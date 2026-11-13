@@ -2,6 +2,7 @@
 #define DAMN_CORE_META_TYPE_META_HPP
 
 #include "damn/core/def.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <tuple>
 #include <cstddef>

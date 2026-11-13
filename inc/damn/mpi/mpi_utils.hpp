@@ -20,6 +20,8 @@
 #include <numeric>
 #include <algorithm>
 #include <type_traits>
+#include <format>
+#include <utility>
 
 
 #if !defined(DAMN_LOG_ERROR)

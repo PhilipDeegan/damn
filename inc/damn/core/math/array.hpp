@@ -3,6 +3,7 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/meta/for_N.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <array>
 #include <limits>
@@ -11,6 +12,8 @@
 #include <cstdint>
 #include <utility>
 #include <type_traits>
+#include <cstddef>
+#include <format>
 
 namespace damn::core
 {

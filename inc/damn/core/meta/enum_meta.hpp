@@ -9,6 +9,13 @@
 #include <variant>
 #include <stdexcept>
 #include <type_traits>
+#include <cstddef>
+
+namespace damn::core
+{
+template<typename T>
+struct ConstexprLift;
+} // namespace damn::core
 
 namespace damn::core
 {

@@ -10,6 +10,9 @@
 #include <cassert>
 #include <cstdint>
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
+#include <utility>
 
 namespace damn::core
 {

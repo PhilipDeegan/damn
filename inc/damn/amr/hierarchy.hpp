@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <format>
+#include <initializer_list>
 
 namespace damn::amr
 {

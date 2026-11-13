@@ -1,4 +1,4 @@
-// IWYU pragma: private, include "core/logger.hpp"
+// IWYU pragma: private, include "damn/core/logger.hpp"
 
 #ifndef DAMN_CORE_SYS_LOGGER_DEFAULTS_HPP
 #define DAMN_CORE_SYS_LOGGER_DEFAULTS_HPP

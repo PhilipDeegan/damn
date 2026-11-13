@@ -3,6 +3,7 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/meta/for_N.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <array>
 #include <cmath>
@@ -11,6 +12,8 @@
 #include <numeric>
 #include <algorithm>
 #include <type_traits>
+#include <cstdlib>
+#include <initializer_list>
 
 namespace damn::core
 {

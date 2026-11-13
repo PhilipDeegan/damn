@@ -1,9 +1,13 @@
-// IWYU pragma: private, include "core/exec/kernels/launchers.hpp"
+// IWYU pragma: private, include "damn/core/exec/kernels/launchers.hpp"
 
 #ifndef DAMN_CORE_EXEC_KERNELS_DETAIL_DEF_LAUNCHERS_HPP
 #define DAMN_CORE_EXEC_KERNELS_DETAIL_DEF_LAUNCHERS_HPP
 
 #include "damn/core/def.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "damn/core/def/detail/mkn_gpu.hpp"
+#include "mkn/gpu.hpp"
+#include "mkn/gpu/def.hpp"
 
 #if DAMN_HAVE_MKN_GPU
 

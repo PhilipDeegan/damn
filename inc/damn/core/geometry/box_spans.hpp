@@ -3,10 +3,18 @@
 
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/def.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+
+namespace damn::core
+{
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
 
 namespace damn::core
 {

@@ -2,12 +2,15 @@
 #define DAMN_CORE_DATA_TILES_TILE_SET_TRAVERSAL_HPP
 
 #include "damn/core/geometry/box.hpp"
+#include "damn/core/geometry/point.hpp"
 
 #include <array>
 #include <cassert>
 #include <optional>
 #include <functional>
 #include <type_traits>
+#include <cstddef>
+#include <cstdint>
 
 namespace damn::core
 {

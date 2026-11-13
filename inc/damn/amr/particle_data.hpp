@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <utility>
 #include <type_traits>
+#include <concepts>
 
 namespace damn::amr
 {

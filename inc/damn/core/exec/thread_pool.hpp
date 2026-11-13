@@ -13,6 +13,7 @@
 #include <exception>
 #include <stdexcept>
 #include <type_traits>
+#include <cstddef>
 
 namespace damn::core
 {

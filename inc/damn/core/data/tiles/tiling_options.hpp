@@ -2,6 +2,7 @@
 #define DAMN_CORE_DATA_TILES_TILING_OPTIONS_HPP
 
 #include "damn/core/sys/env.hpp"
+#include "damn/core/def.hpp"
 
 #include <string>
 #include <algorithm>

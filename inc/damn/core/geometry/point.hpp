@@ -8,6 +8,7 @@
 #include "damn/core/sys/strings.hpp"
 #include "damn/core/meta/type_equality_meta.hpp"
 #include "damn/core/meta/container_meta.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <array>
 #include <tuple>
@@ -16,6 +17,13 @@
 #include <cstddef>
 #include <sstream>
 #include <ostream>
+#include <cstdint>
+#include <cstdlib>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
 
 namespace damn
 {

@@ -2,6 +2,7 @@
 #define DAMN_CORE_DEF_PHLOP_HPP
 
 
+#include "phlop/timing/scope.hpp"
 #if __has_include("phlop/timing/mpi_scope_timer.hpp")                                              \
                   and (!defined(DAMN_HAVE_PHLOP) || DAMN_HAVE_PHLOP == 1)
 

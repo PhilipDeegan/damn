@@ -3,6 +3,7 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/meta/type_meta.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <cstdlib>
 #include <algorithm>

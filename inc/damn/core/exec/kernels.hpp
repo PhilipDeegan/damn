@@ -3,6 +3,23 @@
 
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/exec/kernels/launchers.hpp"
+#include "damn/core/def/detail/mkn_gpu.hpp"
+#include "damn/core/exec/kernels.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <type_traits>
+
+namespace damn::core
+{
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
+namespace mkn::gpu
+{
+struct Guess;
+} // namespace mkn::gpu
 
 #if DAMN_HAVE_GPU || DAMN_HAVE_MKN_GPU
 

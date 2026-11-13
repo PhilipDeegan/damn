@@ -3,11 +3,15 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/meta/for_N.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <array>
 #include <tuple>
 #include <string>
 #include <utility>
+#include <cstddef>
+#include <iterator>
+#include <variant>
 
 namespace damn::core
 {
