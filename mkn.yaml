@@ -32,12 +32,12 @@ profile:
   mode: none
   test: tst/damn/mpi/test_mpi_utils.cpp
 
-# HDF5 through HighFive (header only, fetched), over damn_mpi: needs an MPI compiler and a
+# HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
 # parallel HDF5 the settings can find, e.g. -x res/mkn/mpi
 - name: damn_hdf5
   parent: base
   self: damn_mpi
-  sub: highfive#v3.0.0-beta2&tpp/highfive(https://github.com/highfive-devs/highfive)
+  sub: highfive#v3.3.0&tpp/highfive(https://github.com/highfive-devs/highfive)
   inc: tpp/highfive/include
   lib: hdf5
 
