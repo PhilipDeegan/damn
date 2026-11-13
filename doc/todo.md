@@ -19,25 +19,25 @@ static dict handler goes away.
 
 ## damn (this PR)
 
-- [ ] Delete `inc/damn/initializer/` and `src/damn/initializer/`.
-- [ ] Move `DictionaryException` out of `inc/damn/core/errors.hpp` (to plamn).
-- [ ] Drop cppdict: the `sub:` and `inc:` lines in `mkn.yaml` `base`.
-- [ ] `damn_core` then compiles only `tpp/phlop/src/phlop/timing/scope_timer.cpp`.
-- [ ] Remove the `damn/initializer/...` include from `inc/damn/damn_core.hpp`
+- [x] Delete `inc/damn/initializer/` and `src/damn/initializer/`.
+- [x] Move `DictionaryException` out of `inc/damn/core/errors.hpp` (to plamn).
+- [x] Drop cppdict: the `sub:` and `inc:` lines in `mkn.yaml` `base`.
+- [x] `damn_core` then compiles only `tpp/phlop/src/phlop/timing/scope_timer.cpp`.
+- [x] Remove the `damn/initializer/...` include from `inc/damn/damn_core.hpp`
       (it is generated from the header list, so just drop the line).
-- [ ] Build and test from a clean clone (`rm -rf tpp bin .mkn`), as CI does.
+- [x] Build and test from a clean clone (`rm -rf tpp bin .mkn`), as CI does.
 
 ## plamn (companion PR, merge after this one)
 
-- [ ] Add `inc/plamn/initializer/data_provider.hpp` with `namespace plamn::initializer`:
+- [x] Add `inc/plamn/initializer/data_provider.hpp` with `namespace plamn::initializer`:
       the dict type (rename `DAMNDict`, e.g. `Dict`), `InitFunction<dim>` and
       `InitFunctionHelper`, the `cppdict::get_value` enum overload. No handler, no
       singleton, no `DataProvider`.
-- [ ] Add `DictionaryException` to plamn (e.g. `plamn/core/errors.hpp`).
-- [ ] Replace every `damn::initializer::` and `damn::core::DictionaryException`
+- [x] Add `DictionaryException` to plamn (e.g. `plamn/core/errors.hpp`).
+- [x] Replace every `damn::initializer::` and `damn::core::DictionaryException`
       use with the plamn names; include the new headers.
-- [ ] Add cppdict to plamn's `mkn.yaml` `base` (`sub:` + `inc:`), as damn had it.
-- [ ] Build and test (`mkn clean build test -p test_plamn_core -dKO -t 8`):
+- [x] Add cppdict to plamn's `mkn.yaml` `base` (`sub:` + `inc:`), as damn had it.
+- [x] Build and test (`mkn clean build test -p test_plamn_core -dKO -t 8`):
       expect 2/30/69/4/2 passing.
 
 ## Later: Python owns the dict

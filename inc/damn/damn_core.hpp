@@ -53,6 +53,5 @@
 #include "damn/core/sys/strings.hpp" // IWYU pragma: export
 #include "damn/core/sys/time.hpp" // IWYU pragma: export
 #include "damn/core/vector.hpp" // IWYU pragma: export
-#include "damn/initializer/data_provider.hpp" // IWYU pragma: export
 
 #endif /* DAMN_DAMN_CORE_HPP */
