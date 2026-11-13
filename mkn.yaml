@@ -12,7 +12,7 @@ profile:
        tpp/phlop/inc
   sub: cppdict&tpp/cppdict(https://github.com/LaboratoryOfPlasmaPhysics/cppdict)
        bto&tpp/bto(https://github.com/bshoshany/thread-pool)
-       phlop&tpp/phlop(https://github.com/PhilipDeegan/phlop)
+       phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
   dep: mkn.kul mkn.gpu
   arg: -std=c++20
 
@@ -20,7 +20,6 @@ profile:
   parent: base
   src: src/damn
        tpp/phlop/src/phlop/timing/scope_timer.cpp
-       tpp/phlop/src/phlop/timing/common_threaded_timer.cpp
   out: damn_core
 
 - name: test_damn_core
