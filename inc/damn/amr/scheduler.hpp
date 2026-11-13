@@ -21,6 +21,18 @@
 #include <cstddef>
 #include <algorithm>
 #include <stdexcept>
+#include <format>
+
+namespace damn
+{
+namespace amr
+{
+    template<std::size_t dim, typename PatchData>
+    struct LevelData;
+    template<std::size_t dim>
+    struct Hierarchy;
+} // namespace amr
+} // namespace damn
 
 namespace damn::amr
 {

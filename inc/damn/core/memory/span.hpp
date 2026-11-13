@@ -7,12 +7,17 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/math/array.hpp"
+#include "damn/core/def/damn_config.hpp"
 
+#include <assert.h>
 #include <vector>
 #include <algorithm>
 #include <cstddef>
 #include <numeric>
 #include <type_traits>
+#include <array>
+#include <format>
+#include <utility>
 
 
 namespace damn::core

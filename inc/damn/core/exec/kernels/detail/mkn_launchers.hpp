@@ -1,4 +1,4 @@
-// IWYU pragma: private, include "core/exec/kernels/launchers.hpp"
+// IWYU pragma: private, include "damn/core/exec/kernels/launchers.hpp"
 
 #ifndef DAMN_CORE_EXEC_KERNELS_DETAIL_MKN_LAUNCHERS_HPP
 #define DAMN_CORE_EXEC_KERNELS_DETAIL_MKN_LAUNCHERS_HPP

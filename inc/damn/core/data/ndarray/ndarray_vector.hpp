@@ -8,10 +8,16 @@
 #include "damn/core/meta/for_N.hpp"
 #include "damn/core/math/array.hpp"
 #include "damn/core/math/numeric.hpp"
+#include "damn/core/def/damn_config.hpp"
 
+#include <assert.h>
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <cstddef>
+#include <new>
+#include <type_traits>
+#include <utility>
 
 namespace damn::core
 {

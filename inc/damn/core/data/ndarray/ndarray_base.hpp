@@ -5,8 +5,11 @@
 #include "damn/core/def.hpp"
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/meta/for_N.hpp"
+#include "damn/core/def/damn_config.hpp"
 
+#include <assert.h>
 #include <cstdint>
+#include <cstddef>
 
 
 namespace damn::core

@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <unordered_map>
+#include <cstddef>
 
 
 namespace damn::core

@@ -5,9 +5,21 @@
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/meta/container_meta.hpp"
 #include "damn/core/memory/memory.hpp"
-
+#include "damn/core/def/detail/mkn_avx.hpp"
+#include "damn/core/def/detail/mkn_gpu.hpp"
+#include "damn/core/def/detail/umpire.hpp"
+#include "damn/core/def/kokkos_tools.hpp"
+#include "mkn/gpu.hpp"
+#include "mkn/kul/alloc.hpp"
 
 #include <vector>
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 namespace damn
 {

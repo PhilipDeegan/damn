@@ -6,8 +6,10 @@
 #include "damn/core/memory/span.hpp"
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "damn/core/math/array.hpp"
 
-
+#include <assert.h>
 #include <tuple>
 #include <limits>
 #include <vector>
@@ -16,6 +18,11 @@
 #include <optional>
 #include <algorithm>
 #include <unordered_map>
+#include <array>
+#include <cstdint>
+#include <cstdlib>
+#include <format>
+#include <string>
 
 
 namespace damn::core

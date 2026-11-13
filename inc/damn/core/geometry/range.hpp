@@ -5,6 +5,8 @@
 
 #include <iterator>
 #include <concepts>
+#include <cstddef>
+#include <utility>
 
 namespace damn
 {

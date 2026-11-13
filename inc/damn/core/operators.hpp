@@ -3,12 +3,15 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/meta/type_meta.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "mkn/gpu.hpp"
 
 #ifndef DAMN_HAVE_GPU
 #define DAMN_HAVE_GPU 0
 #endif
 
 #include <atomic>
+#include <type_traits>
 
 // device atomics (atomicAdd...) only exist in the device compilation pass (DAMN_DEVICE_PASS);
 // host calls of DAMN_ALL code (e.g. GPU_UNIFIED CPU fallbacks) use the std::atomic paths

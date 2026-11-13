@@ -9,9 +9,24 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/tiles/tile_set.hpp"
 #include "damn/core/data/ndarray/ndarray_vector.hpp"
+#include "damn/core/data/ndarray/ndarray_base.hpp"
 
+#include <assert.h>
 #include <type_traits>
 #include <unordered_set>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <vector>
+
+namespace damn
+{
+namespace core
+{
+    template<typename Type, std::size_t dim>
+    class Point;
+} // namespace core
+} // namespace damn
 
 
 namespace damn::core

@@ -7,6 +7,9 @@
 #include <string>
 #include <cstddef>
 #include <unordered_map>
+#include <initializer_list>
+#include <ostream>
+#include <utility>
 
 
 namespace damn::core

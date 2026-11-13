@@ -7,11 +7,17 @@
 #include "damn/core/meta/for_N.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 #include "damn/core/data/ndarray/ndarray_mask.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <array>
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
+#include <algorithm>
+#include <cstddef>
+#include <format>
+#include <type_traits>
+#include <utility>
 
 namespace damn::core
 {

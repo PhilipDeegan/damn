@@ -50,9 +50,9 @@ jobs:
         apt update && apt install -y curl git iwyu
         curl -Lo mkn https://github.com/mkn/mkn/releases/download/latest/mkn_nix
         chmod +x mkn
-        KLOG=3 ./mkn compile -dtKOqp iwyu_fix -Wx res/mkn/mpi
+        KLOG=3 ./mkn build -dtKOqp iwyu_fix -Wx res/mkn/mpi # build: the module must link
         git config --global --add safe.directory "$PWD"
         if ! git diff --exit-code -- inc src tst; then
-          echo "run: mkn compile -p iwyu_fix, and commit the result"
+          echo "run: mkn build -p iwyu_fix -x res/mkn/mpi, and commit the result"
           exit 1
         fi

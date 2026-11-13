@@ -52,7 +52,8 @@ profile:
       paths: inc
       headers: -x c++-header
 
-# iwyu's suggestions applied (fix_include): CI runs this and fails on any resulting diff
+# iwyu's suggestions applied (fix_include): CI builds this and fails on any resulting diff
+# mpicxx adds MPI's include directories itself, iwyu needs them given (Debian/Ubuntu openmpi)
 - name: iwyu_fix
   parent: base
   mode: none
@@ -60,5 +61,9 @@ profile:
   - name: cpp.iwyu
     compile:
       paths: inc
+      # fragments of damn/core/exec/kernels.hpp, not standalone headers
+      ignore: kernels/detail/mkn_launchers.hpp
+      inc: /usr/lib/x86_64-linux-gnu/openmpi/include /usr/lib/x86_64-linux-gnu/openmpi/include/openmpi
       headers: -x c++-header
       fix: --nocomments
+      system_last: true

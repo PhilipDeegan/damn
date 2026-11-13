@@ -10,6 +10,8 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <cstddef>
+#include <type_traits>
 
 namespace damn::core
 {

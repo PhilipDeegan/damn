@@ -10,6 +10,7 @@
 #include <memory>
 #include <fstream>
 #include <iostream>
+#include <ctime>
 
 #if !defined(DAMN_LOG_LEVEL)
 #define DAMN_LOG_LEVEL 2 // 0 == off
@@ -23,6 +24,7 @@ constexpr static std::uint8_t LOG_LEVEL = DAMN_LOG_LEVEL;
 #if !defined(NDEBUG) || defined(DAMN_FORCE_DEBUG_DO) || defined(DAMN_FORCE_LOG_LINE)
 #include <sstream>  // IWYU pragma: keep
 #include <iostream> // IWYU pragma: keep
+
 #define DAMN_LOG_LINE_STR(str)                                                                    \
     std::cout << __FILE__ << ":" << __LINE__ << " - " << (str) << std::endl
 // named stream: an rvalue stream would resolve `<< s` from inside std, by ADL only

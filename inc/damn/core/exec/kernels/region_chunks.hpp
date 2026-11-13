@@ -10,6 +10,7 @@
 #include "damn/core/exec/kernels.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <cstdint>
 #include <cstddef>

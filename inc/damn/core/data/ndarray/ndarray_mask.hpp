@@ -2,6 +2,12 @@
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_MASK_HPP
 
 
+#include "damn/core/def.hpp"
+#include "damn/core/vector.hpp"
+#include "damn/core/math/array.hpp"
+#include "damn/core/data/ndarray/ndarray_base.hpp"
+
+#include <assert.h>
 #include <array>
 #include <tuple>
 #include <vector>
@@ -9,13 +15,8 @@
 #include <numeric>
 #include <iostream>
 #include <stdexcept>
-
-
-#include "damn/core/def.hpp"
-#include "damn/core/vector.hpp"
-#include "damn/core/math/array.hpp"
-
-#include "damn/core/data/ndarray/ndarray_base.hpp"
+#include <cstddef>
+#include <utility>
 
 namespace damn::core
 {

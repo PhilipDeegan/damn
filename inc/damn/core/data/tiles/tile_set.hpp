@@ -10,11 +10,18 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/ndarray/ndarray_vector.hpp"
-
 #include "tile_set_mapper.hpp"
+#include "damn/core/data/ndarray/ndarray_base.hpp"
+#include "damn/core/data/tiles/tiling_options.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "damn/core/geometry/point.hpp"
 
+#include <assert.h>
 #include <array>
 #include <tuple>
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 
 namespace damn::core
 {

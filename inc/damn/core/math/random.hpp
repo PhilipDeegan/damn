@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <string_view>
+#include <cstddef>
 
 /* Tools to give every cell its own reproducible random stream.
  *

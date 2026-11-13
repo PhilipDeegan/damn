@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <utility>
+#include <iterator>
 
 namespace damn::core
 {
