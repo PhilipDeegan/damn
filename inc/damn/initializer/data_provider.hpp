@@ -1,0 +1,113 @@
+#ifndef DATA_PROVIDER_HPP
+#define DATA_PROVIDER_HPP
+
+#include <memory>
+#include <string>
+#include <vector>
+#include <optional>
+#include <functional>
+#include <type_traits>
+
+#include "damn/core/def.hpp"
+#include "damn/core/memory/span.hpp"
+
+#include "dict.hpp"
+
+namespace cppdict
+{
+/**
+ * @brief reads a scoped enum stored in the dict as its underlying integer.
+ *
+ * overloads cppdict::get_value
+ */
+template<typename Enum, typename... Types>
+    requires(std::is_enum_v<Enum>)
+Enum get_value(Dict<Types...> const& dict, std::string const& path, Enum const default_value,
+               char delimiter = '/')
+{
+    return static_cast<Enum>(
+        get_value(dict, detail::split_string(path, delimiter), static_cast<int>(default_value)));
+}
+} // namespace cppdict
+
+
+namespace damn
+{
+namespace initializer
+{
+    template<typename ReturnType, std::size_t dim>
+    struct InitFunctionHelper
+    {
+    };
+
+    template<>
+    struct InitFunctionHelper<double, 1>
+    {
+        using return_type = std::shared_ptr<core::Span<double>>;
+        using param_type  = core::Span<double const> const&;
+        using type        = std::function<return_type(param_type)>;
+    };
+
+    template<>
+    struct InitFunctionHelper<double, 2>
+    {
+        using return_type = std::shared_ptr<core::Span<double>>;
+        using param_type  = core::Span<double const> const&;
+        using type        = std::function<return_type(param_type, param_type)>;
+    };
+
+    template<>
+    struct InitFunctionHelper<double, 3>
+    {
+        using return_type = std::shared_ptr<core::Span<double>>;
+        using param_type  = core::Span<double const> const&;
+        using type        = std::function<return_type(param_type, param_type, param_type)>;
+    };
+
+    template<std::size_t dim>
+    using InitFunction = InitFunctionHelper<double, dim>::type;
+
+
+    using DAMNDict
+        = cppdict::Dict<bool, int, std::vector<int>, double, std::vector<double>, std::size_t,
+                        std::optional<std::size_t>, std::string, std::vector<std::string>,
+                        InitFunction<1>, InitFunction<2>, InitFunction<3>>;
+
+
+    class DAMNDictHandler
+    {
+    public:
+        NO_DISCARD static DAMNDictHandler& INSTANCE();
+
+        void init() { damnDict = std::make_unique<DAMNDict>(); }
+
+        void stop() { damnDict.reset(); }
+
+        NO_DISCARD auto& dict()
+        {
+            if (!damnDict)
+                init();
+            return *damnDict;
+        }
+
+    private:
+        DAMNDictHandler() = default;
+        std::unique_ptr<DAMNDict> damnDict;
+    };
+
+
+    class DataProvider
+    {
+    public:
+        /**
+         * @brief read will read the data from whatever source specific DataProvider classes
+         * implement. readData() must be called before passing
+         */
+        virtual void read()     = 0;
+        virtual ~DataProvider() = default;
+    };
+
+} // namespace initializer
+} // namespace damn
+
+#endif // DATA_PROVIDER_HPP
