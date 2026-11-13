@@ -4,9 +4,15 @@ name: damn
 
 profile:
 
+# subprojects are fetched along the profile/parent chain, before sources are checked
 - name: base
   inc: inc
-  self: cppdict phlop thread_pool
+       tpp/cppdict/include
+       tpp/bto/include
+       tpp/phlop/inc
+  sub: cppdict&tpp/cppdict(https://github.com/LaboratoryOfPlasmaPhysics/cppdict)
+       bto&tpp/bto(https://github.com/bshoshany/thread-pool)
+       phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
   dep: mkn.kul mkn.gpu
   arg: -std=c++20
 
@@ -14,7 +20,6 @@ profile:
   parent: base
   src: src/damn
        tpp/phlop/src/phlop/timing/scope_timer.cpp
-       tpp/phlop/src/phlop/timing/common_threaded_timer.cpp
   out: damn_core
 
 - name: test_damn_core
@@ -23,15 +28,3 @@ profile:
   dep: google.test
   mode: none
   test: tst/damn/core/test_damn_core.cpp
-
-- name: cppdict
-  sub: cppdict&tpp/cppdict(https://github.com/LaboratoryOfPlasmaPhysics/cppdict)
-  inc: tpp/cppdict/include
-
-- name: thread_pool
-  sub: bto&tpp/bto(https://github.com/bshoshany/thread-pool)
-  inc: tpp/bto/include
-
-- name: phlop
-  sub: phlop&tpp/phlop(https://github.com/PhilipDeegan/phlop)
-  inc: tpp/phlop/inc
