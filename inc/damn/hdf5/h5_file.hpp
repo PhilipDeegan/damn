@@ -313,7 +313,10 @@ private:
     template<typename Size>
     static bool is_zero(Size size)
     {
-        if constexpr (requires { size.begin(); size.end(); })
+        if constexpr (requires {
+                          size.begin();
+                          size.end();
+                      })
             return std::all_of(size.begin(), size.end(), [](auto const& val) { return val == 0; });
         else
             return size == 0;

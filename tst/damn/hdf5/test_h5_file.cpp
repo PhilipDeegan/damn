@@ -14,8 +14,8 @@
 static_assert(DAMN_HAS_HIGHFIVE);
 
 using namespace damn;
-using damn::hdf5::h5::HighFiveFile;
 using damn::hdf5::h5::HiFile;
+using damn::hdf5::h5::HighFiveFile;
 
 namespace
 {
