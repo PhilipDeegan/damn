@@ -4,58 +4,12 @@
 #include "damn/core/def.hpp"
 
 #include <string>
-#include <sstream>
 #include <iostream>
-#include <stdexcept>
 #include <unordered_map>
-
-#include "dict.hpp"
 
 
 namespace damn::core
 {
-class DictionaryException : public std::exception
-{
-public:
-    DictionaryException() = default;
-    DictionaryException(auto const& k, auto const& v) { (*this)(k, v); }
-
-    using Dict_t = cppdict::Dict<std::string>;
-
-    auto& operator[](std::string const& key) { return dict_[key]; }
-    auto& operator[](std::string const& key) const { return dict_[key]; }
-    auto& operator()(std::string const key, std::string const val)
-    {
-        dict_[key] = val;
-        return *this;
-    }
-
-    std::string operator()() const
-    {
-        std::stringstream ss;
-        dict_.visit(
-            [&](std::string const& key, auto const& val) { ss << key << " " << val << std::endl; });
-        return ss.str();
-    }
-
-    char const* what() const noexcept override
-    {
-        static thread_local std::string msg;
-        return (msg = (*this)()).c_str();
-    }
-
-    std::string id() const
-    {
-        if (!dict_.contains("ID"))
-            throw std::runtime_error("DictionaryException has no ID");
-        return (*this)["ID"].template to<std::string>();
-    }
-
-private:
-    Dict_t dict_;
-};
-
-
 class Errors
 {
 public:
