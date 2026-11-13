@@ -7,6 +7,7 @@
 #include "damn/amr/hierarchy.hpp" // IWYU pragma: export
 #include "damn/amr/box_data.hpp" // IWYU pragma: export
 #include "damn/amr/level_data.hpp" // IWYU pragma: export
+#include "damn/amr/particle_data.hpp" // IWYU pragma: export
 #include "damn/amr/schedule.hpp" // IWYU pragma: export
 #include "damn/amr/scheduler.hpp" // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_base.hpp" // IWYU pragma: export

@@ -7,6 +7,7 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <cstdint>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -59,13 +60,53 @@ struct Population
 {
     std::string name;
     Field density;
-    std::vector<int> particles; // not BoxData
+    std::vector<int> particles; // neither BoxData nor ParticleData
 };
+
+// a particle: its cell and where it started, for checks
+struct Item
+{
+    std::array<int, 2> cell;
+    std::array<int, 2> origin;
+    std::uint32_t from_patch;
+};
+
+struct Particles
+{
+    using value_type = Item;
+    int gw           = 1; // ghost cells a patch may hold particles in
+    std::vector<Item> items{};
+};
+
+inline Box2 domain_box(Particles const&, Box2 const& cells)
+{
+    return cells;
+}
+inline Box2 ghost_box(Particles const& p, Box2 const& cells)
+{
+    return damn::core::grow(cells, p.gw);
+}
+inline void for_each_item(Particles const& p, auto&& fn)
+{
+    for (auto const& item : p.items)
+        fn(item);
+}
+inline Point2 cell(Item const& item)
+{
+    return Point2{item.cell};
+}
+inline void append(Particles& p, Item item, Point2 const& shift)
+{
+    for (std::size_t i = 0; i < 2; ++i)
+        item.cell[i] += shift[i];
+    p.items.push_back(item);
+}
 
 struct PatchData
 {
     Field Bx{{true, false}}, rho{{true, true}}, Ez{{false, false}};
     std::vector<Population> populations;
+    Particles domain, patch_ghost;
 };
 
 inline void for_each_resource(PatchData& data, auto&& fn)
@@ -78,6 +119,8 @@ inline void for_each_resource(PatchData& data, auto&& fn)
         fn(pop.name + "_density", pop.density);
         fn(pop.name + "_particles", pop.particles);
     }
+    fn("domain", data.domain);
+    fn("patch_ghost", data.patch_ghost);
 }
 } // namespace toy
 
@@ -86,6 +129,9 @@ namespace damn::amr
 {
 static_assert(BoxData<toy::Field, 2>);
 static_assert(not BoxData<std::vector<int>, 2>);
+static_assert(ParticleData<toy::Particles, 2>);
+static_assert(not ParticleData<std::vector<int>, 2>);
+static_assert(not BoxData<toy::Particles, 2>);
 
 namespace
 {
@@ -277,6 +323,77 @@ TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)
 
 INSTANTIATE_TEST_SUITE_P(Schedule, BorderOps, ::testing::Bool());
 
+
+// ---------------------------------------------------------------- GhostToDomain
+
+class GhostParticles : public ::testing::TestWithParam<bool> // periodic
+{
+};
+
+TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
+{
+    bool const periodic = GetParam();
+    auto const h        = make_hierarchy({periodic, periodic});
+    auto ld             = allocate(h.levels[0], 0, make_patch_data);
+
+    // one particle in each ghost cell of each patch, as if it had just left the patch
+    std::size_t n_left = 0;
+    for_each_patch(ld, [&](auto const& patch, auto& data) {
+        core::for_each_point(ghost_box(data.patch_ghost, patch.box), [&](auto const& c) {
+            if (!isIn(c, patch.box))
+            {
+                data.patch_ghost.items.push_back({{c[0], c[1]}, {c[0], c[1]}, patch.id});
+                ++n_left;
+            }
+        });
+    });
+
+    Scheduler<2> scheduler;
+    add_pairs(scheduler, "leaving", Transfer::GhostToDomain, {{"patch_ghost", "domain"}});
+    fill<Transfer::GhostToDomain>(scheduler, "leaving", h, ld, 0);
+
+    auto const level_cells = level_domain(h, 0);
+    auto const shape       = level_cells.shape();
+    auto const wrap        = [&](std::array<int, 2> c) {
+        for (std::size_t i = 0; i < 2; ++i)
+            if (periodic)
+                c[i] = mod(c[i], shape[i]);
+        return c;
+    };
+
+    // each particle arrived exactly where its (wrapped) cell is owned
+    std::size_t n_arrived = 0, n_inside = 0;
+    for_each_patch(ld, [&](auto const& patch, auto& data) {
+        for (auto const& item : data.domain.items)
+        {
+            ++n_arrived;
+            EXPECT_TRUE(isIn(Point2{item.cell}, patch.box)) << patch.id;
+            EXPECT_EQ(item.cell, wrap(item.origin));
+            // never handed back to the patch it left, unless through a periodic image
+            EXPECT_FALSE(item.from_patch == patch.id and item.cell == item.origin);
+        }
+        for (auto const& item : data.patch_ghost.items)
+            n_inside += isIn(Point2{item.origin}, level_cells);
+    });
+
+    if (periodic)
+        EXPECT_EQ(n_arrived, n_left); // every cell has an owner
+    else
+        EXPECT_EQ(n_arrived, n_inside); // those that left the domain are dropped
+    EXPECT_GT(n_arrived, 0u);
+}
+
+INSTANTIATE_TEST_SUITE_P(Schedule, GhostParticles, ::testing::Bool());
+
+TEST(Scheduler, particleTransfersNeedParticleData)
+{
+    auto const h = make_hierarchy({true, true});
+    auto ld      = allocate(h.levels[0], 0, make_patch_data);
+
+    Scheduler<2> scheduler;
+    add_pairs(scheduler, "bad", Transfer::GhostToDomain, {{"rho", "rho"}});
+    EXPECT_THROW(fill<Transfer::GhostToDomain>(scheduler, "bad", h, ld, 0), std::runtime_error);
+}
 
 // ---------------------------------------------------------------- Scheduler
 

@@ -5,6 +5,7 @@
 //
 //   add(scheduler, key, kind, names)  resources registered under the same key and kind are
 //                                     exchanged together, by one schedule
+//   add_pairs(...)                    the same with (source, destination) resource pairs
 //   fill<kind>(scheduler, key, ...)   runs it on a level; the schedule is (re)built when the
 //                                     level is new or its patches changed
 //
@@ -18,6 +19,7 @@
 #include <vector>
 #include <utility>
 #include <cstddef>
+#include <algorithm>
 #include <stdexcept>
 
 namespace damn::amr
@@ -27,7 +29,7 @@ struct Scheduler
 {
     struct Entry
     {
-        std::vector<std::string> names{};
+        std::vector<ResourcePair> names{}; // (source, destination) resources
         std::map<int, Schedule<dim>> per_level{}; // level number -> schedule
     };
 
@@ -35,17 +37,25 @@ struct Scheduler
 };
 
 
-// registers resources `names` under key for kind; adding to a key extends it, and drops
-// its schedules
+// registers resource pairs under key for kind; adding to a key extends it, and drops its
+// schedules
+template<std::size_t dim>
+void add_pairs(Scheduler<dim>& scheduler, std::string const& key, Transfer const kind,
+               std::vector<ResourcePair> const& pairs)
+{
+    auto& entry = scheduler.entries[{key, kind}];
+    for (auto const& pair : pairs)
+        if (std::find(entry.names.begin(), entry.names.end(), pair) == entry.names.end())
+            entry.names.push_back(pair);
+    entry.per_level.clear();
+}
+
+// resources that are their own source and destination (fields)
 template<std::size_t dim>
 void add(Scheduler<dim>& scheduler, std::string const& key, Transfer const kind,
          std::vector<std::string> const& names)
 {
-    auto& entry = scheduler.entries[{key, kind}];
-    for (auto const& name : names)
-        if (std::find(entry.names.begin(), entry.names.end(), name) == entry.names.end())
-            entry.names.push_back(name);
-    entry.per_level.clear();
+    add_pairs(scheduler, key, kind, same_names(names));
 }
 
 template<std::size_t dim>
@@ -55,7 +65,7 @@ NO_DISCARD bool has(Scheduler<dim> const& scheduler, std::string const& key, Tra
 }
 
 template<std::size_t dim>
-NO_DISCARD std::vector<std::string> const& names(Scheduler<dim> const& scheduler,
+NO_DISCARD std::vector<ResourcePair> const& names(Scheduler<dim> const& scheduler,
                                                  std::string const& key, Transfer const kind)
 {
     if (!has(scheduler, key, kind))
