@@ -187,6 +187,21 @@ TEST(Hierarchy, periodicShiftsAreTheNeighbouringDomainImages)
                 != both.end());
 }
 
+TEST(Hierarchy, coveredByLevelIncludesPeriodicImages)
+{
+    auto h = hierarchy_2d({true, false});
+    set_level(h, uniform_level_0(h, {5, 8})); // two patches side by side
+
+    auto const& left = h.levels[0].patches[0].box; // (0,0) (4,7)
+    auto const ghost = core::grow(left, 1);         // (-1,-1) (5,8)
+
+    std::size_t cells = 0;
+    for (auto const& b : covered_by_level(h, 0, ghost))
+        cells += b.size();
+    // all but the y ghost rows: x is periodic, y is not
+    EXPECT_EQ(cells, 7u * 8u);
+}
+
 } // namespace damn::amr
 
 

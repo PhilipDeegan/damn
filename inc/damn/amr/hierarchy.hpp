@@ -292,6 +292,24 @@ NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> con
     return shifts;
 }
 
+// the parts of box (level ln index space) that level ln's patches cover, periodic images
+// included, e.g. the ghost cells of a patch that are not level border
+template<std::size_t dim>
+NO_DISCARD std::vector<core::Box<int, dim>>
+covered_by_level(Hierarchy<dim> const& h, int const ln, core::Box<int, dim> const& box)
+{
+    std::vector<core::Point<int, dim>> shifts{core::Point<int, dim>{}};
+    for (auto const& s : periodic_shifts(h, ln))
+        shifts.push_back(s);
+
+    std::vector<core::Box<int, dim>> covered;
+    for (auto const& patch : h.levels.at(ln).patches)
+        for (auto const& shift : shifts)
+            if (auto const overlap = box * core::shift(patch.box, shift))
+                covered.push_back(*overlap);
+    return covered;
+}
+
 } // namespace damn::amr
 
 #endif // DAMN_AMR_HIERARCHY_HPP
