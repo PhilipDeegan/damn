@@ -1,9 +1,10 @@
 #ifndef DAMN_DAMN_CORE_HPP
 #define DAMN_DAMN_CORE_HPP
 
-// everything damn: index space, storage, tiling, execution, input
+// everything damn: index space, storage, tiling, execution, patch hierarchy
 // damn is agnostic to what the data is; users bring its shape
 
+#include "damn/amr/hierarchy.hpp" // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_base.hpp" // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_mask.hpp" // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_vector.hpp" // IWYU pragma: export

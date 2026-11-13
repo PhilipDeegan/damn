@@ -25,3 +25,4 @@ profile:
   dep: google.test
   mode: none
   test: tst/damn/core/test_damn_core.cpp
+        tst/damn/amr/test_hierarchy.cpp
