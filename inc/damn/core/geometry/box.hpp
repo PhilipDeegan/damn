@@ -501,28 +501,27 @@ NO_DISCARD constexpr int floor_div(int const a, int const b) DAMN_ALL
     return a / b - ((a % b != 0) and ((a < 0) != (b < 0)));
 }
 
-// cells of box, in the index space ratio times finer
+// per element
 template<std::size_t dim>
-NO_DISCARD constexpr Box<int, dim> refine(Box<int, dim> box, int const ratio) DAMN_ALL
+NO_DISCARD constexpr Point<int, dim> floor_div(Point<int, dim> p, int const b) DAMN_ALL
 {
     for (std::size_t i = 0; i < dim; ++i)
-    {
-        box.lower[i] = box.lower[i] * ratio;
-        box.upper[i] = (box.upper[i] + 1) * ratio - 1;
-    }
-    return box;
+        p[i] = floor_div(p[i], b);
+    return p;
+}
+
+// cells of box, in the index space ratio times finer
+template<std::size_t dim>
+NO_DISCARD Box<int, dim> refine(Box<int, dim> const& box, int const ratio) DAMN_ALL
+{
+    return Box<int, dim>{box.lower * ratio, (box.upper + 1) * ratio - 1};
 }
 
 // smallest box of the index space ratio times coarser covering box
 template<std::size_t dim>
-NO_DISCARD constexpr Box<int, dim> coarsen(Box<int, dim> box, int const ratio) DAMN_ALL
+NO_DISCARD Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN_ALL
 {
-    for (std::size_t i = 0; i < dim; ++i)
-    {
-        box.lower[i] = floor_div(box.lower[i], ratio);
-        box.upper[i] = floor_div(box.upper[i], ratio);
-    }
-    return box;
+    return Box<int, dim>{floor_div(box.lower, ratio), floor_div(box.upper, ratio)};
 }
 
 

@@ -40,6 +40,12 @@ static_assert(core::floor_div(-2, 2) == -1);
 static_assert(core::floor_div(-3, 2) == -2);
 static_assert(core::floor_div(0, 2) == 0);
 
+TEST(BoxRatio, floorDivPerElement)
+{
+    EXPECT_EQ(core::floor_div(core::Point<int, 3>{std::array{-3, 0, 3}}, 2),
+              (core::Point<int, 3>{std::array{-2, 0, 1}}));
+}
+
 TEST(BoxRatio, refineCoversTheSameRegion)
 {
     EXPECT_EQ(core::refine(box<1>({-1}, {1}), 2), box<1>({-2}, {3}));
