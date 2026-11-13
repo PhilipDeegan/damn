@@ -51,3 +51,14 @@ profile:
     compile:
       paths: inc
       headers: -x c++-header
+
+# iwyu's suggestions applied (fix_include): CI runs this and fails on any resulting diff
+- name: iwyu_fix
+  parent: base
+  mode: none
+  mod:
+  - name: cpp.iwyu
+    compile:
+      paths: inc
+      headers: -x c++-header
+      fix: --nocomments

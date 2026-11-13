@@ -37,3 +37,22 @@ jobs:
           echo "run: git clang-format $mb -- inc src tst"
           exit 1
         fi
+
+  iwyu:
+    # include what you use: applying iwyu's suggestions changes nothing
+    runs-on: ubuntu-24.04
+    container: ghcr.io/pharchive/phare_dep/ubuntu:24.04
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - run: |
+        apt update && apt install -y curl git iwyu
+        curl -Lo mkn https://github.com/mkn/mkn/releases/download/latest/mkn_nix
+        chmod +x mkn
+        KLOG=3 ./mkn compile -dtKOqp iwyu_fix -Wx res/mkn/mpi
+        git config --global --add safe.directory "$PWD"
+        if ! git diff --exit-code -- inc src tst; then
+          echo "run: mkn compile -p iwyu_fix, and commit the result"
+          exit 1
+        fi
