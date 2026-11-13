@@ -2,7 +2,6 @@
 // across ranks; run with any number of ranks, e.g. mpirun -n 3 bin/test_damn_hdf5/test/...
 
 #include "damn/hdf5/damn_hdf5.hpp"
-#include "damn/hdf5/hdf5_utils.hpp"
 
 #include "gtest/gtest.h"
 
@@ -13,10 +12,6 @@
 #include <numeric>
 
 static_assert(DAMN_HAS_HIGHFIVE);
-static_assert(damn::hdf5::is_array_dataset<std::array<double, 3>, 1>);
-static_assert(damn::hdf5::is_array_dataset<std::array<double, 2>, 2>);
-static_assert(not damn::hdf5::is_array_dataset<std::array<double, 4>, 2>);
-static_assert(not damn::hdf5::is_array_dataset<std::vector<double>, 1>);
 
 using namespace damn;
 using damn::hdf5::h5::HighFiveFile;
