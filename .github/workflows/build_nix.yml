@@ -22,3 +22,5 @@ jobs:
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_core -Wx res/mkn/mpi
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_mpi -Wx res/mkn/mpi
         mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
+        KLOG=3 ./mkn clean build test -dtKOqp test_damn_hdf5 -Wx res/mkn/mpi
+        mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
