@@ -495,6 +495,36 @@ NO_DISCARD auto asBox(Point_t<Type, SIZE> const& point) DAMN_ALL
 }
 
 
+// rounds towards -inf, so cell -1 coarsens to -1 for ratio 2, not 0
+NO_DISCARD constexpr int floor_div(int const a, int const b) DAMN_ALL
+{
+    return a / b - ((a % b != 0) and ((a < 0) != (b < 0)));
+}
+
+// per element
+template<std::size_t dim>
+NO_DISCARD constexpr Point<int, dim> floor_div(Point<int, dim> p, int const b) DAMN_ALL
+{
+    for (std::size_t i = 0; i < dim; ++i)
+        p[i] = floor_div(p[i], b);
+    return p;
+}
+
+// cells of box, in the index space ratio times finer
+template<std::size_t dim>
+NO_DISCARD Box<int, dim> refine(Box<int, dim> const& box, int const ratio) DAMN_ALL
+{
+    return Box<int, dim>{box.lower * ratio, (box.upper + 1) * ratio - 1};
+}
+
+// smallest box of the index space ratio times coarser covering box
+template<std::size_t dim>
+NO_DISCARD Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN_ALL
+{
+    return Box<int, dim>{floor_div(box.lower, ratio), floor_div(box.upper, ratio)};
+}
+
+
 
 } // namespace damn::core
 
