@@ -9,7 +9,7 @@
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/math/array.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <tuple>
 #include <limits>
 #include <vector>

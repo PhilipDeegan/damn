@@ -10,7 +10,7 @@
 #include "damn/core/def/detail/raja.hpp"
 #include "mkn/gpu.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <algorithm>
 #include <stdexcept>
 

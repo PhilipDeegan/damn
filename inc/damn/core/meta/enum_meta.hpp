@@ -11,14 +11,11 @@
 #include <type_traits>
 #include <cstddef>
 
-namespace damn
+namespace damn::core
 {
-namespace core
-{
-    template<typename T>
-    struct ConstexprLift;
-} // namespace core
-} // namespace damn
+template<typename T>
+struct ConstexprLift;
+} // namespace damn::core
 
 namespace damn::core
 {

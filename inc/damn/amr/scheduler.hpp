@@ -23,16 +23,13 @@
 #include <stdexcept>
 #include <format>
 
-namespace damn
+namespace damn::amr
 {
-namespace amr
-{
-    template<std::size_t dim, typename PatchData>
-    struct LevelData;
-    template<std::size_t dim>
-    struct Hierarchy;
-} // namespace amr
-} // namespace damn
+template<std::size_t dim, typename PatchData>
+struct LevelData;
+template<std::size_t dim>
+struct Hierarchy;
+} // namespace damn::amr
 
 namespace damn::amr
 {

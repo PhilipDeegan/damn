@@ -11,7 +11,7 @@
 #include "damn/core/data/ndarray/ndarray_vector.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <type_traits>
 #include <unordered_set>
 #include <cstddef>
@@ -19,14 +19,11 @@
 #include <stdexcept>
 #include <vector>
 
-namespace damn
+namespace damn::core
 {
-namespace core
-{
-    template<typename Type, std::size_t dim>
-    class Point;
-} // namespace core
-} // namespace damn
+template<typename Type, std::size_t dim>
+class Point;
+} // namespace damn::core
 
 
 namespace damn::core

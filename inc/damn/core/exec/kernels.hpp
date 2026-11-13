@@ -11,21 +11,15 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace damn
+namespace damn::core
 {
-namespace core
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
+namespace mkn::gpu
 {
-    template<typename Type, std::size_t dim>
-    struct Box;
-} // namespace core
-} // namespace damn
-namespace mkn
-{
-namespace gpu
-{
-    struct Guess;
-} // namespace gpu
-} // namespace mkn
+struct Guess;
+} // namespace mkn::gpu
 
 #if DAMN_HAVE_GPU || DAMN_HAVE_MKN_GPU
 

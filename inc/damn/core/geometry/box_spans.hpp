@@ -10,14 +10,11 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace damn
+namespace damn::core
 {
-namespace core
-{
-    template<typename Type, std::size_t dim>
-    struct Box;
-} // namespace core
-} // namespace damn
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
 
 namespace damn::core
 {

@@ -10,7 +10,7 @@
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/def/damn_config.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <array>
 #include <cstdint>
 #include <optional>

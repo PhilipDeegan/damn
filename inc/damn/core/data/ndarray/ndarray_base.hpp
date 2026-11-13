@@ -7,7 +7,7 @@
 #include "damn/core/meta/for_N.hpp"
 #include "damn/core/def/damn_config.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 #include <cstddef>
 

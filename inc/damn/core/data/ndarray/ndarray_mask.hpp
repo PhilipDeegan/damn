@@ -7,7 +7,7 @@
 #include "damn/core/math/array.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 
-#include <assert.h>
+#include <cassert>
 #include <array>
 #include <tuple>
 #include <vector>
