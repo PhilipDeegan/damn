@@ -40,14 +40,20 @@ jobs:
 
   iwyu:
     # include what you use: applying iwyu's suggestions changes nothing
+    # Debian 13: the same iwyu (8.23) and libstdc++ as development machines, results differ
+    # between versions; also a much smaller image than phare_dep
     runs-on: ubuntu-24.04
-    container: ghcr.io/pharchive/phare_dep/ubuntu:24.04
+    container: debian:trixie
     timeout-minutes: 30
     steps:
+    - run: |  # git before checkout, so the checkout is a repository
+        apt-get update
+        apt-get install -y --no-install-recommends ca-certificates curl git \
+          g++ openmpi-bin libopenmpi-dev iwyu
+
     - uses: actions/checkout@v4
 
     - run: |
-        apt update && apt install -y curl git iwyu
         curl -Lo mkn https://github.com/mkn/mkn/releases/download/latest/mkn_nix
         chmod +x mkn
         KLOG=3 ./mkn build -dtKOqp iwyu_fix -Wx res/mkn/mpi # build: the module must link
