@@ -41,3 +41,13 @@ profile:
         tst/damn/amr/test_hierarchy.cpp
         tst/damn/amr/test_level_data.cpp
         tst/damn/amr/test_schedule.cpp
+
+# include-what-you-use report for inc/, needs iwyu on PATH
+- name: iwyu
+  parent: base
+  mode: none
+  mod:
+  - name: cpp.iwyu
+    compile:
+      paths: inc
+      headers: -x c++-header
