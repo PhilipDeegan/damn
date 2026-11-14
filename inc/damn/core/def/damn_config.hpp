@@ -2,7 +2,6 @@
 #define DAMN_CORE_DEF_DAMN_CONFIG_HPP
 
 
-#include "damn/core/def/detail/build_config.hpp"
 #include "damn/core/def/detail/umpire.hpp"
 #include "damn/core/def/detail/raja.hpp" // checks for umpire to know if gpu
 #include "damn/core/def/detail/mkn_avx.hpp"

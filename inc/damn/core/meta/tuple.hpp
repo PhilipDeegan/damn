@@ -1,7 +1,6 @@
 #ifndef DAMN_CORE_META_TUPLE_HPP
 #define DAMN_CORE_META_TUPLE_HPP
 
-#include "damn/core/def.hpp"
 #include "damn/core/meta/for_N.hpp"
 #include "damn/core/def/damn_config.hpp"
 
@@ -10,8 +9,8 @@
 #include <string>
 #include <utility>
 #include <cstddef>
-#include <iterator>
 #include <variant>
+#include <iterator>
 
 namespace damn::core
 {

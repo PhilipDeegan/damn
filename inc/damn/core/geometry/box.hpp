@@ -10,10 +10,8 @@
 #include "damn/core/math/array.hpp"
 
 #include <cassert>
-#include <tuple>
 #include <limits>
 #include <vector>
-#include <cstddef>
 #include <iostream>
 #include <optional>
 #include <algorithm>
@@ -21,7 +19,6 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
-#include <format>
 #include <string>
 
 

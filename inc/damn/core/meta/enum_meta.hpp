@@ -2,7 +2,6 @@
 #define DAMN_CORE_META_ENUM_META_HPP
 
 #include "damn/core/meta/for_N.hpp"
-#include "damn/core/meta/constexprifier.hpp"
 
 #include <cstdint>
 #include <utility>

@@ -2,7 +2,6 @@
 #define DAMN_CORE_SYS_MONITORING_HPP
 
 #include "damn/core/logger.hpp"
-#include "damn/core/def/damn_config.hpp"
 
 #include <string>
 #include <cstddef>

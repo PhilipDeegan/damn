@@ -1,18 +1,16 @@
 #ifndef DAMN_CORE_DATA_TILES_TILE_SET_MAPPER_HPP
 #define DAMN_CORE_DATA_TILES_TILE_SET_MAPPER_HPP
 
-#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/data/tiles/tiling_options.hpp"
 
 #include <vector>
 #include <cassert>
-#include <cstdint>
 #include <algorithm>
 #include <cstddef>
-#include <iterator>
 #include <utility>
+#include <iterator>
 
 namespace damn::core
 {

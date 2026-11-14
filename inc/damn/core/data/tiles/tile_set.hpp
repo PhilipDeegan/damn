@@ -5,16 +5,16 @@
 #include "damn/core/vector.hpp"
 #include "damn/core/memory/span.hpp"
 #include "damn/core/math/numeric.hpp"
-#include "damn/core/meta/tuple.hpp"
 #include "damn/core/meta/for_N.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/ndarray/ndarray_vector.hpp"
-#include "tile_set_mapper.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 #include "damn/core/data/tiles/tiling_options.hpp"
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/geometry/point.hpp"
+
+#include "tile_set_mapper.hpp"
 
 #include <cassert>
 #include <array>

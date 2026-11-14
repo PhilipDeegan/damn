@@ -13,7 +13,6 @@
 // resource's kind, e.g. its centering), not on the instance's values: damn calls them with
 // one patch's resource for the boxes of other patches
 
-#include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 

@@ -2,7 +2,6 @@
 #define DAMN_CORE_MEMORY_KOKKOS_ALLOCATOR_HPP
 
 #include "damn/core/def/kokkos_tools.hpp"
-#include "damn/core/def/damn_config.hpp"
 
 #if DAMN_HAVE_KOKKOS
 

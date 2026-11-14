@@ -4,6 +4,7 @@
 #include "damn/core/def.hpp"
 #include "damn/core/meta/type_meta.hpp"
 #include "damn/core/def/damn_config.hpp"
+
 #include "mkn/gpu.hpp"
 
 #ifndef DAMN_HAVE_GPU

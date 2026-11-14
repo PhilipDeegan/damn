@@ -10,8 +10,6 @@
 
 #if !defined(DAMN_HAVE_MKN_GPU) || DAMN_HAVE_MKN_GPU == 1
 #if __has_include("mkn/gpu.hpp")
-#include "mkn/gpu.hpp"
-#include "mkn/kul/alloc.hpp"
 
 #define DAMN_HAVE_MKN_GPU 1
 

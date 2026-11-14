@@ -8,6 +8,7 @@
 #if __has_include("highfive/H5File.hpp") and (!defined(DAMN_HAS_HIGHFIVE) || DAMN_HAS_HIGHFIVE == 1)
 
 #include "damn/hdf5/h5_file.hpp" // IWYU pragma: export
+
 #include "highfive/H5Version.hpp"
 
 #ifndef HIGHFIVE_VERSION_STRING

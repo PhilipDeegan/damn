@@ -16,7 +16,6 @@
 #include <numeric>
 #include <type_traits>
 #include <array>
-#include <format>
 #include <utility>
 
 

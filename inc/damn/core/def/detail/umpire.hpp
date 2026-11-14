@@ -18,6 +18,8 @@
 #endif
 
 #if DAMN_HAVE_UMPIRE
+#include "damn/core/memory/umpire_allocator.hpp" // LockedQuickPool
+
 #include "SAMRAI/SAMRAI_config.h"
 #include "SAMRAI/tbox/Collectives.h" // tbox::parallel_synchronize();
 #include "umpire/Allocator.hpp"
@@ -25,7 +27,6 @@
 #include "umpire/TypedAllocator.hpp"
 #include "umpire/strategy/AllocationAdvisor.hpp"
 #include "umpire/strategy/QuickPool.hpp"
-#include "damn/core/memory/umpire_allocator.hpp" // LockedQuickPool
 
 namespace damn::_umpire_
 {

@@ -2,7 +2,6 @@
 #define DAMN_CORE_DATA_TILES_TILE_SET_OVERLAPS_HPP
 
 
-#include "damn/core/def.hpp"
 #include "damn/core/memory/span.hpp"
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/geometry/box.hpp"

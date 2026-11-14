@@ -8,7 +8,6 @@
 #include "damn/core/def/damn_config.hpp"
 
 #include <cassert>
-#include <cstdint>
 #include <cstddef>
 
 

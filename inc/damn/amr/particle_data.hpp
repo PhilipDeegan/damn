@@ -14,13 +14,11 @@
 //
 // items must be trivially copyable; as for BoxData the boxes depend only on the patch box
 
-#include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 
 #include <cstddef>
 #include <utility>
-#include <type_traits>
 #include <concepts>
 
 namespace damn::amr
