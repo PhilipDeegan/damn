@@ -1,10 +1,10 @@
-// damn::amr same level moves on a toy field: ghost fills (periodic or not), border sum and
+// damn::amr same level copies on a toy field: ghost fills (periodic or not), border sum and
 // max, leaving particles; the Neighbours' links and distances, plans kept and dropped, and
 // the LevelMap between two levels
 // expected values come from brute force over every patch and periodic image
 
 #include "damn/amr/level_map.hpp"
-#include "damn/amr/move.hpp"
+#include "damn/amr/copy.hpp"
 
 #include "gtest/gtest.h"
 
@@ -237,7 +237,7 @@ TEST_P(GhostFill, ghostsGetTheNeighboursDomainValues)
     });
 
     auto n = neighbours_of(h);
-    move(fill_ghosts, n, {name}, ld);
+    copy(fill_ghosts, n, {name}, ld);
 
     // a ghost point is filled iff some (other or shifted) patch's domain covers it
     auto const domain_nodes = [&](auto const& f, auto const& p) { return domain_box(f, p.box); };
@@ -270,7 +270,7 @@ TEST_P(GhostFill, ghostsGetTheNeighboursDomainValues)
         EXPECT_GT(n_unfilled, 0u); // outside the domain
 }
 
-INSTANTIATE_TEST_SUITE_P(Move, GhostFill,
+INSTANTIATE_TEST_SUITE_P(Copy, GhostFill,
                          ::testing::Combine(::testing::Values("Bx", "rho", "Ez", "alpha_density"),
                                             ::testing::Bool()));
 
@@ -293,7 +293,7 @@ TEST_P(BorderOps, sumCountsEveryPatchImageCoveringAPoint)
     });
 
     auto n = neighbours_of(h);
-    move(sum_borders, n, {"rho"}, ld);
+    copy(sum_borders, n, {"rho"}, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         auto& f         = data.rho;
@@ -319,7 +319,7 @@ TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)
     });
 
     auto n = neighbours_of(h);
-    move(max_borders, n, {"Bx"}, ld);
+    copy(max_borders, n, {"Bx"}, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         auto& f         = data.Bx;
@@ -334,7 +334,7 @@ TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)
     });
 }
 
-INSTANTIATE_TEST_SUITE_P(Move, BorderOps, ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(Copy, BorderOps, ::testing::Bool());
 
 
 // ---------------------------------------------------------------- GhostToDomain
@@ -362,7 +362,7 @@ TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
     });
 
     auto n = neighbours_of(h);
-    move(gather_leaving, n, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, ld);
+    copy(gather_leaving, n, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, ld);
 
     auto const level_cells = level_domain(h, 0);
     auto const shape       = level_cells.shape();
@@ -395,18 +395,18 @@ TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
     EXPECT_GT(n_arrived, 0u);
 }
 
-INSTANTIATE_TEST_SUITE_P(Move, GhostParticles, ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(Copy, GhostParticles, ::testing::Bool());
 
-TEST(Move, leavingNeedsParticleData)
+TEST(Copy, leavingNeedsParticleData)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
     auto n       = neighbours_of(h);
-    EXPECT_THROW(move(gather_leaving, n, std::vector<ResourcePair>{{"rho", "rho"}}, ld),
+    EXPECT_THROW(copy(gather_leaving, n, std::vector<ResourcePair>{{"rho", "rho"}}, ld),
                  std::runtime_error);
 }
 
-TEST(Move, oneMoveExchangesAllItsResources)
+TEST(Copy, oneCopyExchangesAllItsResources)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
@@ -422,7 +422,7 @@ TEST(Move, oneMoveExchangesAllItsResources)
         }
     });
 
-    move(fill_ghosts, n, moments, ld);
+    copy(fill_ghosts, n, moments, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         for (auto const& name : moments)
@@ -435,42 +435,42 @@ TEST(Move, oneMoveExchangesAllItsResources)
     });
 }
 
-TEST(Move, rejectsUnknownAndNonBoxResources)
+TEST(Copy, rejectsUnknownAndNonBoxResources)
 {
     auto const h = make_hierarchy({false, false});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
     auto n       = neighbours_of(h);
 
-    EXPECT_THROW(move(fill_ghosts, n, {"alpha_particles"}, ld), std::runtime_error);
-    EXPECT_THROW(move(fill_ghosts, n, {"rhoo"}, ld), std::runtime_error);
-    EXPECT_THROW(move(fill_ghosts, n, {"domain"}, ld), std::runtime_error); // ParticleData
+    EXPECT_THROW(copy(fill_ghosts, n, {"alpha_particles"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"rhoo"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"domain"}, ld), std::runtime_error); // ParticleData
 }
 
-TEST(Move, plansAreMadeOnceAndKeptInTheNeighbours)
+TEST(Copy, plansAreMadeOnceAndKeptInTheNeighbours)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
     auto n       = neighbours_of(h);
 
-    move(fill_ghosts, n, {"Bx"}, ld);
-    move(sum_borders, n, {"rho"}, ld);
+    copy(fill_ghosts, n, {"Bx"}, ld);
+    copy(sum_borders, n, {"rho"}, ld);
     ASSERT_EQ(n.plans.size(), 2u);
     auto const* plan = &n.plans.begin()->second;
 
-    move(fill_ghosts, n, {"Bx"}, ld);
+    copy(fill_ghosts, n, {"Bx"}, ld);
     EXPECT_EQ(n.plans.size(), 2u);
     EXPECT_EQ(&n.plans.begin()->second, plan);
 
     // the border sum's buffer holds every copy, no more
     auto const& sum   = plan_for(Region::Borders, n, ld, same_names({"rho"}));
     std::size_t bytes = 0;
-    for (auto const& c : sum.copies)
+    for (auto const& c : sum.pieces)
         bytes += c.bytes;
     EXPECT_EQ(sum.buffer.size(), bytes);
     EXPECT_GT(bytes, 0u);
 }
 
-TEST(Move, aRegridNeedsNewNeighbours)
+TEST(Copy, aRegridNeedsNewNeighbours)
 {
     auto h  = make_hierarchy({true, true});
     auto ld = allocate(h.levels[0], 0, make_patch_data);
@@ -482,28 +482,28 @@ TEST(Move, aRegridNeedsNewNeighbours)
     ld = allocate(h.levels[0], 0, make_patch_data);
 
     EXPECT_FALSE(is_current(n, h.levels[0]));
-    EXPECT_THROW(move(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
 
     n = neighbours_of(h);
     EXPECT_TRUE(is_current(n, h.levels[0]));
-    EXPECT_NO_THROW(move(fill_ghosts, n, {"Bx"}, ld));
+    EXPECT_NO_THROW(copy(fill_ghosts, n, {"Bx"}, ld));
 }
 
-TEST(Move, theReachMustCoverEveryResource)
+TEST(Copy, theReachMustCoverEveryResource)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
     auto short_n = make_neighbours(h, 0, 0, single_node(), reach - 1);
-    EXPECT_THROW(move(fill_ghosts, short_n, {"Bx"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, short_n, {"Bx"}, ld), std::runtime_error);
 }
 
-TEST(Move, otherRanksAreNotDoneYet)
+TEST(Copy, otherRanksAreNotDoneYet)
 {
     auto const h = make_hierarchy({true, true}, 2); // patches split over 2 ranks
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
     auto n       = neighbours_of(h, 0, single_node(2));
     EXPECT_EQ(farthest(n), Distance::Node);
-    EXPECT_THROW(move(fill_ghosts, n, {"rho"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"rho"}, ld), std::runtime_error);
 }
 
 

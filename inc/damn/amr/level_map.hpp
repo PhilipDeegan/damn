@@ -10,7 +10,7 @@
 //             data onto it; link shifts are in the fine index space
 //
 // purely geometric, as Neighbours: built per regrid of either level. Refining and coarsening
-// data along it comes later
+// data along it come later
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
@@ -44,24 +44,32 @@ struct LevelMap
 
 namespace detail
 {
+    // local patch id -> its LevelData index
     template<std::size_t dim>
     NO_DISCARD std::map<std::uint32_t, std::size_t>
-    local_indices(std::vector<Patch<dim>> const& local)
-    {
-        std::map<std::uint32_t, std::size_t> index_of;
-        for (std::size_t i = 0; i < local.size(); ++i)
-            index_of[local[i].id] = i;
-        return index_of;
-    }
+    local_indices(std::vector<Patch<dim>> const& local);
 
+    // the shifts with the unshifted image first
     template<std::size_t dim>
     NO_DISCARD std::vector<core::Point<int, dim>>
-    with_no_shift(std::vector<core::Point<int, dim>> s)
-    {
-        s.insert(s.begin(), core::Point<int, dim>{});
-        return s;
-    }
+    with_no_shift(std::vector<core::Point<int, dim>> s);
 } // namespace detail
+
+template<std::size_t dim>
+std::map<std::uint32_t, std::size_t> detail::local_indices(std::vector<Patch<dim>> const& local)
+{
+    std::map<std::uint32_t, std::size_t> index_of;
+    for (std::size_t i = 0; i < local.size(); ++i)
+        index_of[local[i].id] = i;
+    return index_of;
+}
+
+template<std::size_t dim>
+std::vector<core::Point<int, dim>> detail::with_no_shift(std::vector<core::Point<int, dim>> s)
+{
+    s.insert(s.begin(), core::Point<int, dim>{});
+    return s;
+}
 
 
 // the map between level coarse and level coarse + 1, for rank's patches of both

@@ -9,7 +9,7 @@
 //                meets the local patch's box grown by reach: reach is the most cells any
 //                resource reaches outside its patch (ghosts, plus one for primal nodes)
 //
-// purely geometric: built once per regrid (make_neighbours), then damn/amr/move.hpp moves
+// purely geometric: built once per regrid (make_neighbours), then damn/amr/copy.hpp copies
 // data along the links; what moves where for a given set of resources is planned on first
 // use and kept here (plans), so a regrid, which builds new Neighbours, drops them
 
@@ -60,7 +60,7 @@ NO_DISCARD inline std::vector<ResourcePair> same_names(std::vector<std::string> 
     return pairs;
 }
 
-// what goes where, see move.hpp
+// what goes where, see copy.hpp
 enum class Region : std::uint8_t {
     Ghosts,  // neighbours' domain points -> my ghost points
     Borders, // neighbours' ghost points -> the same points of mine (ghost boxes overlap)
@@ -69,7 +69,7 @@ enum class Region : std::uint8_t {
 
 // one region of one resource from one linked patch into one local patch
 template<std::size_t dim>
-struct Copy
+struct Piece
 {
     std::size_t dst = 0; // local patch (LevelData index)
     Link<dim> src{};     // where from
@@ -82,7 +82,7 @@ struct Copy
 template<std::size_t dim>
 struct Plan
 {
-    std::vector<Copy<dim>> copies{};
+    std::vector<Piece<dim>> pieces{};
     std::vector<std::byte> buffer{}; // kept between moves: no allocation once sized
 };
 
@@ -97,7 +97,7 @@ struct Neighbours
     std::vector<Patch<dim>> built_on{};     // the level's patches when built
     std::vector<Patch<dim>> local{};        // this rank's, in LevelData order
     std::vector<std::vector<Link<dim>>> of; // of[i]: links of local[i]
-    std::map<PlanKey, Plan<dim>> plans{};   // move.hpp's, by region and resources
+    std::map<PlanKey, Plan<dim>> plans{};   // copy.hpp's, by region and resources
 };
 
 
