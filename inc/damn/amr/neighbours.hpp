@@ -14,6 +14,7 @@
 // use and kept here (plans), so a regrid, which builds new Neighbours, drops them
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -119,6 +120,7 @@ template<std::size_t dim>
 NO_DISCARD Neighbours<dim> make_neighbours(Hierarchy<dim> const& h, int const ln, int const rank,
                                            Topology const& topology, int const reach)
 {
+    DAMN_LOG_SCOPE(1, "damn::amr::make_neighbours");
     if (!level_exists(h, ln))
         throw std::runtime_error("damn::amr::make_neighbours: no level " + std::to_string(ln));
     if (reach < 0)

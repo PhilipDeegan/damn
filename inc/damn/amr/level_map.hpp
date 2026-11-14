@@ -13,6 +13,7 @@
 // data along it come later
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -77,6 +78,7 @@ template<std::size_t dim>
 NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int const coarse, int const rank,
                                         Topology const& topology, int const reach)
 {
+    DAMN_LOG_SCOPE(1, "damn::amr::make_level_map");
     int const fine = coarse + 1;
     if (!level_exists(h, coarse) or !level_exists(h, fine))
         throw std::runtime_error("damn::amr::make_level_map: no levels " + std::to_string(coarse)

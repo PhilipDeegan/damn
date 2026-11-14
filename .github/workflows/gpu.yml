@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# the containers run as root: Open MPI refuses unless allowed, for every mpirun
+env:
+  OMPI_ALLOW_RUN_AS_ROOT: 1
+  OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+
 jobs:
   # CUDA on a simulated NVIDIA H100, clang only (no nvcc). The simulator needs a shared cudart,
   #  the profiles link -lcudart (the .so).
@@ -69,11 +74,11 @@ jobs:
     - name: Build/Test mpi
       run: |
         KLOG=3 vgpu run mkn clean build test -dtKOqp test_damn_mpi -x res/mkn/clang_cuda_mpi_ci
-        vgpu run mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
+        vgpu run mpirun --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
     - name: Build/Test hdf5
       run: |
         KLOG=3 vgpu run mkn clean build test -dtKOqp test_damn_hdf5 -x res/mkn/clang_cuda_mpi_ci
-        vgpu run mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
+        vgpu run mpirun --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
 
   # ROCm on a simulated AMD MI300X (gfx942), hipcc from ROCm 7.1, rocThrust (res/mkn/hip_thrust.yaml,
   #  thrust is used only if its headers are found)
@@ -120,8 +125,8 @@ jobs:
     - name: Build/Test mpi
       run: |
         KLOG=3 vgpu run mkn clean build test -dtKOqp test_damn_mpi -x res/mkn/hip_thrust_mpi_ci
-        vgpu run mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
+        vgpu run mpirun --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
     - name: Build/Test hdf5
       run: |
         KLOG=3 vgpu run mkn clean build test -dtKOqp test_damn_hdf5 -x res/mkn/hip_thrust_mpi_ci
-        vgpu run mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
+        vgpu run mpirun --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp

@@ -34,6 +34,7 @@ profile:
   test: tst/damn/mpi/test_mpi_utils.cpp
         tst/damn/mpi/test_mpi_copy.cpp
         tst/damn/mpi/test_mpi_regrid.cpp
+        tst/damn/mpi/test_mpi_scope_timing.cpp
 
 # HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
 # parallel HDF5 the settings can find, e.g. -x res/mkn/mpi
