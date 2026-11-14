@@ -2,18 +2,15 @@
 #define DAMN_CORE_DEF_DAMN_CONFIG_HPP
 
 
-#include "damn/core/def/detail/umpire.hpp"
-#include "damn/core/def/detail/raja.hpp" // checks for umpire to know if gpu
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
-#include "damn/core/def/kokkos_tools.hpp"
 
 #include <cstdint>
 
 #if !defined(DAMN_HAVE_GPU)
-#if DAMN_HAVE_MKN_GPU_HW // or DAMN_HAVE_UMPIRE
+#if DAMN_HAVE_MKN_GPU_HW
 #define DAMN_HAVE_GPU 1
-#endif // DAMN_HAVE_MKN_GPU_HW or DAMN_HAVE_UMPIRE
+#endif // DAMN_HAVE_MKN_GPU_HW
 #endif // !defined(DAMN_HAVE_GPU)
 
 
@@ -53,14 +50,11 @@ namespace damn
 {
 struct CompileOptions
 {
-    static constexpr bool WithUmpire   = DAMN_HAVE_UMPIRE;
     static constexpr bool WithMknGpu   = DAMN_HAVE_MKN_GPU;
     static constexpr bool WithMknGpuHW = DAMN_HAVE_MKN_GPU_HW;
     static constexpr bool WithMknAVX   = DAMN_HAVE_MKN_AVX;
-    static constexpr bool WithRAJA     = DAMN_HAVE_RAJA;
     static constexpr bool WithThrust   = DAMN_HAVE_THRUST;
-    static constexpr bool WithKokkos   = DAMN_HAVE_KOKKOS;
-    static constexpr bool WithGpu      = WithUmpire || WithMknGpu;
+    static constexpr bool WithGpu      = WithMknGpu;
 };
 
 

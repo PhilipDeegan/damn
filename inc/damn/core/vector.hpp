@@ -7,8 +7,6 @@
 #include "damn/core/memory/memory.hpp"
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
-#include "damn/core/def/detail/umpire.hpp"
-#include "damn/core/def/kokkos_tools.hpp"
 
 #include "mkn/gpu.hpp"
 #include "mkn/kul/alloc.hpp"
@@ -27,7 +25,7 @@ namespace damn
 
 auto constexpr default_allocator_mode()
 {
-    if constexpr (CompileOptions::WithUmpire or CompileOptions::WithMknGpuHW)
+    if constexpr (CompileOptions::WithMknGpuHW)
         return AllocatorMode::GPU_UNIFIED;
     return AllocatorMode::CPU;
 }
@@ -40,8 +38,7 @@ bool constexpr allocator_mode_supported()
     else if constexpr (/*allocator_mode == AllocatorMode::GPU
                        or */
                        allocator_mode == AllocatorMode::GPU_UNIFIED)
-        return CompileOptions::WithMknGpuHW or CompileOptions::WithUmpire
-               or CompileOptions::WithKokkos;
+        return CompileOptions::WithMknGpuHW;
     return false;
 }
 
@@ -92,13 +89,7 @@ auto constexpr allocator()
                       or */
                        allocator_mode == AllocatorMode::GPU_UNIFIED)
     {
-        // umpire allocates when present, kernels (e.g. mkn::gpu) then run on umpire memory
-        if constexpr (CompileOptions::WithUmpire)
-        {
-            // like mkn below: fields (mode 0) construct, particles (mode 1) don't
-            DAMN_WITH_UMPIRE(return Allocator<allocator_mode, UmpireAllocator<Type, mode == 0>>{});
-        }
-        else if constexpr (CompileOptions::WithMknGpuHW)
+        if constexpr (CompileOptions::WithMknGpuHW)
         {
             DAMN_WITH_MKN_GPU({
                 if constexpr (mode == 0) // for fields
@@ -106,10 +97,6 @@ auto constexpr allocator()
                 else // for particles
                     return Allocator<allocator_mode, mkn::gpu::NoConstructAllocator<Type>>{};
             });
-        }
-        else if constexpr (CompileOptions::WithKokkos)
-        {
-            DAMN_WITH_KOKKOS(return Allocator<allocator_mode, KokkosAllocator<Type>>{});
         }
         // else compile error
     }
@@ -120,7 +107,6 @@ template<typename Type, auto allocator_mode, std::uint8_t mode>
 using allocator_type_t = decltype(allocator<Type, allocator_mode, mode>());
 
 // true if V is a std::vector using an mkn::gpu allocator, for mkn::gpu::{resize,reserve,as_super}
-//  GPU_UNIFIED vectors may use another allocator (e.g. UmpireAllocator) even with mkn::gpu on
 template<typename V>
 bool constexpr is_mkn_gpu_vector_v = false;
 
@@ -131,17 +117,6 @@ bool constexpr is_mkn_gpu_vector_v<std::vector<T, mkn::gpu::NoConstructAllocator
 template<typename T, std::int32_t align>
 bool constexpr is_mkn_gpu_vector_v<std::vector<T, mkn::gpu::ManagedAllocator<T, align>>> = true;
 #endif // DAMN_HAVE_MKN_GPU
-
-// true if V is a std::vector over unified memory whose allocator constructs nothing by default
-//  (resize touches no element on the host), other than mkn::gpu's, e.g. umpire particles
-template<typename V>
-bool constexpr is_unified_non_constructing_vector_v = false;
-
-#if DAMN_HAVE_UMPIRE
-template<typename T>
-bool constexpr is_unified_non_constructing_vector_v<std::vector<T, UmpireAllocator<T, false>>>
-    = true;
-#endif // DAMN_HAVE_UMPIRE
 
 // ^ bi directionality v
 
@@ -360,26 +335,14 @@ struct MinimizingVector
 };
 
 
-// capacity of v to at least s, the best way for its allocator: unified memory vectors that
-//  construct nothing on the host get a new buffer and a device copy (copy = false: no copy),
-//  so their elements never migrate to the host, others std::vector::reserve
+// capacity of v to at least s, the best way for its allocator: mkn::gpu's (unified memory,
+//  copy = false: no copy), others std::vector::reserve
 template<typename V>
 void reserve(V& v, std::size_t const s, bool const copy = true)
 {
     if constexpr (is_mkn_gpu_vector_v<V>)
     {
         DAMN_WITH_MKN_GPU(mkn::gpu::reserve(v, s, copy));
-    }
-    else if constexpr (is_unified_non_constructing_vector_v<V>)
-    {
-        if (s <= v.capacity())
-            return;
-        V cpy(v.get_allocator());
-        cpy.reserve(s);
-        cpy.resize(v.size()); // constructs nothing
-        if (copy and v.size())
-            core::gpu::copy(cpy.data(), v.data(), v.size());
-        v = std::move(cpy);
     }
     else
         v.reserve(s);
@@ -394,11 +357,7 @@ void resize(V& v, std::size_t const s, bool const copy = true)
         DAMN_WITH_MKN_GPU(mkn::gpu::resize(v, s, copy));
     }
     else
-    {
-        if constexpr (is_unified_non_constructing_vector_v<V>)
-            reserve(v, s, copy);
         v.resize(s);
-    }
 }
 
 
