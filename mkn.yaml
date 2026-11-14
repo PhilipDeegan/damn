@@ -58,6 +58,7 @@ profile:
         tst/damn/amr/test_hierarchy.cpp
         tst/damn/amr/test_level_data.cpp
         tst/damn/amr/test_copy.cpp
+        tst/damn/amr/test_partition.cpp
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu

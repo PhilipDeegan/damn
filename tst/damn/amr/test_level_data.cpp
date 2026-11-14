@@ -48,13 +48,11 @@ static_assert(not HasResources<toy::NoResources>);
 
 namespace
 {
-    // 10 x 8 cells, 6 patches of 4 x 4 (at most), ranks 0 0 0 1 1 1
+    // 10 x 8 cells, 6 patches of 4 x 4 (at most), ranks 0 0 0 1 1 1 (given, not partitioned)
     auto level_0()
     {
-        Hierarchy<2> h;
-        h.domain = core::Box<int, 2>{std::array{0, 0}, std::array{9, 7}};
-        h.dx     = {.1, .1};
-        return uniform_level_0(h, {4, 4}, 2);
+        auto const domain = core::Box<int, 2>{std::array{0, 0}, std::array{9, 7}};
+        return make_level(0, chop(domain, std::array{4, 4}), {0, 0, 0, 1, 1, 1});
     }
 
     // one value per cell, two populations named from the input
