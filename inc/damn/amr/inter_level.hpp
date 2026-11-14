@@ -17,7 +17,8 @@
 //                     per coarse patch image: appends the fine items (e.g. split coarse ones)
 //                     whose cell is in box; coarse items' cells are at cell(item) + shift in
 //                     the coarse index space
-//     with a pair's coarse_new set, coarse values are (1 - alpha) coarse + alpha coarse_new
+//     with a pair's coarse_new set, coarse values are (1 - alpha) coarse + alpha coarse_new:
+//     coarse only at alpha 0, coarse_new only at alpha 1 (the other may be unset)
 //
 //   coarsen(op, map, pairs, fine_ld, coarse_ld)
 //     BoxData only: for each fine patch and coarse patch image under it,
@@ -183,12 +184,20 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
                 });
                 return;
             }
+            // at alpha 1 coarse_new only: coarse may not be set yet (0 * NaN is NaN)
             bool const found_new = with_resource(coarse_data, pair.coarse_new, [&](auto& nsrc) {
                 if constexpr (std::is_same_v<std::decay_t<decltype(nsrc)>, R>)
-                    core::for_each_point(piece.box, [&](auto const& p) {
-                        detail::write(out, T((1 - alpha) * value(src, cbox, p - shift)
-                                             + alpha * value(nsrc, cbox, p - shift)));
-                    });
+                {
+                    if (alpha == 1)
+                        core::for_each_point(piece.box, [&](auto const& p) {
+                            detail::write(out, T{value(nsrc, cbox, p - shift)});
+                        });
+                    else
+                        core::for_each_point(piece.box, [&](auto const& p) {
+                            detail::write(out, T((1 - alpha) * value(src, cbox, p - shift)
+                                                 + alpha * value(nsrc, cbox, p - shift)));
+                        });
+                }
                 else
                     throw std::runtime_error("damn::amr::refine: " + pair.coarse_new + " is not of "
                                              + pair.coarse + "'s kind");

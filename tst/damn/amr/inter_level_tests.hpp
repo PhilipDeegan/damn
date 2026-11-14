@@ -14,6 +14,7 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -205,6 +206,31 @@ TEST(Refine, timeInterpolated)
         core::for_each_point(domain_box(f, cell), [&](auto const& p) {
             EXPECT_DOUBLE_EQ(value(f, cell, p), 1.25 * f_on(l.h, 0, core::floor_div(p, 2))) << p;
         });
+    }
+}
+
+TEST(Refine, theEndsOfATimeInterpolationReadOneSideOnly)
+{
+    for (double const alpha : {0., 1.})
+    {
+        auto l = make_levels({true, true});
+        // the side alpha does not weigh is unset
+        for (std::size_t i = 0; i < size(l.coarse); ++i)
+        {
+            auto& f = field(l.coarse.data[i], alpha == 1 ? "protons_density" : "alpha_density");
+            std::fill(f.v.begin(), f.v.end(), nan);
+        }
+        do_refine(Inject{}, LevelRegion::Interior, l.map,
+                  {{"protons_density", "rho", "alpha_density"}}, l.coarse, l.fine, alpha);
+        for (std::size_t i = 0; i < size(l.fine); ++i)
+        {
+            auto& f          = l.fine.data[i].rho;
+            auto const& cell = l.fine.patches[i].box;
+            core::for_each_point(domain_box(f, cell), [&](auto const& p) {
+                EXPECT_EQ(value(f, cell, p), (1 + alpha) * f_on(l.h, 0, core::floor_div(p, 2)))
+                    << alpha << " " << p;
+            });
+        }
     }
 }
 
