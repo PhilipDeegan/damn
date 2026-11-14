@@ -109,8 +109,56 @@ inline void append(Particles& p, Item item, Point2 const& shift)
     p.items.push_back(item);
 }
 
+// counts the PatchData alive (not moved from), and the most at once: regrid's memory tests
+struct Tracker
+{
+    static inline long live = 0, peak = 0;
+    static void reset_peak() { peak = live; }
+
+    Tracker() { up(); }
+    Tracker(Tracker const& that)
+        : alive{that.alive}
+    {
+        if (alive)
+            up();
+    }
+    Tracker(Tracker&& that) noexcept
+        : alive{std::exchange(that.alive, false)}
+    {
+    }
+    Tracker& operator=(Tracker const& that)
+    {
+        if (alive != that.alive)
+            that.alive ? up() : down();
+        alive = that.alive;
+        return *this;
+    }
+    Tracker& operator=(Tracker&& that) noexcept
+    {
+        if (alive)
+            down();
+        alive = std::exchange(that.alive, false);
+        return *this;
+    }
+    ~Tracker()
+    {
+        if (alive)
+            down();
+    }
+
+private:
+    void up()
+    {
+        if (++live > peak)
+            peak = live;
+    }
+    void down() { --live; }
+    bool alive = true;
+};
+
 struct PatchData
 {
+    Tracker tracker;
     Field Bx{{true, false}}, rho{{true, true}}, Ez{{false, false}};
     std::vector<Population> populations;
     Particles domain, patch_ghost;
