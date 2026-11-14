@@ -108,10 +108,12 @@ jobs:
           res/mkn/hip_thrust.yaml > res/mkn/hip_thrust_ci.yaml
         sed -e "s/^super: hip_thrust$/super: hip_thrust_ci/" \
           res/mkn/hip_thrust_mpi.yaml > res/mkn/hip_thrust_mpi_ci.yaml
-        grep -n offload-arch res/mkn/hip_thrust_ci.yaml
+        # the hip profiles' local (/mkn/r) and remote (git@github.com, SSH) repositories are a
+        #  developer's: CI uses mkn's defaults (~/.maiken/repo, https)
+        sed -i -e '/^local:/,+2d' -e '/^remote:/,+2d' res/mkn/hip_thrust_ci.yaml
+        cat res/mkn/hip_thrust_ci.yaml
         curl -Lo mkn https://github.com/mkn/mkn/releases/download/latest/mkn_nix
         chmod +x mkn && mv mkn /usr/local/bin/mkn
-        mkdir -p /mkn # the hip profiles set local.repo: /mkn/r
     - name: Build/Test core
       run: |
         KLOG=3 vgpu run mkn clean build test -dtKOqp test_damn_core -x res/mkn/hip_thrust_ci
