@@ -2,7 +2,6 @@
 #define DAMN_CORE_GEOMETRY_POINT_HPP
 
 #include "damn/core/def.hpp"
-#include "damn/core/memory/span.hpp"
 #include "damn/core/math/array.hpp"
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/sys/strings.hpp"
@@ -16,7 +15,6 @@
 #include <cassert>
 #include <cstddef>
 #include <sstream>
-#include <ostream>
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>

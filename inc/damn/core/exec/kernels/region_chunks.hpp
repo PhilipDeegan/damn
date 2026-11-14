@@ -6,10 +6,6 @@
 //  one launch for all. Even split: ceil(size / target) chunks of ceil(size / n) points, so no
 //  chunk is a mostly idle remainder. The target sizes the grid to the device (SM count)
 
-#include "damn/core/def.hpp"
-#include "damn/core/exec/kernels.hpp"
-#include "damn/core/geometry/box.hpp"
-#include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <cstdint>

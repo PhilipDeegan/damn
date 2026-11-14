@@ -3,18 +3,11 @@
 
 
 #include "damn/core/def.hpp"
-#include "damn/core/vector.hpp"
-#include "damn/core/math/array.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 
 #include <cassert>
 #include <array>
-#include <tuple>
-#include <vector>
 #include <cstdint>
-#include <numeric>
-#include <iostream>
-#include <stdexcept>
 #include <cstddef>
 #include <utility>
 

@@ -1,7 +1,6 @@
 #ifndef DAMN_CORE_MATH_SORT_HPP
 #define DAMN_CORE_MATH_SORT_HPP
 
-#include "damn/core/def.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <algorithm>

@@ -5,7 +5,6 @@
 #include "damn/core/geometry/point.hpp"
 
 #include <array>
-#include <cassert>
 #include <optional>
 #include <functional>
 #include <type_traits>

@@ -1,7 +1,6 @@
 #ifndef DAMN_CORE_MEMORY_UMPIRE_ALLOCATOR_HPP
 #define DAMN_CORE_MEMORY_UMPIRE_ALLOCATOR_HPP
 
-#include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/umpire.hpp"
 
 #if DAMN_HAVE_UMPIRE

@@ -4,10 +4,9 @@
 
 #include "damn/core/def/kokkos_tools.hpp"
 #include "damn/core/def/damn_config.hpp"
-#include "damn/core/memory/kokkos_allocator.hpp"
-#include "damn/core/memory/umpire_allocator.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
 #include "damn/core/def/detail/raja.hpp"
+
 #include "mkn/gpu.hpp"
 
 #include <cassert>

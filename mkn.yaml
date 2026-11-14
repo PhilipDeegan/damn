@@ -60,7 +60,7 @@ profile:
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
-  parent: base
+  parent: damn_hdf5 # base, MPI, HighFive and HDF5: every header parses
   mode: none
   mod:
   - name: cpp.iwyu
@@ -73,7 +73,7 @@ profile:
 # iwyu's suggestions applied (fix_include): CI builds this and fails on any resulting diff
 # mpicxx adds MPI's include directories itself, iwyu needs them given (Debian/Ubuntu openmpi)
 - name: iwyu_fix
-  parent: base
+  parent: damn_hdf5 # base, MPI, HighFive and HDF5: every header parses
   mode: none
   mod:
   - name: cpp.iwyu
@@ -85,5 +85,7 @@ profile:
       headers: -x c++-header
       # namespace a::b in forward declarations, damn's include mappings
       args: -Xiwyu --cxx17ns -Xiwyu --mapping_file=res/iwyu.imp
-      fix: --nocomments
+      # --noreorder keeps the include order (damn, other, system), --nosafe_headers lets it
+      # remove unused includes from headers too
+      fix: --nocomments --noreorder --nosafe_headers
       system_last: true

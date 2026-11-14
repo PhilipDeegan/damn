@@ -15,7 +15,6 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstddef>
-#include <format>
 #include <type_traits>
 #include <utility>
 

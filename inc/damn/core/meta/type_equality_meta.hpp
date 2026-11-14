@@ -2,7 +2,6 @@
 #define DAMN_CORE_META_TYPE_EQUALITY_META_HPP
 
 #include <concepts>
-#include <type_traits>
 
 
 namespace damn

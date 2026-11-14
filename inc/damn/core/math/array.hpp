@@ -13,7 +13,6 @@
 #include <utility>
 #include <type_traits>
 #include <cstddef>
-#include <format>
 
 namespace damn::core
 {

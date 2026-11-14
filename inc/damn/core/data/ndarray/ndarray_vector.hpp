@@ -1,12 +1,9 @@
 #ifndef DAMN_CORE_DATA_NDARRAY_NDARRAY_VECTOR_HPP
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_VECTOR_HPP
 
-#include "damn/core/def.hpp"
 #include "damn/core/vector.hpp"
 #include "damn/core/memory/span.hpp"
 #include "damn/core/data/ndarray/ndarray_view.hpp"
-#include "damn/core/meta/for_N.hpp"
-#include "damn/core/math/array.hpp"
 #include "damn/core/math/numeric.hpp"
 #include "damn/core/def/damn_config.hpp"
 

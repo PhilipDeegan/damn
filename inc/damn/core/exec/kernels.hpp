@@ -23,8 +23,6 @@ struct Guess;
 
 #if DAMN_HAVE_GPU || DAMN_HAVE_MKN_GPU
 
-#include "damn/core/geometry/box.hpp"
-
 namespace damn::kernel
 {
 
