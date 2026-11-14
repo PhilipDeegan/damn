@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -176,6 +177,12 @@ inline void for_each_resource(PatchData& data, auto&& fn)
     }
     fn("domain", data.domain);
     fn("patch_ghost", data.patch_ghost);
+}
+
+// LevelData holding patch data by unique_ptr (move only), as plamn's
+inline void for_each_resource(std::unique_ptr<PatchData>& data, auto&& fn)
+{
+    for_each_resource(*data, fn);
 }
 } // namespace toy
 
