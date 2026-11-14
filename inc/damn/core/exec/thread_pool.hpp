@@ -1,6 +1,13 @@
 #ifndef DAMN_CORE_EXEC_THREAD_POOL_HPP
 #define DAMN_CORE_EXEC_THREAD_POOL_HPP
 
+// ThreadPool: n_pools BS thread pools of threads_per_pool threads, patches to pools, tiles to a
+// pool's threads (patch_exec, tile_exec)
+//
+// -DDAMN_THREAD_POOL_SYNC=1: every pool is synchronous, a task runs on the calling thread when
+// it is submitted, in submission order. The same calls and results, no threads: serial numbers
+// for timings and hardware counters (which count the calling thread), and simpler debugging
+
 #include "BS_thread_pool.hpp"
 
 #include <mutex>
@@ -15,11 +22,29 @@
 #include <type_traits>
 #include <cstddef>
 
+#if !defined(DAMN_THREAD_POOL_SYNC)
+#define DAMN_THREAD_POOL_SYNC 0
+#endif
+
 namespace damn::core
 {
+// a pool whose tasks run when submitted, on the submitting thread: what ThreadPool uses with
+// DAMN_THREAD_POOL_SYNC
+struct SynchronousPool
+{
+    explicit SynchronousPool(std::size_t const /*threads*/) {}
+
+    void detach_task(auto&& task) { task(); }
+    void wait() {}
+    bool wait_for(auto const&) const { return true; } // never anything left to wait for
+};
 
 struct ThreadPool
 {
+    bool static constexpr synchronous = DAMN_THREAD_POOL_SYNC;
+    using Pool
+        = std::conditional_t<synchronous, SynchronousPool, ::BS::thread_pool<::BS::tp::none>>;
+
     static inline std::size_t n_pools          = 1;
     static inline std::size_t threads_per_pool = 1;
 
@@ -39,8 +64,7 @@ struct ThreadPool
         mutices          = std::vector<std::mutex>(n_pools);
         thread_pools.reserve(n_pools);
         for (std::size_t i = 0; i < n_pools; ++i)
-            thread_pools.emplace_back(
-                std::make_shared<::BS::thread_pool<::BS::tp::none>>(threads_per_pool));
+            thread_pools.emplace_back(std::make_shared<Pool>(threads_per_pool));
     }
 
     // joins and destroys every pool's threads, configure() is needed before further use
@@ -188,7 +212,7 @@ struct ThreadPool
     auto& operator()() { return thread_pools[first_ready_idx()]; }
 
     std::vector<std::mutex> mutices;
-    std::vector<std::shared_ptr<::BS::thread_pool<::BS::tp::none>>> thread_pools;
+    std::vector<std::shared_ptr<Pool>> thread_pools;
 
 private:
     // per View type, not per call site: calls don't nest, each empties its slots before returning
