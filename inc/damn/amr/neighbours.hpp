@@ -27,6 +27,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iterator>
 
 namespace damn::amr
 {
@@ -67,23 +68,32 @@ enum class Region : std::uint8_t {
     Leaving, // neighbours' items outside their domain -> my domain, where their cell is mine
 };
 
-// one region of one resource from one linked patch into one local patch
+// one region of one resource from one linked patch into one patch
 template<std::size_t dim>
 struct Piece
 {
-    std::size_t dst = 0; // local patch (LevelData index)
+    std::size_t dst = 0; // local patch (LevelData index), not_local for outgoing pieces
     Link<dim> src{};     // where from
     ResourcePair names{};
     core::Box<int, dim> box{}; // dst points (or cells), level index space
     std::size_t offset = 0;    // into the plan's buffer, if it goes through one (bytes)
-    std::size_t bytes  = 0;
+    std::size_t bytes  = 0;    // field values (0 for particles: their number varies)
+    int dst_rank       = 0;
 };
 
+// what goes where for a region and set of resources, from one rank's point of view
+//   pieces:   into my patches, from mine or another rank's
+//   outgoing: from my patches into another rank's
+// both ranks of a transfer make the same pieces in the same order, from the same global patch
+// list: messages need no description of their content
 template<std::size_t dim>
 struct Plan
 {
+    Region region = Region::Ghosts;
     std::vector<Piece<dim>> pieces{};
-    std::vector<std::byte> buffer{}; // kept between moves: no allocation once sized
+    std::vector<Piece<dim>> outgoing{};
+    std::vector<std::byte> buffer{}; // local sums/maxes, kept between copies
+    std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept as well
 };
 
 template<std::size_t dim>
@@ -97,7 +107,10 @@ struct Neighbours
     std::vector<Patch<dim>> built_on{};     // the level's patches when built
     std::vector<Patch<dim>> local{};        // this rank's, in LevelData order
     std::vector<std::vector<Link<dim>>> of; // of[i]: links of local[i]
-    std::map<PlanKey, Plan<dim>> plans{};   // copy.hpp's, by region and resources
+    // other ranks' patches near mine, in level order, with their links to my patches: what I
+    // send them
+    std::vector<std::pair<Patch<dim>, std::vector<Link<dim>>>> remote{};
+    std::map<PlanKey, Plan<dim>> plans{}; // copy.hpp's, by region and resources
 };
 
 
@@ -117,33 +130,43 @@ NO_DISCARD Neighbours<dim> make_neighbours(Hierarchy<dim> const& h, int const ln
     for (auto const& s : periodic_shifts(h, ln))
         shifts.push_back(s);
 
-    Neighbours<dim> n{ln, rank, reach, level.patches, local_patches(level, rank), {}, {}};
+    Neighbours<dim> n{ln, rank, reach, level.patches, local_patches(level, rank), {}, {}, {}};
 
     std::map<std::uint32_t, std::size_t> local_index_of;
     for (std::size_t i = 0; i < n.local.size(); ++i)
         local_index_of[n.local[i].id] = i;
 
-    n.of.resize(n.local.size());
-    for (std::size_t i = 0; i < n.local.size(); ++i)
-    {
-        auto const& dst         = n.local[i];
+    // dst's links to the level's patches (only to rank's if mine_only), in level order: every
+    // rank makes the same links for a pair of patches, so their pieces come in the same order
+    auto const links_of = [&](Patch<dim> const& dst, bool const mine_only) {
+        std::vector<Link<dim>> links;
         auto const reach_of_dst = core::grow(dst.box, reach);
-
         for (auto const& src : level.patches)
             for (auto const& shift : shifts)
             {
                 bool const self = src.id == dst.id;
-                if (self and shift == core::Point<int, dim>{})
+                if ((self and shift == core::Point<int, dim>{}) or (mine_only and src.rank != rank))
                     continue;
                 if (!(reach_of_dst * core::shift(core::grow(src.box, reach), shift)))
                     continue;
 
                 auto const found = local_index_of.find(src.id);
-                n.of[i].push_back({src, shift,
-                                   self ? Distance::Self : distance(topology, dst.rank, src.rank),
-                                   found == local_index_of.end() ? not_local : found->second});
+                links.push_back({src, shift,
+                                 self ? Distance::Self : distance(topology, dst.rank, src.rank),
+                                 found == local_index_of.end() ? not_local : found->second});
             }
-    }
+        return links;
+    };
+
+    for (auto const& dst : n.local)
+        n.of.push_back(links_of(dst, false));
+
+    if (!n.local.empty())
+        for (auto const& dst : level.patches)
+            if (dst.rank != rank)
+                if (auto links = links_of(dst, true); !links.empty())
+                    n.remote.emplace_back(dst, std::move(links));
+
     return n;
 }
 
