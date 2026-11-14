@@ -7,8 +7,10 @@ property:
 find:
   hdf5:
     inc:
+      /opt/hdf5/include
       /usr/include/hdf5/openmpi
       /usr/include/openmpi-${sys.arch}
     lib:
+      /opt/hdf5/lib
       /usr/lib64/openmpi/lib
       /usr/lib/${sys.arch}-linux-gnu/hdf5/openmpi

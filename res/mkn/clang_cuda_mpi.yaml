@@ -15,9 +15,11 @@ super: clang_cuda
 find:
   hdf5:
     inc:
+      /opt/hdf5/include
       /usr/include/hdf5/openmpi
       /usr/include/openmpi-x86_64
     lib:
+      /opt/hdf5/lib
       /usr/lib64/openmpi/lib
       /usr/lib/x86_64-linux-gnu/hdf5/openmpi
 
