@@ -25,9 +25,10 @@
 //       domain points under the fine patch's domain (fine ghosts are expected filled)
 //     then they are assigned to the coarse patch
 //
-// sources are never modified. Pieces of other ranks are damn/mpi/inter_level.hpp's: the
-// functions here throw for them. What goes where is planned on first use for a region,
-// resources and stencil, and kept in the LevelMap
+// an operator handles the resource kinds it has a call for: one asked to move a resource it
+// has none for throws. Sources are never modified. Pieces of other ranks are
+// damn/mpi/inter_level.hpp's: the functions here throw for them. What goes where is planned on
+// first use for a region, resources and stencil, and kept in the LevelMap
 //
 // resources' boxes come from the user's domain_box / ghost_box of the resource kind, from any
 // patch data holding the name (either level): the coarse and fine resources of a name are
@@ -46,6 +47,7 @@
 #include "damn/amr/neighbours.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -222,7 +224,14 @@ void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Fin
             if (count)
                 std::memcpy(items.data(), at, count * sizeof(Item));
             at += count * sizeof(Item);
-            op(dst, target.fine.box, target.box, std::span<Item const>{items}, piece.coarse.shift);
+            if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
+                                         core::Box<int, dim> const&, std::span<Item const>,
+                                         core::Point<int, dim> const&>)
+                op(dst, target.fine.box, target.box, std::span<Item const>{items},
+                   piece.coarse.shift);
+            else
+                throw std::runtime_error("damn::amr::refine: the operator does not refine "
+                                         + pair.fine);
         }
         else if constexpr (BoxData<R, dim>)
         {
@@ -283,7 +292,12 @@ void refine_fields(LevelPlan<dim>& plan, FineLD& fine_ld, auto& op)
                     target.coarse_box,
                     reinterpret_cast<T const*>(
                         reinterpret_cast<std::byte const*>(plan.scratch.data()) + target.offset)};
-                op(dst, target.fine.box, target.box, coarse);
+                if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
+                                             core::Box<int, dim> const&, decltype(coarse) const&>)
+                    op(dst, target.fine.box, target.box, coarse);
+                else
+                    throw std::runtime_error("damn::amr::refine: the operator does not refine "
+                                             + pair.fine);
             }
         });
     }
@@ -303,7 +317,12 @@ void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target, 
             auto const at = out.size();
             out.resize(at + target.coarse_box.size() * sizeof(T));
             std::vector<T> values(target.coarse_box.size());
-            op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
+            if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
+                                         BoxValues<T, dim> const&>)
+                op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
+            else
+                throw std::runtime_error("damn::amr::coarsen: the operator does not coarsen "
+                                         + pair.fine);
             // in the box's point order
             BoxValues<T const, dim> const computed{target.coarse_box, values.data()};
             auto* to = out.data() + at;
