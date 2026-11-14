@@ -2,9 +2,11 @@
 #define DAMN_AMR_TIME_REFINEMENT_HPP
 
 // advancing a hierarchy with time refinement (subcycling, Berger & Colella): each level takes
-// ratio steps per step of the next coarser one, after it, then is synchronised onto it
+// time_ratio steps per step of the next coarser one, after it, then is synchronised onto it
 //
-//   advance(h, hooks, t, dt): one step dt of level 0 from t, its finer levels recursively
+//   advance(h, hooks, t, dt, time_ratio): one step dt of level 0 from t, its finer levels
+//   recursively; time_ratio defaults to the hierarchy's refinement ratio (dt ~ dx), e.g.
+//   ratio^2 for dt ~ dx^2 (hybrid's whistler waves, PHARE's getMaxFinerLevelDt)
 //
 // the user's hooks, per level ln (all but advance optional, see below):
 //   hooks.advance(ln, t, dt)               one step of level ln, from t to t + dt
@@ -31,9 +33,9 @@ namespace damn::amr
 namespace detail
 {
     template<std::size_t dim>
-    void advance_level(Hierarchy<dim> const& h, auto& hooks, int const ln, double const t,
-                       double const dt, bool const first, bool const last, double const coarse_t,
-                       double const coarse_dt)
+    void advance_level(Hierarchy<dim> const& h, auto& hooks, int const time_ratio, int const ln,
+                       double const t, double const dt, bool const first, bool const last,
+                       double const coarse_t, double const coarse_dt)
     {
         if constexpr (requires { hooks.first_step(ln, t, coarse_t, coarse_dt); })
             if (ln > 0 and first)
@@ -49,20 +51,23 @@ namespace detail
 
         if (!level_exists(h, ln + 1))
             return;
-        double const fine_dt = dt / h.ratio;
-        for (int k = 0; k < h.ratio; ++k)
-            advance_level(h, hooks, ln + 1, t + k * fine_dt, fine_dt, k == 0, k == h.ratio - 1, t,
-                          dt);
+        double const fine_dt = dt / time_ratio;
+        for (int k = 0; k < time_ratio; ++k)
+            advance_level(h, hooks, time_ratio, ln + 1, t + k * fine_dt, fine_dt, k == 0,
+                          k == time_ratio - 1, t, dt);
         if constexpr (requires { hooks.synchronize(ln + 1, t + dt); })
             hooks.synchronize(ln + 1, t + dt);
     }
 } // namespace detail
 
-// one step dt of level 0 from t, with ratio substeps per level per step of the coarser one
+// one step dt of level 0 from t, with time_ratio substeps per level per step of the coarser one
+// (0: the refinement ratio)
 template<std::size_t dim>
-void advance(Hierarchy<dim> const& h, auto& hooks, double const t, double const dt)
+void advance(Hierarchy<dim> const& h, auto& hooks, double const t, double const dt,
+             int const time_ratio = 0)
 {
-    detail::advance_level(h, hooks, 0, t, dt, true, true, t, dt);
+    detail::advance_level(h, hooks, time_ratio > 0 ? time_ratio : h.ratio, 0, t, dt, true, true, t,
+                          dt);
 }
 
 } // namespace damn::amr

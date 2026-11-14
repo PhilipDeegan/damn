@@ -97,6 +97,19 @@ TEST(TimeRefinement, finerLevelsSubcycleAfterTheCoarserThenSynchronize)
                        }));
 }
 
+TEST(TimeRefinement, aTimeRatioOtherThanTheRefinementRatio)
+{
+    Minimal m;
+    advance(levels(3), m, 0., 1., 4); // dt ~ dx^2
+    EXPECT_EQ(m.steps, 1 + 4 + 16);
+
+    Record r;
+    advance(levels(2), r, 0., 1., 4);
+    EXPECT_EQ(r.calls.size(), 2u + 4 * 2 + 2 + 1); // level 0, 4 substeps, first/last, sync
+    EXPECT_EQ(r.calls[4], "advance 1 0 0.25");
+    EXPECT_EQ(r.calls.back(), "sync 1 1");
+}
+
 TEST(TimeRefinement, hooksBeyondAdvanceAreOptional)
 {
     Minimal m;
