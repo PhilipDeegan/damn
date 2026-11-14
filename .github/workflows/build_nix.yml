@@ -22,5 +22,9 @@ jobs:
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_core -Wx res/mkn/mpi
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_mpi -Wx res/mkn/mpi
         mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
+        # copies between ranks: 3 ranks share 6 patches unevenly, 8 leave two ranks without one
+        for n in 2 3 8; do
+          mpirun --allow-run-as-root --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_copy.cpp
+        done
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_hdf5 -Wx res/mkn/mpi
         mpirun --allow-run-as-root --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
