@@ -13,6 +13,7 @@
 // messages of a peer in order, so a receiver unpacks them against its own map
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/regrid.hpp"
@@ -44,6 +45,7 @@ regrid(amr::RegridMap<dim> const& map, amr::LevelData<dim, PatchData>&& old, Mak
        RegridLimits const limits = {}, MPI_Comm const comm = MPI_COMM_WORLD)
 {
     using namespace amr;
+    DAMN_LOG_SCOPE(1, "damn::mpi::regrid");
 
     auto const as_int = [](std::size_t const bytes) {
         if (bytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
@@ -138,13 +140,18 @@ regrid(amr::RegridMap<dim> const& map, amr::LevelData<dim, PatchData>&& old, Mak
             detail::pack_transfer(t, src, buffer);
             if (buffer.size() >= limits.chunk)
                 flush(t.to.rank, buffer);
-            while (in_flight > limits.max_in_flight)
-                progress(new_data);
+            if (in_flight > limits.max_in_flight)
+            {
+                DAMN_LOG_SCOPE(2, "damn::mpi::regrid::over_max_in_flight");
+                while (in_flight > limits.max_in_flight)
+                    progress(new_data);
+            }
         },
         [&](auto& new_data) { // finish
             for (auto& [peer, buffer] : buffers)
                 if (!buffer.empty())
                     flush(peer, buffer);
+            DAMN_LOG_SCOPE(2, "damn::mpi::regrid::receive"); // waits for other ranks
             while (expected)
             {
                 MPI_Status status;

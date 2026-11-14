@@ -22,6 +22,7 @@
 // first data arrives. The peak is about the old level, not the old and the new together
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
@@ -74,6 +75,7 @@ template<std::size_t dim>
 NO_DISCARD RegridMap<dim> make_regrid_map(Level<dim> const& old_level, Level<dim> const& new_level,
                                           int const rank)
 {
+    DAMN_LOG_SCOPE(2, "damn::amr::make_regrid_map");
     if (old_level.number != new_level.number)
         throw std::runtime_error("damn::amr::make_regrid_map: not the same level");
 
@@ -224,6 +226,7 @@ namespace detail
     LevelData<dim, PatchData> regrid(RegridMap<dim> const& map, LevelData<dim, PatchData>&& old,
                                      Make&& make, Send&& send, Finish&& finish)
     {
+        DAMN_LOG_SCOPE(1, "damn::amr::regrid");
         if (old.level != map.level or old.patches != map.old_local)
             throw std::runtime_error("damn::amr::regrid: the map is not the level data's");
 
@@ -255,6 +258,7 @@ namespace detail
 
         for (std::size_t s = 0; s < olds.size(); ++s)
         {
+            DAMN_LOG_SCOPE(2, "damn::amr::regrid::old_patch"); // copied, packed, freed
             if (!olds[s])
                 continue; // kept
             for (auto const* t : from[s])

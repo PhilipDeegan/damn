@@ -22,6 +22,7 @@ profile:
 # needs an MPI compiler, e.g. -x res/mkn/mpi
 - name: damn_mpi
   parent: base
+  self: damn_core # phlop's scope timer instances, for the scopes in damn's MPI headers
   src: src/damn/mpi
   out: damn_mpi
 
