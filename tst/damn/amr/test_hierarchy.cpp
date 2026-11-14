@@ -119,19 +119,28 @@ TEST(Hierarchy, chopCoversTheBoxWithDisjointBoxes)
     EXPECT_EQ(cells, domain.size());
 }
 
-TEST(Hierarchy, uniformLevel0DealsContiguousRunsToRanks)
+TEST(Hierarchy, uniformLevel0PartitionsCellsOverRanks)
 {
     auto const level = uniform_level_0(hierarchy_2d(), {4, 4}, 2);
 
+    // 3 x 2 patches of 16, 16 and 8 cells per row: 80 cells, 40 a rank (partition.hpp)
     ASSERT_EQ(level.patches.size(), 6u);
-    std::vector<int> ranks;
+    std::array<std::size_t, 2> cells{};
     for (auto const& p : level.patches)
-        ranks.push_back(p.rank);
-    EXPECT_EQ(ranks, (std::vector<int>{0, 0, 0, 1, 1, 1}));
+    {
+        ASSERT_TRUE(p.rank == 0 or p.rank == 1);
+        cells[p.rank] += p.box.size();
+    }
+    EXPECT_LE(std::max(cells[0], cells[1]) - 40, 16u);
 
-    auto const local = local_patches(level, 1);
-    ASSERT_EQ(local.size(), 3u);
-    EXPECT_EQ(local[0].id, 3u);
+    auto const local        = local_patches(level, 1);
+    std::size_t local_cells = 0;
+    for (auto const& p : local)
+    {
+        EXPECT_EQ(p.rank, 1);
+        local_cells += p.box.size();
+    }
+    EXPECT_EQ(local_cells, cells[1]);
     EXPECT_EQ(patch_with_id(level, 4).box, level.patches[4].box);
 }
 
@@ -199,7 +208,7 @@ TEST(Hierarchy, coveredByLevelIncludesPeriodicImages)
     set_level(h, uniform_level_0(h, {5, 8})); // two patches side by side
 
     auto const& left = h.levels[0].patches[0].box; // (0,0) (4,7)
-    auto const ghost = core::grow(left, 1);         // (-1,-1) (5,8)
+    auto const ghost = core::grow(left, 1);        // (-1,-1) (5,8)
 
     std::size_t cells = 0;
     for (auto const& b : covered_by_level(h, 0, ghost))

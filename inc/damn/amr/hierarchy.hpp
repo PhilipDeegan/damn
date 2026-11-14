@@ -13,6 +13,7 @@
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/amr/partition.hpp"
 
 #include <array>
 #include <vector>
@@ -47,13 +48,13 @@ struct Hierarchy
 {
     auto static constexpr dimension = dim;
 
-    core::Box<int, dim> domain{};            // level 0 cells
-    std::array<double, dim> dx{};            // level 0 mesh size
-    core::Point<double, dim> origin{};       // physical position of domain.lower's lower corner
-    std::array<bool, dim> periodic{};        // per direction
-    int max_levels = 1;                      // levels allowed, including 0
-    int ratio      = 2;                      // between consecutive levels
-    std::vector<Level<dim>> levels{};        // 0 .. finest
+    core::Box<int, dim> domain{};      // level 0 cells
+    std::array<double, dim> dx{};      // level 0 mesh size
+    core::Point<double, dim> origin{}; // physical position of domain.lower's lower corner
+    std::array<bool, dim> periodic{};  // per direction
+    int max_levels = 1;                // levels allowed, including 0
+    int ratio      = 2;                // between consecutive levels
+    std::vector<Level<dim>> levels{};  // 0 .. finest
 };
 
 
@@ -209,8 +210,8 @@ NO_DISCARD Patch<dim> const& patch_with_id(Level<dim> const& level, std::uint32_
     for (auto const& patch : level.patches)
         if (patch.id == id)
             return patch;
-    throw std::runtime_error("damn::amr: no patch with id " + std::to_string(id)
-                             + " on level " + std::to_string(level.number));
+    throw std::runtime_error("damn::amr: no patch with id " + std::to_string(id) + " on level "
+                             + std::to_string(level.number));
 }
 
 
@@ -252,16 +253,14 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
     return boxes;
 }
 
-// level 0 as the domain chopped into patches of `size`, dealt to n_ranks in contiguous runs
+// level 0 as the domain chopped into patches of `size`, partitioned over n_ranks by cells along
+// the Hilbert curve (partition.hpp; for other weights: make_level(0, boxes, partition(...)))
 template<std::size_t dim>
 NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim> const& h, std::array<int, dim> const& size,
                                       int const n_ranks = 1)
 {
     auto const boxes = chop(h.domain, size);
-    std::vector<int> ranks(boxes.size());
-    for (std::size_t i = 0; i < boxes.size(); ++i)
-        ranks[i] = static_cast<int>(i * n_ranks / boxes.size());
-    return make_level(0, boxes, ranks);
+    return make_level(0, boxes, partition(boxes, cell_weights(boxes), n_ranks));
 }
 
 
@@ -270,8 +269,7 @@ NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim> const& h, std::array<int, d
 // offsets, in level ln's index space, of the periodic images of the domain next to it
 // (not the domain itself): 3^p - 1 of them for p periodic directions
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> const& h,
-                                                              int const ln)
+NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> const& h, int const ln)
 {
     auto const shape = level_domain(h, ln).shape();
 
@@ -296,8 +294,8 @@ NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> con
 // the parts of box (level ln index space) that level ln's patches cover, periodic images
 // included, e.g. the ghost cells of a patch that are not level border
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>>
-covered_by_level(Hierarchy<dim> const& h, int const ln, core::Box<int, dim> const& box)
+NO_DISCARD std::vector<core::Box<int, dim>> covered_by_level(Hierarchy<dim> const& h, int const ln,
+                                                             core::Box<int, dim> const& box)
 {
     std::vector<core::Point<int, dim>> shifts{core::Point<int, dim>{}};
     for (auto const& s : periodic_shifts(h, ln))
