@@ -35,6 +35,7 @@ profile:
         tst/damn/mpi/test_mpi_copy.cpp
         tst/damn/mpi/test_mpi_regrid.cpp
         tst/damn/mpi/test_mpi_inter_level.cpp
+        tst/damn/mpi/test_mpi_clustering.cpp
         tst/damn/mpi/test_mpi_scope_timing.cpp
 
 # HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
@@ -65,6 +66,7 @@ profile:
         tst/damn/amr/test_partition.cpp
         tst/damn/amr/test_regrid.cpp
         tst/damn/amr/test_inter_level.cpp
+        tst/damn/amr/test_clustering.cpp
         tst/damn/core/exec/test_thread_pool.cpp
         tst/damn/core/exec/test_thread_pool_sync.cpp
 
