@@ -165,8 +165,7 @@ TEST(Regrid, newCellsTakeTheBorderPointsTheyShareKeptOrNot)
             for (auto const& b : chop(g.h.levels[0].patches[0].box, {4, 3}))
                 boxes.push_back(b);
         auto const level = make_level(0, boxes);
-        auto const map
-            = make_regrid_map(g.h.levels[0], level, 0, periodic_shifts(g.h, 0));
+        auto const map   = make_regrid_map(g.h.levels[0], level, 0, periodic_shifts(g.h, 0));
         EXPECT_EQ(map.kept[1] != not_local, kept);
         g.ld = regrid(map, std::move(g.ld), make_patch_data);
 

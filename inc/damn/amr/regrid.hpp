@@ -53,7 +53,7 @@ template<std::size_t dim>
 struct Transfer
 {
     Patch<dim> from{}, to{};
-    core::Point<int, dim> shift{}; // the old patch's image is at from.box + shift
+    core::Point<int, dim> shift{};              // the old patch's image is at from.box + shift
     std::optional<core::Box<int, dim>> cells{}; // (from.box + shift) * to.box, if they share any
     std::size_t src = not_local; // old LevelData index, if this rank holds from
     std::size_t dst = not_local; // new LevelData index, if this rank holds to
