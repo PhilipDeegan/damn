@@ -8,6 +8,9 @@
   # is needed
   { symbol: ["std::vector", "private", "<vector>", "public"] },
 
+  # phlop's scope timers come through damn/core/logger.hpp's DAMN_LOG_SCOPE
+  { include: ["@\"phlop/timing/.*\"", "private", "\"damn/core/logger.hpp\"", "public"] },
+
   # MPI comes through damn_mpi.hpp, which silences mpi.h's warnings
   { include: ["\"mpi.h\"", "private", "\"damn/mpi/damn_mpi.hpp\"", "public"] },
   { include: ["<mpi.h>", "private", "\"damn/mpi/damn_mpi.hpp\"", "public"] },
