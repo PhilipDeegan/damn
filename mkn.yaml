@@ -56,7 +56,7 @@ profile:
   test: tst/damn/core/test_damn_core.cpp
         tst/damn/amr/test_hierarchy.cpp
         tst/damn/amr/test_level_data.cpp
-        tst/damn/amr/test_schedule.cpp
+        tst/damn/amr/test_move.cpp
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
