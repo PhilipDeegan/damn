@@ -1,8 +1,10 @@
-// damn::amr same level schedules on a toy field: ghost fills (periodic or not), border sum
-// and max, and the Scheduler's named, merged and rebuilt schedules
+// damn::amr same level copies on a toy field: ghost fills (periodic or not), border sum and
+// max, leaving particles; the Neighbours' links and distances, plans kept and dropped, and
+// the LevelMap between two levels
 // expected values come from brute force over every patch and periodic image
 
-#include "damn/amr/scheduler.hpp"
+#include "damn/amr/level_map.hpp"
+#include "damn/amr/copy.hpp"
 
 #include "gtest/gtest.h"
 
@@ -152,13 +154,19 @@ namespace
         return h;
     }
 
+    int constexpr reach = 3; // toy fields: 2 ghosts, plus one for primal nodes
+
+    Neighbours<2> neighbours_of(Hierarchy<2> const& h, int const rank = 0,
+                                Topology const& t = single_node())
+    {
+        return make_neighbours(h, 0, rank, t, reach);
+    }
+
     toy::PatchData make_patch_data(Patch<2> const& patch)
     {
         toy::PatchData data;
         data.populations = {{"protons", {{true, true}}, {}}, {"alpha", {{true, true}}, {}}};
-        auto const init  = [&](toy::Field& f) {
-            f.v.assign(ghost_box(f, patch.box).size(), nan);
-        };
+        auto const init  = [&](toy::Field& f) { f.v.assign(ghost_box(f, patch.box).size(), nan); };
         init(data.Bx);
         init(data.rho);
         init(data.Ez);
@@ -179,7 +187,10 @@ namespace
         return *f;
     }
 
-    int mod(int a, int n) { return ((a % n) + n) % n; }
+    int mod(int a, int n)
+    {
+        return ((a % n) + n) % n;
+    }
 
     // a function of the physical point: periodic where the hierarchy is
     double f_of(Hierarchy<2> const& h, Point2 p)
@@ -225,8 +236,8 @@ TEST_P(GhostFill, ghostsGetTheNeighboursDomainValues)
                              [&](auto const& p) { value(f, patch.box, p) = f_of(h, p); });
     });
 
-    auto const schedule = make_schedule(Transfer::PatchGhost, h, 0, ld, 0, {name});
-    run(schedule, ld);
+    auto n = neighbours_of(h);
+    copy(fill_ghosts, n, {name}, ld);
 
     // a ghost point is filled iff some (other or shifted) patch's domain covers it
     auto const domain_nodes = [&](auto const& f, auto const& p) { return domain_box(f, p.box); };
@@ -259,9 +270,8 @@ TEST_P(GhostFill, ghostsGetTheNeighboursDomainValues)
         EXPECT_GT(n_unfilled, 0u); // outside the domain
 }
 
-INSTANTIATE_TEST_SUITE_P(Schedule, GhostFill,
-                         ::testing::Combine(::testing::Values("Bx", "rho", "Ez",
-                                                              "alpha_density"),
+INSTANTIATE_TEST_SUITE_P(Copy, GhostFill,
+                         ::testing::Combine(::testing::Values("Bx", "rho", "Ez", "alpha_density"),
                                             ::testing::Bool()));
 
 
@@ -278,10 +288,12 @@ TEST_P(BorderOps, sumCountsEveryPatchImageCoveringAPoint)
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         auto& f = data.rho;
-        core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) { value(f, patch.box, p) = 1; });
+        core::for_each_point(ghost_box(f, patch.box),
+                             [&](auto const& p) { value(f, patch.box, p) = 1; });
     });
 
-    run(make_schedule(Transfer::BorderSum, h, 0, ld, 0, {"rho"}), ld);
+    auto n = neighbours_of(h);
+    copy(sum_borders, n, {"rho"}, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         auto& f         = data.rho;
@@ -306,7 +318,8 @@ TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)
                              [&](auto const& p) { value(f, patch.box, p) = patch.id + 1.; });
     });
 
-    run(make_schedule(Transfer::BorderMax, h, 0, ld, 0, {"Bx"}), ld);
+    auto n = neighbours_of(h);
+    copy(max_borders, n, {"Bx"}, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
         auto& f         = data.Bx;
@@ -321,7 +334,7 @@ TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)
     });
 }
 
-INSTANTIATE_TEST_SUITE_P(Schedule, BorderOps, ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(Copy, BorderOps, ::testing::Bool());
 
 
 // ---------------------------------------------------------------- GhostToDomain
@@ -348,9 +361,8 @@ TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
         });
     });
 
-    Scheduler<2> scheduler;
-    add_pairs(scheduler, "leaving", Transfer::GhostToDomain, {{"patch_ghost", "domain"}});
-    fill<Transfer::GhostToDomain>(scheduler, "leaving", h, ld, 0);
+    auto n = neighbours_of(h);
+    copy(gather_leaving, n, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, ld);
 
     auto const level_cells = level_domain(h, 0);
     auto const shape       = level_cells.shape();
@@ -383,33 +395,26 @@ TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
     EXPECT_GT(n_arrived, 0u);
 }
 
-INSTANTIATE_TEST_SUITE_P(Schedule, GhostParticles, ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(Copy, GhostParticles, ::testing::Bool());
 
-TEST(Scheduler, particleTransfersNeedParticleData)
+TEST(Copy, leavingNeedsParticleData)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
-
-    Scheduler<2> scheduler;
-    add_pairs(scheduler, "bad", Transfer::GhostToDomain, {{"rho", "rho"}});
-    EXPECT_THROW(fill<Transfer::GhostToDomain>(scheduler, "bad", h, ld, 0), std::runtime_error);
+    auto n       = neighbours_of(h);
+    EXPECT_THROW(copy(gather_leaving, n, std::vector<ResourcePair>{{"rho", "rho"}}, ld),
+                 std::runtime_error);
 }
 
-// ---------------------------------------------------------------- Scheduler
-
-TEST(Scheduler, oneKeyExchangesAllItsResources)
+TEST(Copy, oneCopyExchangesAllItsResources)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
-
-    Scheduler<2> scheduler;
-    add(scheduler, "moments", Transfer::PatchGhost, {"rho"});
-    add(scheduler, "moments", Transfer::PatchGhost, {"protons_density", "alpha_density"});
-    EXPECT_EQ(names(scheduler, "moments", Transfer::PatchGhost).size(), 3u);
-    EXPECT_FALSE(has(scheduler, "moments", Transfer::BorderSum));
+    auto n       = neighbours_of(h);
+    std::vector<std::string> const moments{"rho", "protons_density", "alpha_density"};
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
-        for (auto const* name : {"rho", "protons_density", "alpha_density"})
+        for (auto const& name : moments)
         {
             auto& f = field(data, name);
             core::for_each_point(domain_box(f, patch.box),
@@ -417,10 +422,10 @@ TEST(Scheduler, oneKeyExchangesAllItsResources)
         }
     });
 
-    fill<Transfer::PatchGhost>(scheduler, "moments", h, ld, 0);
+    copy(fill_ghosts, n, moments, ld);
 
     for_each_patch(ld, [&](auto const& patch, auto& data) {
-        for (auto const* name : {"rho", "protons_density", "alpha_density"})
+        for (auto const& name : moments)
         {
             auto& f = field(data, name);
             core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
@@ -430,48 +435,190 @@ TEST(Scheduler, oneKeyExchangesAllItsResources)
     });
 }
 
-TEST(Scheduler, rebuildsTheScheduleWhenTheLevelChanges)
+TEST(Copy, rejectsUnknownAndNonBoxResources)
+{
+    auto const h = make_hierarchy({false, false});
+    auto ld      = allocate(h.levels[0], 0, make_patch_data);
+    auto n       = neighbours_of(h);
+
+    EXPECT_THROW(copy(fill_ghosts, n, {"alpha_particles"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"rhoo"}, ld), std::runtime_error);
+    EXPECT_THROW(copy(fill_ghosts, n, {"domain"}, ld), std::runtime_error); // ParticleData
+}
+
+TEST(Copy, plansAreMadeOnceAndKeptInTheNeighbours)
+{
+    auto const h = make_hierarchy({true, true});
+    auto ld      = allocate(h.levels[0], 0, make_patch_data);
+    auto n       = neighbours_of(h);
+
+    copy(fill_ghosts, n, {"Bx"}, ld);
+    copy(sum_borders, n, {"rho"}, ld);
+    ASSERT_EQ(n.plans.size(), 2u);
+    auto const* plan = &n.plans.begin()->second;
+
+    copy(fill_ghosts, n, {"Bx"}, ld);
+    EXPECT_EQ(n.plans.size(), 2u);
+    EXPECT_EQ(&n.plans.begin()->second, plan);
+
+    // the border sum's buffer holds every copy, no more
+    auto const& sum   = plan_for(Region::Borders, n, ld, same_names({"rho"}));
+    std::size_t bytes = 0;
+    for (auto const& c : sum.pieces)
+        bytes += c.bytes;
+    EXPECT_EQ(sum.buffer.size(), bytes);
+    EXPECT_GT(bytes, 0u);
+}
+
+TEST(Copy, aRegridNeedsNewNeighbours)
 {
     auto h  = make_hierarchy({true, true});
     auto ld = allocate(h.levels[0], 0, make_patch_data);
-
-    Scheduler<2> scheduler;
-    add(scheduler, "B", Transfer::PatchGhost, {"Bx"});
-
-    auto const* first = &schedule_for<Transfer::PatchGhost>(scheduler, "B", h, ld, 0);
-    EXPECT_EQ(first->built_on.size(), 6u);
-    EXPECT_EQ(&schedule_for<Transfer::PatchGhost>(scheduler, "B", h, ld, 0), first); // cached
+    auto n  = neighbours_of(h);
+    EXPECT_TRUE(is_current(n, h.levels[0]));
+    EXPECT_EQ(n.local.size(), 6u);
 
     set_level(h, uniform_level_0(h, {4, 6})); // regrid level 0: 2 patches
     ld = allocate(h.levels[0], 0, make_patch_data);
 
-    auto const& rebuilt = schedule_for<Transfer::PatchGhost>(scheduler, "B", h, ld, 0);
-    EXPECT_EQ(rebuilt.built_on.size(), 2u);
-    EXPECT_TRUE(is_current(rebuilt, h.levels[0]));
+    EXPECT_FALSE(is_current(n, h.levels[0]));
+    EXPECT_THROW(copy(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
+
+    n = neighbours_of(h);
+    EXPECT_TRUE(is_current(n, h.levels[0]));
+    EXPECT_NO_THROW(copy(fill_ghosts, n, {"Bx"}, ld));
 }
 
-TEST(Scheduler, rejectsUnknownAndNonBoxResources)
+TEST(Copy, theReachMustCoverEveryResource)
 {
-    auto const h = make_hierarchy({false, false});
+    auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
-
-    Scheduler<2> scheduler;
-    EXPECT_THROW(fill<Transfer::PatchGhost>(scheduler, "none", h, ld, 0), std::runtime_error);
-
-    add(scheduler, "parts", Transfer::PatchGhost, {"alpha_particles"});
-    EXPECT_THROW(fill<Transfer::PatchGhost>(scheduler, "parts", h, ld, 0), std::runtime_error);
-
-    add(scheduler, "typo", Transfer::PatchGhost, {"rhoo"});
-    EXPECT_THROW(fill<Transfer::PatchGhost>(scheduler, "typo", h, ld, 0), std::runtime_error);
+    auto short_n = make_neighbours(h, 0, 0, single_node(), reach - 1);
+    EXPECT_THROW(copy(fill_ghosts, short_n, {"Bx"}, ld), std::runtime_error);
 }
 
-TEST(Scheduler, remoteSourcesAreNotDoneYet)
+TEST(Copy, otherRanksAreNotDoneYet)
 {
     auto const h = make_hierarchy({true, true}, 2); // patches split over 2 ranks
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
+    auto n       = neighbours_of(h, 0, single_node(2));
+    EXPECT_EQ(farthest(n), Distance::Node);
+    EXPECT_THROW(copy(fill_ghosts, n, {"rho"}, ld), std::runtime_error);
+}
 
-    auto const schedule = make_schedule(Transfer::PatchGhost, h, 0, ld, 0, {"rho"});
-    EXPECT_THROW(run(schedule, ld), std::runtime_error);
+
+// ---------------------------------------------------------------- Topology, Neighbours
+
+TEST(Topology, distancesAreOrdered)
+{
+    Location const a{0, 0, 0, -1};
+    EXPECT_EQ(distance(a, a), Distance::Local);
+    EXPECT_EQ(distance(a, Location{0, 0, 1, -1}), Distance::Numa); // other NUMA node
+    EXPECT_EQ(distance(a, Location{0, 0, 0, 1}), Distance::Numa);  // a device
+    EXPECT_EQ(distance(a, Location{1, 0, 0, -1}), Distance::Node);
+    EXPECT_EQ(distance(a, Location{1, 1, 0, -1}), Distance::Remote);
+    EXPECT_LT(Distance::Self, Distance::Local);
+    EXPECT_LT(Distance::Local, Distance::Numa);
+    EXPECT_LT(Distance::Numa, Distance::Node);
+    EXPECT_LT(Distance::Node, Distance::Remote);
+    EXPECT_THROW(std::ignore = location(single_node(2), 2), std::runtime_error);
+}
+
+TEST(Neighbours, linksCarryTheirDistance)
+{
+    auto const h = make_hierarchy({true, true}, 2);
+
+    Topology two_nodes      = single_node(2);
+    two_nodes.ranks[1].node = 1;
+
+    for (auto const& [t, other] :
+         {std::pair{single_node(2), Distance::Node}, std::pair{two_nodes, Distance::Remote}})
+    {
+        auto const n       = neighbours_of(h, 0, t);
+        std::size_t n_self = 0, n_local = 0, n_other = 0;
+        for (std::size_t i = 0; i < n.local.size(); ++i)
+            for (auto const& link : n.of[i])
+            {
+                if (link.patch.id == n.local[i].id)
+                {
+                    EXPECT_EQ(link.distance, Distance::Self);
+                    EXPECT_NE(link.shift, Point2{});
+                    ++n_self;
+                }
+                else if (link.patch.rank == 0)
+                {
+                    EXPECT_EQ(link.distance, Distance::Local);
+                    EXPECT_NE(link.local, not_local);
+                    ++n_local;
+                }
+                else
+                {
+                    EXPECT_EQ(link.distance, other);
+                    EXPECT_EQ(link.local, not_local);
+                    ++n_other;
+                }
+            }
+        EXPECT_GT(n_self, 0u); // periodic images of themselves
+        EXPECT_GT(n_local, 0u);
+        EXPECT_GT(n_other, 0u);
+    }
+}
+
+TEST(Neighbours, onlyPatchesWithinReach)
+{
+    // 12 x 2 cells, 2 x 2 patches, not periodic: patch i only meets i - 1 and i + 1 at reach 1
+    Hierarchy<2> h;
+    h.domain = Box2{std::array{0, 0}, std::array{11, 1}};
+    h.dx     = {.1, .1};
+    set_level(h, uniform_level_0(h, {2, 2}));
+    auto const n = make_neighbours(h, 0, 0, single_node(), 1);
+    ASSERT_EQ(n.local.size(), 6u);
+    for (std::size_t i = 0; i < n.local.size(); ++i)
+    {
+        EXPECT_EQ(n.of[i].size(), (i == 0 or i == 5) ? 1u : 2u) << i;
+        for (auto const& link : n.of[i])
+            EXPECT_EQ(std::abs(static_cast<int>(link.patch.id) - static_cast<int>(n.local[i].id)),
+                      1);
+    }
+}
+
+
+// ---------------------------------------------------------------- LevelMap
+
+TEST(LevelMap, coarseAndFinePatchesAtTheSameLocation)
+{
+    auto h       = make_hierarchy({false, false});
+    h.max_levels = 2;
+    // level 1: two fine patches over coarse cells [1, 4] x [1, 2] and [5, 6] x [3, 4]
+    set_level(h, make_level(1, std::vector{Box2{std::array{2, 2}, std::array{9, 5}},
+                                           Box2{std::array{10, 6}, std::array{13, 9}}}));
+
+    auto const map = make_level_map(h, 0, 0, single_node(), 0);
+    ASSERT_EQ(map.local_fine.size(), 2u);
+    ASSERT_EQ(map.local_coarse.size(), 6u);
+
+    // brute force: coarse patch c is under fine patch f iff their coarse footprints meet
+    for (std::size_t i = 0; i < map.local_fine.size(); ++i)
+    {
+        auto const footprint = core::coarsen(map.local_fine[i].box, h.ratio);
+        std::size_t expected = 0;
+        for (auto const& c : h.levels[0].patches)
+            expected += static_cast<bool>(footprint * c.box);
+        EXPECT_EQ(map.under[i].size(), expected) << i;
+        for (auto const& link : map.under[i])
+        {
+            EXPECT_TRUE((footprint * link.patch.box).has_value());
+            EXPECT_EQ(link.distance, Distance::Local);
+        }
+    }
+    std::size_t n_over = 0;
+    for (auto const& links : map.over)
+        n_over += links.size();
+    std::size_t n_under = 0;
+    for (auto const& links : map.under)
+        n_under += links.size();
+    EXPECT_EQ(n_over, n_under); // the same overlaps, seen from either side
+    EXPECT_TRUE(is_current(map, h));
 }
 
 } // namespace damn::amr
