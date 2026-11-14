@@ -22,6 +22,7 @@ profile:
 # needs an MPI compiler, e.g. -x res/mkn/mpi
 - name: damn_mpi
   parent: base
+  self: damn_core # phlop's scope timer instances, for the scopes in damn's MPI headers
   src: src/damn/mpi
   out: damn_mpi
 
@@ -32,6 +33,7 @@ profile:
   mode: none
   test: tst/damn/mpi/test_mpi_utils.cpp
         tst/damn/mpi/test_mpi_copy.cpp
+        tst/damn/mpi/test_mpi_scope_timing.cpp
 
 # HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
 # parallel HDF5 the settings can find, e.g. -x res/mkn/mpi

@@ -27,6 +27,7 @@
 //                 the pieces packed by pack_piece and unpacked by unpack_piece below
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/geometry/box_spans.hpp"
@@ -42,6 +43,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -69,6 +71,20 @@ inline constexpr CopyOp<Region::Ghosts, Arrival::Assign> fill_ghosts{};
 inline constexpr CopyOp<Region::Borders, Arrival::Sum> sum_borders{};
 inline constexpr CopyOp<Region::Borders, Arrival::Max> max_borders{};
 inline constexpr CopyOp<Region::Leaving, Arrival::Append> gather_leaving{};
+
+// a copy's name, for scopes
+template<Region region, Arrival arrival>
+NO_DISCARD constexpr std::string_view name(CopyOp<region, arrival>)
+{
+    if constexpr (region == Region::Ghosts)
+        return "fill_ghosts";
+    else if constexpr (region == Region::Leaving)
+        return "gather_leaving";
+    else if constexpr (arrival == Arrival::Sum)
+        return "sum_borders";
+    else
+        return "max_borders";
+}
 
 
 namespace detail
@@ -157,19 +173,23 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
     typename Neighbours<dim>::PlanKey key{region, pairs};
     auto found = n.plans.find(key);
     if (found == n.plans.end())
+    {
+        DAMN_LOG_SCOPE(2, "damn::amr::plan_for"); // once per region and resources
         found = n.plans
                     .emplace(std::move(key), region == Region::Leaving
                                                  ? detail::particle_plan(n, ld, pairs)
                                                  : detail::box_plan(region, n, ld, pairs))
                     .first;
+    }
     return found->second;
 }
 
 // on one rank: throws if any piece comes from, or must go to, another rank
 template<Region region, Arrival arrival, std::size_t dim, typename PatchData>
-void copy(CopyOp<region, arrival>, Neighbours<dim>& n, std::vector<ResourcePair> const& pairs,
-          LevelData<dim, PatchData>& ld)
+void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
+          std::vector<ResourcePair> const& pairs, LevelData<dim, PatchData>& ld)
 {
+    DAMN_LOG_SCOPE(2, "damn::amr::copy<" + std::string{name(op)} + ">");
     auto& plan = plan_for(region, n, ld, pairs);
     detail::check_local(plan);
 

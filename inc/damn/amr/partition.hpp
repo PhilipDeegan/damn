@@ -14,6 +14,7 @@
 // cell)
 
 #include "damn/core/def.hpp"
+#include "damn/core/logger.hpp"
 
 #include <algorithm>
 #include <array>
@@ -138,6 +139,7 @@ template<std::size_t dim>
 std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
                            std::vector<double> const& weights, int const n_ranks)
 {
+    DAMN_LOG_SCOPE(1, "damn::amr::partition");
     if (n_ranks < 1)
         throw std::runtime_error("damn::amr::partition: n_ranks < 1");
     if (weights.size() != boxes.size())
