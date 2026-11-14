@@ -31,7 +31,7 @@ jobs:
     env:
       CUDA_ARCH: sm_90
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install
       run: |
         apt-get update && apt-get install -y curl sudo clang-19 libnuma-dev
@@ -55,6 +55,10 @@ jobs:
         #  missing include directory
         [ -d "${CUDA_HOME}/targets/x86_64-linux/include/cccl" ] \
           || sed -i '\|targets/x86_64-linux/include/cccl|d' res/mkn/clang_cuda_ci.yaml
+        # link the simulator's shared cudart, not the toolkit's: mkn puts the profile's lib path on
+        #  LD_LIBRARY_PATH for test runs, and the toolkit's cudart cannot run on the simulated driver
+        sed -i "s|^path: .*|path: ${VGPU_SHIM_DIR}|" res/mkn/clang_cuda_ci.yaml
+        grep -n "^path:\|cuda.arch" res/mkn/clang_cuda_ci.yaml
         sed -e "s/^super: clang_cuda$/super: clang_cuda_ci/" \
           res/mkn/clang_cuda_mpi.yaml > res/mkn/clang_cuda_mpi_ci.yaml
         curl -Lo mkn https://github.com/mkn/mkn/releases/download/latest/mkn_nix
@@ -79,7 +83,7 @@ jobs:
     container: ghcr.io/pharchive/phare_dep/ubuntu:24.04
     timeout-minutes: 120
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install
       run: apt-get update && apt-get install -y curl sudo
     - name: Set up the simulated GPU and ROCm
