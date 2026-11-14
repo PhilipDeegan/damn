@@ -29,15 +29,11 @@ namespace damn::kernel
 template<std::size_t dim, typename... Args>
 void launch(core::Box<std::uint32_t, dim> const& box, std::size_t const& size, Args&&... args)
 {
-    // mkn::gpu launches when present, raja kernels are not implemented
+    // mkn::gpu launches when present
     if constexpr (CompileOptions::WithMknGpu)
     {
         DAMN_WITH_MKN_GPU(
             { core::gpu::BoxCellNLauncher<core::Box<std::uint32_t, dim>>{box, size}(args...); });
-    }
-    else if constexpr (CompileOptions::WithRAJA)
-    {
-        throw std::runtime_error("launch::kernel NO IMPL");
     }
     else
         throw std::runtime_error("launch::kernel NO ALTERNATIVE");
@@ -46,14 +42,10 @@ void launch(core::Box<std::uint32_t, dim> const& box, std::size_t const& size, A
 template<typename... Args>
 void launch(std::size_t const& size, Args&&... args)
 {
-    // mkn::gpu launches when present, raja kernels are not implemented
+    // mkn::gpu launches when present
     if constexpr (CompileOptions::WithMknGpu)
     {
         DAMN_WITH_MKN_GPU({ core::gpu::DeviceLauncher<mkn::gpu::Guess, true>{size}(args...); });
-    }
-    else if constexpr (CompileOptions::WithRAJA)
-    {
-        throw std::runtime_error("launch::kernel NO IMPL");
     }
     else
         throw std::runtime_error("launch::kernel NO ALTERNATIVE");
@@ -64,16 +56,12 @@ template<typename Stream, typename... Args>
     requires(!std::is_convertible_v<Stream const&, std::size_t>)
 void launch(Stream& stream, std::size_t const& size, Args&&... args)
 {
-    // mkn::gpu launches when present, raja kernels are not implemented
+    // mkn::gpu launches when present
     if constexpr (CompileOptions::WithMknGpu)
     {
         DAMN_WITH_MKN_GPU({
             core::gpu::DeviceLauncher<mkn::gpu::Guess, true>{size}.stream(stream, args...);
         });
-    }
-    else if constexpr (CompileOptions::WithRAJA)
-    {
-        throw std::runtime_error("launch::kernel NO IMPL");
     }
     else
         throw std::runtime_error("launch::kernel NO ALTERNATIVE");

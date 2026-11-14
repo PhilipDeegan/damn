@@ -25,7 +25,6 @@
 #include "damn/core/def/constants.hpp"                 // IWYU pragma: export
 #include "damn/core/def/damn_config.hpp"               // IWYU pragma: export
 #include "damn/core/def/enum_table.hpp"                // IWYU pragma: export
-#include "damn/core/def/kokkos_tools.hpp"              // IWYU pragma: export
 #include "damn/core/def/phlop.hpp"                     // IWYU pragma: export
 #include "damn/core/errors.hpp"                        // IWYU pragma: export
 #include "damn/core/exec/kernels.hpp"                  // IWYU pragma: export
@@ -42,10 +41,8 @@
 #include "damn/core/math/numeric.hpp"                  // IWYU pragma: export
 #include "damn/core/math/random.hpp"                   // IWYU pragma: export
 #include "damn/core/math/sort.hpp"                     // IWYU pragma: export
-#include "damn/core/memory/kokkos_allocator.hpp"       // IWYU pragma: export
 #include "damn/core/memory/memory.hpp"                 // IWYU pragma: export
 #include "damn/core/memory/span.hpp"                   // IWYU pragma: export
-#include "damn/core/memory/umpire_allocator.hpp"       // IWYU pragma: export
 #include "damn/core/meta/constexprifier.hpp"           // IWYU pragma: export
 #include "damn/core/meta/container_meta.hpp"           // IWYU pragma: export
 #include "damn/core/meta/enum_meta.hpp"                // IWYU pragma: export
