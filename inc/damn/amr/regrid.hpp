@@ -10,8 +10,10 @@
 //
 // a new patch with the same box and owner as an old one takes its data as is (moved, ghosts
 // included). Otherwise new patches are made (make(patch)) and get their domain from the old
-// patches overlapping it:
-//   BoxData:       the values on domain_box(resource, cells) of the shared cells
+// patches overlapping or touching it, periodic images included (make_regrid_map's shifts):
+//   BoxData:       the values on the domain points both share: domain_box(resource, box) of
+//                  either, e.g. a primal node on the border of an old patch next to the new one,
+//                  without shared cells
 //   ParticleData:  the items whose cell is in the shared cells: domain items only, ghost items
 //                  are outside every old domain
 // for every resource of those kinds (for_each_resource); other resources are left as made.
@@ -46,12 +48,13 @@
 
 namespace damn::amr
 {
-// cells of one old patch going to one new patch
+// what of one old patch (or a periodic image of it) goes to one new patch
 template<std::size_t dim>
 struct Transfer
 {
     Patch<dim> from{}, to{};
-    core::Box<int, dim> cells{}; // from.box * to.box
+    core::Point<int, dim> shift{};              // the old patch's image is at from.box + shift
+    std::optional<core::Box<int, dim>> cells{}; // (from.box + shift) * to.box, if they share any
     std::size_t src = not_local; // old LevelData index, if this rank holds from
     std::size_t dst = not_local; // new LevelData index, if this rank holds to
 };
@@ -71,9 +74,11 @@ struct RegridMap
 };
 
 
+// shifts: the level's periodic images (periodic_shifts, the domain itself excluded)
 template<std::size_t dim>
 NO_DISCARD RegridMap<dim> make_regrid_map(Level<dim> const& old_level, Level<dim> const& new_level,
-                                          int const rank)
+                                          int const rank,
+                                          std::vector<core::Point<int, dim>> shifts = {})
 {
     DAMN_LOG_SCOPE(2, "damn::amr::make_regrid_map");
     if (old_level.number != new_level.number)
@@ -108,22 +113,36 @@ NO_DISCARD RegridMap<dim> make_regrid_map(Level<dim> const& old_level, Level<dim
             if (map.old_local[s].box == map.new_local[d].box)
                 map.kept[d] = s;
 
+    // overlapping or touching (a border's primal points): every rank lists the same, in the
+    //  same order
+    shifts.insert(shifts.begin(), core::Point<int, dim>{});
     for (auto const& o : old_level.patches)
-        for (std::size_t n = 0; n < new_level.patches.size(); ++n)
-        {
-            auto const& to = new_level.patches[n];
-            if (is_kept[n] or (o.rank != rank and to.rank != rank))
-                continue;
-            if (auto const cells = o.box * to.box)
-                map.transfers.push_back(
-                    {o, to, *cells, index_in(map.old_local, o.id), index_in(map.new_local, to.id)});
-        }
+        for (auto const& shift : shifts)
+            for (std::size_t n = 0; n < new_level.patches.size(); ++n)
+            {
+                auto const& to = new_level.patches[n];
+                if (is_kept[n] or (o.rank != rank and to.rank != rank))
+                    continue;
+                auto const image = core::shift(o.box, shift);
+                if (core::grow(image, 1) * to.box)
+                    map.transfers.push_back({o, to, shift, image * to.box,
+                                             index_in(map.old_local, o.id),
+                                             index_in(map.new_local, to.id)});
+            }
     return map;
 }
 
 
 namespace detail
 {
+    // the domain points of a field resource a transfer copies
+    template<std::size_t dim>
+    NO_DISCARD std::optional<core::Box<int, dim>> shared_points(Transfer<dim> const& t,
+                                                                auto const& res)
+    {
+        return domain_box(res, core::shift(t.from.box, t.shift)) * domain_box(res, t.to.box);
+    }
+
     // fn(name, resource) for data's resources damn can regrid: BoxData and ParticleData
     template<std::size_t dim, typename PatchData>
     void for_each_regridded(PatchData& data, auto&& fn)
@@ -147,22 +166,23 @@ namespace detail
                 auto const count_at = out.size();
                 write(out, std::uint64_t{0});
                 std::uint64_t count = 0;
-                for_each_item(res, [&](auto const& item) {
-                    if (core::isIn(cell(item), t.cells))
-                    {
-                        write(out, item);
-                        ++count;
-                    }
-                });
+                if (t.cells)
+                    for_each_item(res, [&](auto const& item) {
+                        if (core::isIn(cell(item) + t.shift, *t.cells))
+                        {
+                            write(out, item);
+                            ++count;
+                        }
+                    });
                 std::memcpy(out.data() + count_at, &count, sizeof(count));
             }
-            else
+            else if (auto const box = shared_points(t, res))
             {
-                using T        = box_data_value_t<R const, dim>;
-                auto const box = domain_box(res, t.cells);
-                out.reserve(out.size() + static_cast<std::size_t>(box.size()) * sizeof(T));
-                core::for_each_point(
-                    box, [&](auto const& p) { write(out, T{value(res, t.from.box, p)}); });
+                using T = box_data_value_t<R const, dim>;
+                out.reserve(out.size() + static_cast<std::size_t>(box->size()) * sizeof(T));
+                core::for_each_point(*box, [&](auto const& p) {
+                    write(out, T{value(res, t.from.box, p - t.shift)});
+                });
             }
         });
     }
@@ -178,12 +198,12 @@ namespace detail
                 using Item       = typename R::value_type;
                 auto const count = read<std::uint64_t>(at);
                 for (std::uint64_t i = 0; i < count; ++i)
-                    append(res, read<Item>(at), core::Point<int, dim>{});
+                    append(res, read<Item>(at), t.shift);
             }
-            else
+            else if (auto const box = shared_points(t, res))
             {
                 using T = box_data_value_t<R, dim>;
-                core::for_each_point(domain_box(res, t.cells),
+                core::for_each_point(*box,
                                      [&](auto const& p) { value(res, t.to.box, p) = read<T>(at); });
             }
         });
@@ -199,13 +219,16 @@ namespace detail
                 if constexpr (std::is_same_v<std::decay_t<decltype(s)>, R>)
                 {
                     if constexpr (ParticleData<R, dim>)
-                        for_each_item(s, [&](auto const& item) {
-                            if (core::isIn(cell(item), t.cells))
-                                append(d, item, core::Point<int, dim>{});
-                        });
-                    else
-                        core::for_each_point(domain_box(d, t.cells), [&](auto const& p) {
-                            value(d, t.to.box, p) = value(s, t.from.box, p);
+                    {
+                        if (t.cells)
+                            for_each_item(s, [&](auto const& item) {
+                                if (core::isIn(cell(item) + t.shift, *t.cells))
+                                    append(d, item, t.shift);
+                            });
+                    }
+                    else if (auto const box = shared_points(t, d))
+                        core::for_each_point(*box, [&](auto const& p) {
+                            value(d, t.to.box, p) = value(s, t.from.box, p - t.shift);
                         });
                 }
                 else
@@ -234,7 +257,7 @@ namespace detail
         olds.reserve(old.data.size());
         for (auto& d : old.data)
             olds.emplace_back(std::move(d));
-        old.data = {};
+        old.data.clear(); // not = {}: an initializer_list, copies (move only patch data)
 
         std::vector<std::optional<PatchData>> news(map.new_local.size());
         auto const make_new = [&](std::size_t const d) -> PatchData& {
@@ -256,17 +279,26 @@ namespace detail
             if (t.src != not_local)
                 from[t.src].push_back(&t);
 
+        // a kept old patch's data is in its new patch: its transfers (border points of the new
+        //  patches touching it) read from there
+        std::vector<std::size_t> kept_into(olds.size(), not_local);
+        for (std::size_t d = 0; d < map.kept.size(); ++d)
+            if (map.kept[d] != not_local)
+                kept_into[map.kept[d]] = d;
+
         for (std::size_t s = 0; s < olds.size(); ++s)
         {
             DAMN_LOG_SCOPE(2, "damn::amr::regrid::old_patch"); // copied, packed, freed
-            if (!olds[s])
-                continue; // kept
+            auto* src = olds[s] ? &*olds[s]
+                                : (kept_into[s] != not_local ? &*news[kept_into[s]] : nullptr);
+            if (!src)
+                continue;
             for (auto const* t : from[s])
             {
                 if (t->dst != not_local)
-                    copy_transfer(*t, *olds[s], make_new(t->dst));
+                    copy_transfer(*t, *src, make_new(t->dst));
                 else
-                    send(*t, *olds[s], make_new);
+                    send(*t, *src, make_new);
             }
             olds[s].reset();
         }

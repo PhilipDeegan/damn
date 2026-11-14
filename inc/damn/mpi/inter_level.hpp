@@ -30,7 +30,7 @@
 
 namespace damn::mpi
 {
-inline constexpr int inter_level_tag = 0xdb;
+inline constexpr int inter_level_tag = 0xdc; // copy_tag, regrid_tag: each transfer its own
 
 namespace detail
 {

@@ -93,7 +93,7 @@ regrid(amr::RegridMap<dim> const& map, amr::LevelData<dim, PatchData>&& old, Mak
                 throw std::runtime_error("damn::mpi::regrid: rank " + std::to_string(peer)
                                          + " sent more than this rank's map expects");
             auto const& t = *from[next++];
-            detail::unpack_transfer(t, new_data(t.dst), at);
+            amr::detail::unpack_transfer(t, new_data(t.dst), at);
             --expected;
         }
         if (at != end)
@@ -133,11 +133,11 @@ regrid(amr::RegridMap<dim> const& map, amr::LevelData<dim, PatchData>&& old, Mak
                   &s.request);
     };
 
-    return detail::regrid(
+    return amr::detail::regrid(
         map, std::move(old), make,
         [&](Transfer<dim> const& t, PatchData& src, auto& new_data) { // send
             auto& buffer = buffers[t.to.rank];
-            detail::pack_transfer(t, src, buffer);
+            amr::detail::pack_transfer(t, src, buffer);
             if (buffer.size() >= limits.chunk)
                 flush(t.to.rank, buffer);
             if (in_flight > limits.max_in_flight)

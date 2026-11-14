@@ -10,6 +10,9 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <cmath>
+#include <memory>
+#include <string_view>
 #include <cstddef>
 #include <iostream>
 #include <utility>
@@ -109,10 +112,89 @@ TEST(Regrid, someBoxesKept)
 
     EXPECT_EQ(map.kept[0], 0u);
     EXPECT_EQ(r.ld.data[0].patch_ghost.items.size(), 1u);
-    for (auto const& t : map.transfers)
-        EXPECT_NE(t.from.id, old[0].id);
+    for (auto const& t : map.transfers) // the kept patch only gives its border points
+        if (t.from.id == old[0].id)
+            EXPECT_FALSE(t.cells.has_value());
     EXPECT_EQ(check(r.h, r.ld), 0u);
     EXPECT_EQ(domain_items(r.ld), 48u);
+}
+
+namespace
+{
+    // old: the left half of the 8 x 6 domain (periodic in x); new: that half, kept or chopped,
+    //  and the right half, new cells
+    struct Grows
+    {
+        Hierarchy<2> h = [] {
+            auto h = make_hierarchy({true, false});
+            set_level(h, make_level(0, std::vector{Box2{std::array{0, 0}, std::array{3, 5}}}));
+            return h;
+        }();
+        LevelData_t ld = allocate(h.levels[0], 0, make_patch_data);
+        Grows() { fill(h, ld); }
+    };
+
+    // the new right patch's domain points from the old patch: its x = 4 border (shared, no
+    //  shared cell) and its x = 8 border (the image of x = 0), the rest untouched (NaN)
+    void expect_borders_from_the_old_patch(Hierarchy<2> const& h, Patch<2> const& right,
+                                           toy::PatchData& data)
+    {
+        for_each_field(data, [&](std::string_view const name, toy::Field& f) {
+            core::for_each_point(domain_box(f, right.box), [&](auto const& p) {
+                bool const border = f.primal[0] and (p[0] == 4 or p[0] == 8);
+                if (border)
+                    EXPECT_EQ(value(f, right.box, p), g_of(h, name, p)) << name << " " << p;
+                else
+                    EXPECT_TRUE(std::isnan(value(f, right.box, p))) << name << " " << p;
+            });
+        });
+        EXPECT_TRUE(data.domain.items.empty()); // no shared cell
+    }
+} // namespace
+
+TEST(Regrid, newCellsTakeTheBorderPointsTheyShareKeptOrNot)
+{
+    Box2 const right{std::array{4, 0}, std::array{7, 5}};
+    for (bool const kept : {true, false})
+    {
+        Grows g;
+        std::vector<Box2> boxes{right};
+        if (kept)
+            boxes.push_back(g.h.levels[0].patches[0].box);
+        else
+            for (auto const& b : chop(g.h.levels[0].patches[0].box, {4, 3}))
+                boxes.push_back(b);
+        auto const level = make_level(0, boxes);
+        auto const map   = make_regrid_map(g.h.levels[0], level, 0, periodic_shifts(g.h, 0));
+        EXPECT_EQ(map.kept[1] != not_local, kept);
+        g.ld = regrid(map, std::move(g.ld), make_patch_data);
+
+        expect_borders_from_the_old_patch(g.h, level.patches[0], g.ld.data[0]);
+        // the left half: its old data
+        for (std::size_t i = 1; i < level.patches.size(); ++i)
+            for_each_field(g.ld.data[i], [&](std::string_view const name, toy::Field& f) {
+                auto const& cells = level.patches[i].box;
+                core::for_each_point(domain_box(f, cells), [&](auto const& p) {
+                    EXPECT_EQ(value(f, cells, p), g_of(g.h, name, p)) << name << " " << p;
+                });
+            });
+    }
+}
+
+TEST(Regrid, moveOnlyPatchData)
+{
+    Grows g;
+    LevelData<2, std::unique_ptr<toy::PatchData>> ld{0, g.ld.patches, {}};
+    for (auto& d : g.ld.data)
+        ld.data.push_back(std::make_unique<toy::PatchData>(std::move(d)));
+
+    Box2 const right{std::array{4, 0}, std::array{7, 5}};
+    auto const level = make_level(0, std::vector{right, g.h.levels[0].patches[0].box});
+    auto const map   = make_regrid_map(g.h.levels[0], level, 0, periodic_shifts(g.h, 0));
+    ld               = regrid(map, std::move(ld), [](Patch<2> const& p) {
+        return std::make_unique<toy::PatchData>(make_patch_data(p));
+    });
+    expect_borders_from_the_old_patch(g.h, level.patches[0], *ld.data[0]);
 }
 
 TEST(Regrid, otherRanksPatchesThrow)

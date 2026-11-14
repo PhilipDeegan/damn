@@ -72,11 +72,11 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::local");
         if constexpr (arrival == Arrival::Assign)
-            detail::assign(plan, ld);
+            amr::detail::assign(plan, ld);
         else if constexpr (arrival == Arrival::Append)
-            detail::append_items(plan, ld);
+            amr::detail::append_items(plan, ld);
         else
-            detail::pack_local(plan, ld);
+            amr::detail::pack_local(plan, ld);
     }
 
     // 3. receive: pieces from each peer, in plan order
@@ -110,7 +110,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     // 4.
     DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
     if constexpr (arrival == Arrival::Sum or arrival == Arrival::Max)
-        detail::unpack_local<arrival>(plan, ld);
+        amr::detail::unpack_local<arrival>(plan, ld);
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 
