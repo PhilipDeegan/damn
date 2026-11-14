@@ -28,7 +28,7 @@ jobs:
   #  shared cudart, the profiles link -lcudart (the .so) from its shim.
   #  sm_90 (H100): res/mkn/clang_cuda.yaml targets sm_120.
   cuda:
-    name: cuda (clang, CUDA 13.5, simulated H100)
+    name: cuda (clang 22, CUDA 13.5, simulated H100)
     runs-on: ubuntu-24.04
     container: ghcr.io/0xz/hpc-containers:cuda-eae65e1
     timeout-minutes: 120
@@ -38,7 +38,11 @@ jobs:
     - uses: actions/checkout@v6
     - name: Install
       run: |
-        apt-get update && apt-get install -y curl clang libnuma-dev
+        # clang 22 (apt.llvm.org): clang 21, Ubuntu 26.04's, cannot compile CUDA 13's headers
+        apt-get update && apt-get install -y curl wget gnupg lsb-release software-properties-common libnuma-dev
+        curl -fsSLo llvm.sh https://apt.llvm.org/llvm.sh && bash llvm.sh 22
+        ln -sf /usr/bin/clang-22 /usr/local/bin/clang
+        ln -sf /usr/bin/clang++-22 /usr/local/bin/clang++
         clang++ --version
     - name: mkn profiles for this GPU
       run: |
