@@ -234,7 +234,7 @@ namespace detail
         olds.reserve(old.data.size());
         for (auto& d : old.data)
             olds.emplace_back(std::move(d));
-        old.data = {};
+        old.data.clear(); // not = {}: an initializer_list, copies (move only patch data)
 
         std::vector<std::optional<PatchData>> news(map.new_local.size());
         auto const make_new = [&](std::size_t const d) -> PatchData& {
