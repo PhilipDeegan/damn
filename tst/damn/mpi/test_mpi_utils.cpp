@@ -1,5 +1,8 @@
 
+#include "damn/mpi/copy.hpp"
+#include "damn/mpi/inter_level.hpp"
 #include "damn/mpi/mpi_utils.hpp"
+#include "damn/mpi/regrid.hpp"
 
 #include "gtest/gtest.h"
 
@@ -44,6 +47,12 @@ struct MPICollectScalar : public ::testing::Test
 using Scalars = ::testing::Types<double, float, int, std::uint32_t, std::int64_t, std::uint8_t,
                                  std::size_t, char>;
 TYPED_TEST_SUITE(MPICollectScalar, Scalars);
+
+// each transfer probes its own tag from any rank: a rank still receiving one must never take a
+// message a faster rank already sent for the next (a regrid's, then a refine's)
+static_assert(damn::mpi::copy_tag != damn::mpi::regrid_tag);
+static_assert(damn::mpi::copy_tag != damn::mpi::inter_level_tag);
+static_assert(damn::mpi::regrid_tag != damn::mpi::inter_level_tag);
 
 TYPED_TEST(MPICollectScalar, gathers_one_value_per_rank_in_rank_order)
 {
