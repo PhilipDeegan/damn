@@ -33,6 +33,7 @@ profile:
   mode: none
   test: tst/damn/mpi/test_mpi_utils.cpp
         tst/damn/mpi/test_mpi_copy.cpp
+        tst/damn/mpi/test_mpi_regrid.cpp
         tst/damn/mpi/test_mpi_scope_timing.cpp
 
 # HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
@@ -61,6 +62,7 @@ profile:
         tst/damn/amr/test_level_data.cpp
         tst/damn/amr/test_copy.cpp
         tst/damn/amr/test_partition.cpp
+        tst/damn/amr/test_regrid.cpp
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
