@@ -1,3 +1,5 @@
+super: base # settings, and the hdf5 find for the _mpi profiles
+
 property: 
   cxx.flags: >-
     --std=c++20 -fsized-deallocation -fPIC
