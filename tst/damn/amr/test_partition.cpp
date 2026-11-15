@@ -76,7 +76,7 @@ namespace
                 if (auto const o = core::grow(boxes[a], 1) * boxes[b])
                 {
                     auto const s = o->shape();
-                    if (s[0] == 1 xor s[1] == 1) // a face, not a corner
+                    if ((s[0] == 1) != (s[1] == 1)) // a face, not a corner
                         cut += static_cast<std::size_t>(std::max(s[0], s[1]));
                 }
             }
@@ -314,6 +314,38 @@ TEST(CutPartition, smallBoxesWithinTolAreNotCut)
     }
 }
 
+TEST(CutPartition, followsTheCapacities)
+{
+    // rank 1 has half its threads on something else, rank 3 none for this: shares 2 : 1 : 2 : 0
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{63, 63}},
+                            Box<2>{std::array{64, 0}, std::array{127, 63}}};
+    std::array const block{8, 8};
+    auto const w = cell_weights(blocks(boxes, block));
+    std::vector const capacity{1., 0.5, 1., 0.};
+    double const total = 128. * 64;
+
+    auto const p = cut_partition(boxes, block, w, capacity, 0.);
+    expect_covers_once(p.boxes, boxes);
+    EXPECT_TRUE(std::is_sorted(p.ranks.begin(), p.ranks.end()));
+    std::vector<double> per_rank(capacity.size(), 0);
+    for (std::size_t k = 0; k < p.boxes.size(); ++k)
+        per_rank[p.ranks[k]] += static_cast<double>(p.boxes[k].size());
+    for (std::size_t r = 0; r < capacity.size(); ++r)
+        EXPECT_LE(std::abs(per_rank[r] - total * capacity[r] / 2.5), 64.) << r; // a block
+    EXPECT_EQ(per_rank[3], 0.);
+
+    // whole boxes, the same shares: within a box of each
+    auto const small = chop(Box<2>{std::array{0, 0}, std::array{99, 69}}, std::array{8, 8});
+    auto const sw    = cell_weights(small);
+    auto const ranks = partition(small, sw, capacity);
+    std::vector<double> whole(capacity.size(), 0);
+    for (std::size_t k = 0; k < small.size(); ++k)
+        whole[ranks[k]] += sw[k];
+    for (std::size_t r = 0; r < capacity.size(); ++r)
+        EXPECT_LE(std::abs(whole[r] - 7000. * capacity[r] / 2.5), 64.) << r;
+    EXPECT_EQ(partition(small, sw, std::vector(4, 1.)), partition(small, sw, 4));
+}
+
 TEST(CutPartition, rejectsBadInput)
 {
     std::vector const boxes{Box<2>{std::array{0, 0}, std::array{15, 15}}};
@@ -325,6 +357,12 @@ TEST(CutPartition, rejectsBadInput)
     EXPECT_THROW(std::ignore = cut_partition(boxes, block, std::vector<double>(4, -1.), 2),
                  std::runtime_error);
     EXPECT_THROW(std::ignore = cut_partition(boxes, std::array{0, 8}, w, 2), std::runtime_error);
+    for (auto const& capacity : {std::vector<double>{}, std::vector{1., -1.}, std::vector{0., 0.}})
+    {
+        EXPECT_THROW(std::ignore = cut_partition(boxes, block, w, capacity), std::runtime_error);
+        EXPECT_THROW(std::ignore = partition(boxes, std::vector(1, 1.), capacity),
+                     std::runtime_error);
+    }
 }
 
 } // namespace damn::amr
