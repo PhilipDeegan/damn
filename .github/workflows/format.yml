@@ -71,8 +71,8 @@ jobs:
     container: debian:trixie
     timeout-minutes: 20
     steps:
-    - run: |  # git before checkout, so the checkout is a repository; Debian 13's clang-tidy 22,
-              #  the same as development machines (results differ between versions)
+    # Debian 13's clang-tidy 22, the same as development machines (results differ between versions)
+    - run: |  # git before checkout, so the checkout is a repository
         apt-get update
         apt-get install -y --no-install-recommends ca-certificates curl git g++ python3 \
           clang-tidy-22
