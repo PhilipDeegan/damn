@@ -12,15 +12,6 @@ super: clang_cuda
 
 
 # as base.yaml, clang_cuda does not inherit it
-find:
-  hdf5:
-    inc:
-      /usr/include/hdf5/openmpi
-      /usr/include/openmpi-x86_64
-    lib:
-      /usr/lib64/openmpi/lib
-      /usr/lib/x86_64-linux-gnu/hdf5/openmpi
-
 env: |
   OMPI_CXX=clang++
   PATH=/opt/mpi/cuda/bin:${PATH}
