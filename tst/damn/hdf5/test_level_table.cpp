@@ -91,6 +91,7 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
 
         h5::HighFiveFile file{name, h5::HiFile::Create | h5::HiFile::Truncate};
         write_level(file, "/level2", rows);
+        write_boxes(file, "/level2/clustered", boxes); // a list of boxes
 
         std::vector<core::StridedSpan<double const>> w, dy;
         std::vector<core::StridedSpan<int const>> c;
@@ -119,6 +120,7 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
         auto const stored = read_level<1>(file, "/level2", 2);
         EXPECT_EQ(stored.level.number, 2);
         ASSERT_EQ(stored.level.patches, level.patches);
+        EXPECT_EQ(read_boxes<1>(file, "/level2/clustered"), boxes);
 
         for (std::size_t k = 0; k < stored.level.patches.size(); ++k) // every patch, any owner
         {

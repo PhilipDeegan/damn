@@ -1,7 +1,8 @@
 // damn::hdf5 checkpoints: a level's resources by name, written then read back into fresh patch
-// data on the same patches: a C ordered field through its box_span (in place), an x fastest one
-// through value() (staged), items through their columns (resized, then in place); their domain
-// values and items as written, ghosts not; ranks without patches take part. Any number of ranks
+// data on the same patches: a C ordered field through its box_span (in place) with its ghosts
+// (its checkpoint_box), an x fastest one through value() (staged) on its domain only, items
+// through their columns (resized, then in place); ranks without patches take part. Any number
+// of ranks
 
 #include "damn/hdf5/checkpoint.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -42,6 +43,10 @@ inline Box2 domain_box(CField const&, Box2 const& cells)
 inline Box2 ghost_box(CField const& f, Box2 const& cells)
 {
     return damn::core::grow(cells, f.gw);
+}
+inline Box2 checkpoint_box(CField const& f, Box2 const& cells) // its ghosts too
+{
+    return ghost_box(f, cells);
 }
 inline damn::core::BoxSpan<double, 2> box_span(CField& f, Box2 const& cells)
 {
@@ -124,7 +129,7 @@ namespace
 
     void fill(toy::CheckpointData& d, amr::Patch<2> const& p)
     {
-        core::for_each_point(domain_box(d.E, p.box),
+        core::for_each_point(ghost_box(d.E, p.box), // ghosts too: E's checkpoint box
                              [&](auto const& pt) { value(d.E, p.box, pt) = e_of(pt); });
         core::for_each_point(domain_box(d.B, p.box),
                              [&](auto const& pt) { value(d.B, p.box, pt) = b_of(pt); });
@@ -167,18 +172,14 @@ namespace
             auto const& p = ld.patches[i];
             auto& d       = ld.data[i];
             core::for_each_point(ghost_box(d.E, p.box), [&](auto const& pt) {
-                auto const v = value(d.E, p.box, pt);
-                if (core::isIn(pt, domain_box(d.E, p.box)))
-                    EXPECT_EQ(v, e_of(pt));
-                else
-                    EXPECT_TRUE(std::isnan(v)); // ghosts are not in a checkpoint
+                EXPECT_EQ(value(d.E, p.box, pt), e_of(pt)); // its checkpoint box: the ghosts
             });
             core::for_each_point(ghost_box(d.B, p.box), [&](auto const& pt) {
                 auto const v = value(d.B, p.box, pt);
                 if (core::isIn(pt, domain_box(d.B, p.box)))
                     EXPECT_EQ(v, b_of(pt));
                 else
-                    EXPECT_TRUE(std::isnan(v));
+                    EXPECT_TRUE(std::isnan(v)); // domain only: no ghosts
             });
             auto expect = allocate_one(p);
             fill(expect, p);

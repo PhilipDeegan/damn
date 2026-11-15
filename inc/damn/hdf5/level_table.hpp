@@ -10,6 +10,8 @@
 //                                             the same on every rank
 //   write_level(file, group, rows)            the level's boxes, ids, owners and the offsets
 //   read_level<dim>(file, group, number)      them back, on any rank (any number of ranks)
+//   write_boxes(file, path, boxes)            a list of boxes the same on every rank (e.g. what
+//   read_boxes<dim>(file, path)               a level was clustered to), and back
 //   write_rows(file, path, rows, spans)       collective: the dataset is created at the total,
 //                                             then each rank writes its patches' rows straight
 //                                             from their memory, one span per local patch:
@@ -232,6 +234,54 @@ NO_DISCARD LevelRows<dim> level_rows(amr::Level<dim> const& level, int const ran
     return {level, rank, std::move(table)};
 }
 
+namespace detail
+{
+    template<std::size_t dim>
+    NO_DISCARD std::vector<int> flat_boxes(std::vector<core::Box<int, dim>> const& boxes)
+    {
+        std::vector<int> flat;
+        flat.reserve(2 * dim * boxes.size());
+        for (auto const& b : boxes)
+        {
+            for (std::size_t i = 0; i < dim; ++i)
+                flat.push_back(b.lower[i]);
+            for (std::size_t i = 0; i < dim; ++i)
+                flat.push_back(b.upper[i]);
+        }
+        return flat;
+    }
+
+    template<std::size_t dim>
+    NO_DISCARD std::vector<core::Box<int, dim>> boxes_of(std::vector<int> const& flat)
+    {
+        if (flat.size() % (2 * dim) != 0)
+            throw std::runtime_error("damn::hdf5: not a list of boxes");
+        std::vector<core::Box<int, dim>> boxes(flat.size() / (2 * dim));
+        for (std::size_t k = 0; k < boxes.size(); ++k)
+            for (std::size_t i = 0; i < dim; ++i)
+            {
+                boxes[k].lower[i] = flat[2 * dim * k + i];
+                boxes[k].upper[i] = flat[2 * dim * k + dim + i];
+            }
+        return boxes;
+    }
+} // namespace detail
+
+// boxes, the same on every rank (collective: every rank creates, rank 0 writes)
+template<std::size_t dim>
+void write_boxes(h5::HighFiveFile& file, std::string const& path,
+                 std::vector<core::Box<int, dim>> const& boxes)
+{
+    detail::write_on_rank_0(file, path, detail::flat_boxes(boxes));
+}
+
+template<std::size_t dim>
+NO_DISCARD std::vector<core::Box<int, dim>> read_boxes(h5::HighFiveFile& file,
+                                                       std::string const& path)
+{
+    return detail::boxes_of<dim>(detail::read_all<int>(file, path));
+}
+
 // group/boxes (patches x 2 dim: lower then upper), group/ids, group/ranks, group/offsets
 template<std::size_t dim>
 void write_level(h5::HighFiveFile& file, std::string const& group, LevelRows<dim> const& rows)
@@ -239,18 +289,16 @@ void write_level(h5::HighFiveFile& file, std::string const& group, LevelRows<dim
     auto const& [level, rank, table] = rows;
     if (table.patches() != level.patches.size())
         throw std::runtime_error("damn::hdf5::write_level: a table of another level");
-    std::vector<int> boxes, ranks;
+    std::vector<core::Box<int, dim>> boxes;
+    std::vector<int> ranks;
     std::vector<std::uint32_t> ids;
     for (auto const& p : level.patches)
     {
-        for (std::size_t i = 0; i < dim; ++i)
-            boxes.push_back(p.box.lower[i]);
-        for (std::size_t i = 0; i < dim; ++i)
-            boxes.push_back(p.box.upper[i]);
+        boxes.push_back(p.box);
         ids.push_back(p.id);
         ranks.push_back(p.rank);
     }
-    detail::write_on_rank_0(file, group + "/boxes", boxes);
+    write_boxes(file, group + "/boxes", boxes);
     detail::write_on_rank_0(file, group + "/ids", ids);
     detail::write_on_rank_0(file, group + "/ranks", ranks);
     detail::write_on_rank_0(file, group + "/offsets", table.offsets);

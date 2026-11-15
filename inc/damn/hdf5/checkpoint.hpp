@@ -10,10 +10,12 @@
 //
 // group/level: the level's boxes, ids, owners; group/<name>/offsets and its datasets:
 //
-//   BoxData (fields)    group/<name>/values: each patch's domain_box values, in C order (the
-//                       last direction fastest). Written and read in place when the resource
-//                       has box_span(resource, patch_box) -> core::BoxSpan over its ghost box (a
-//                       C ordered buffer), else through value() per point
+//   BoxData (fields)    group/<name>/values: each patch's values on its checkpoint box, in C
+//                       order (the last direction fastest): domain_box, unless the resource has
+//                       checkpoint_box(resource, patch_box) (e.g. its ghost box, for ghosts that
+//                       cannot be rebuilt). Written and read in place when the resource has
+//                       box_span(resource, patch_box) -> core::BoxSpan over its ghost box (a C
+//                       ordered buffer), else through value() per point
 //   columns             group/<name>/<column>: a resource with
 //                         for_each_column(resource, fn(name, core::StridedSpan<T>))
 //                         resize_columns(resource, n)
@@ -60,6 +62,21 @@ template<typename R, std::size_t dim>
 concept HasBoxSpan = amr::BoxData<R, dim> and requires(R& r, core::Box<int, dim> const& box) {
     { box_span(r, box).box } -> std::convertible_to<core::Box<int, dim>>;
 };
+
+template<typename R, std::size_t dim>
+concept HasCheckpointBox = requires(R const& r, core::Box<int, dim> const& box) {
+    { checkpoint_box(r, box) } -> std::convertible_to<core::Box<int, dim>>;
+};
+
+// the points of a BoxData resource a checkpoint holds
+template<std::size_t dim>
+NO_DISCARD auto stored_box(auto const& resource, core::Box<int, dim> const& cells)
+{
+    if constexpr (HasCheckpointBox<std::decay_t<decltype(resource)>, dim>)
+        return core::Box<int, dim>{checkpoint_box(resource, cells)};
+    else
+        return core::Box<int, dim>{domain_box(resource, cells)};
+}
 
 template<typename R>
 concept HasColumns = requires(R& r, std::size_t const n) {
@@ -189,7 +206,7 @@ namespace detail
             return n;
         }
         else
-            return domain_box(resource, cells).size();
+            return stored_box(resource, cells).size();
     }
 
     // a resource's values on its domain, in C order, for one without a box_span
@@ -198,8 +215,8 @@ namespace detail
     {
         using T = amr::box_data_value_t<std::decay_t<decltype(resource)>, dim>;
         std::vector<T> out;
-        out.reserve(domain_box(resource, cells).size());
-        core::for_each_point(domain_box(resource, cells),
+        out.reserve(stored_box(resource, cells).size());
+        core::for_each_point(stored_box(resource, cells),
                              [&](auto const& p) { out.push_back(value(resource, cells, p)); });
         return out;
     }
@@ -259,7 +276,7 @@ void write_checkpoint(LevelCheckpoint<dim, PatchData> const& c)
                     if constexpr (amr::BoxData<R, dim> and not HasColumns<R>)
                         if constexpr (std::is_same_v<amr::box_data_value_t<R, dim>, T>)
                         {
-                            auto const domain = domain_box(r, cells(k));
+                            auto const domain = stored_box(r, cells(k));
                             if constexpr (HasBoxSpan<R, dim>)
                             {
                                 core::BoxSpan<T const, dim> const span = box_span(r, cells(k));
@@ -329,7 +346,7 @@ void read_checkpoint(LevelCheckpoint<dim, PatchData> const& c)
             }
             else if constexpr (amr::BoxData<R, dim>)
             {
-                auto const domain = domain_box(r, cells(k));
+                auto const domain = stored_box(r, cells(k));
                 if (domain.size() != table.rows(k))
                     throw std::runtime_error("damn::hdf5::read_checkpoint: " + path
                                              + ": a domain of another size");
