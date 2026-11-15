@@ -55,6 +55,7 @@ profile:
   test: tst/damn/hdf5/test_h5_file.cpp
         tst/damn/hdf5/test_level_table.cpp
         tst/damn/hdf5/test_checkpoint.cpp
+        tst/damn/hdf5/test_vtkhdf.cpp
 
 - name: test_damn_core
   inc: .
