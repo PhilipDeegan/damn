@@ -216,8 +216,8 @@ namespace
 
     int constexpr reach = 3; // toy fields: 2 ghosts, plus one for primal nodes
 
-    Neighbours<2> neighbours_of(Hierarchy<2> const& h, int const rank = 0,
-                                Topology const& t = single_node())
+    [[maybe_unused]] Neighbours<2> neighbours_of(Hierarchy<2> const& h, int const rank = 0,
+                                                 Topology const& t = single_node())
     {
         return make_neighbours(h, 0, rank, t, reach);
     }
@@ -235,7 +235,7 @@ namespace
         return data;
     }
 
-    toy::Field& field(toy::PatchData& d, std::string const& name)
+    [[maybe_unused]] toy::Field& field(toy::PatchData& d, std::string const& name)
     {
         toy::Field* f = nullptr;
         for_each_resource(d, [&](std::string_view n, auto& r) {
@@ -253,7 +253,7 @@ namespace
     }
 
     // a function of the physical point: periodic where the hierarchy is
-    double f_of(Hierarchy<2> const& h, Point2 p)
+    [[maybe_unused]] double f_of(Hierarchy<2> const& h, Point2 p)
     {
         auto const shape = level_domain(h, 0).shape();
         for (std::size_t i = 0; i < 2; ++i)
