@@ -18,8 +18,9 @@
 //   cut_partition(boxes, block, block_weights, capacity | n_ranks)  boxes and their ranks, boxes
 //                                       cut where a rank's share ends inside them
 //
-// as SAMRAI's CascadePartitioner, but along the curve: patches can be large (tiled), so one box's
-// weight may be more than a rank's tolerance. A box is cut into blocks (blocks_of: `block` cells
+// as SAMRAI's CascadePartitioner, but along the curve: with whole boxes the ranks only get within
+// a box's weight of their share, and patches can be large (tiled), one weighing more than the
+// imbalance allowed (tol of a share). A box is cut into blocks (blocks_of: `block` cells
 // from its lower corner, the remainder in the last block of each direction); a box a rank's share
 // ends in is split by its blocks along the curve, and the blocks of each rank coalesced back into
 // boxes. Weights are per block (blocks(boxes, block): box after box), the same on every rank,
