@@ -17,6 +17,8 @@
 #include "highfive/H5Easy.hpp"
 
 #include <string>
+#include <string_view>
+#include <cstdlib>
 #include <vector>
 #include <cstddef>
 #include <algorithm>
@@ -39,6 +41,33 @@ NO_DISCARD auto vector_for_dim()
         return std::vector<std::vector<std::vector<Data>>>();
 }
 
+// the parallel driver: DAMN_HDF5_DRIVER=subfiling for HDF5's subfiling VFD (an I/O concentrator
+// per node writing subfiles, needs MPI_THREAD_MULTIPLE), else MPI-IO. Asked for and not possible
+// (HDF5 without it, MPI below MPI_THREAD_MULTIPLE): opening throws, saying why. Subfiled files
+// are read through the same driver, or merged first (HDF5's h5fuse)
+NO_DISCARD inline bool subfiling_requested()
+{
+    static bool const requested = [] {
+        auto const* v = std::getenv("DAMN_HDF5_DRIVER");
+        return v and std::string_view{v} == "subfiling";
+    }();
+    return requested;
+}
+
+#if defined(H5_HAVE_SUBFILING_VFD) && H5_HAVE_SUBFILING_VFD
+// HighFive's FileAccessProps::add takes anything with apply(fapl)
+struct SubfilingFileAccess
+{
+    MPI_Comm comm = MPI_COMM_WORLD;
+    void apply(hid_t const fapl) const
+    {
+        if (H5Pset_mpi_params(fapl, comm, MPI_INFO_NULL) < 0
+            or H5Pset_fapl_subfiling(fapl, nullptr) < 0) // defaults: a concentrator per node
+            throw std::runtime_error("damn::hdf5: the subfiling file access properties failed");
+    }
+};
+#endif
+
 class HighFiveFile
 {
 public:
@@ -46,6 +75,23 @@ public:
     static auto createHighFiveFile(std::string const path, FileOp flags, bool para,
                                    FileAccessProps& fapl)
     {
+        if (para and subfiling_requested())
+        {
+#if defined(H5_HAVE_SUBFILING_VFD) && H5_HAVE_SUBFILING_VFD
+            int level = 0;
+            MPI_Query_thread(&level);
+            if (level < MPI_THREAD_MULTIPLE)
+                throw std::runtime_error("damn::hdf5: DAMN_HDF5_DRIVER=subfiling needs MPI at "
+                                         "MPI_THREAD_MULTIPLE ("
+                                         + path + ")");
+            fapl.add(SubfilingFileAccess{});
+            return HiFile{path, flags, fapl};
+#else
+            throw std::runtime_error("damn::hdf5: DAMN_HDF5_DRIVER=subfiling, HDF5 built without "
+                                     "the subfiling VFD ("
+                                     + path + ")");
+#endif
+        }
         if (para)
         {
 #if defined(H5_HAVE_PARALLEL)
