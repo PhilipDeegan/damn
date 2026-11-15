@@ -1,7 +1,9 @@
 // damn::amr::partition: the Hilbert curve visits every point once through face neighbours,
 // partitions are contiguous runs of the curve within one box of the even share, keep neighbours
 // together better than lexicographic strips, and follow the weights (PHARE's load balancing
-// test: a row of cells with no particles of one population)
+// test: a row of cells with no particles of one population); cut_partition cuts the boxes a
+// rank's share ends in on their blocks: the pieces cover each box once, and the ranks end within
+// a block of the share where whole boxes do not
 
 #include "damn/amr/partition.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -79,6 +81,26 @@ namespace
                 }
             }
         return cut;
+    }
+
+    // pieces cover the boxes once: as many cells, no two overlap, each inside one box
+    template<std::size_t dim>
+    void expect_covers_once(std::vector<Box<dim>> const& pieces, std::vector<Box<dim>> const& boxes)
+    {
+        std::size_t cells = 0, piece_cells = 0;
+        for (auto const& b : boxes)
+            cells += b.size();
+        for (std::size_t a = 0; a < pieces.size(); ++a)
+        {
+            piece_cells += pieces[a].size();
+            EXPECT_TRUE(std::any_of(boxes.begin(), boxes.end(), [&](auto const& b) {
+                auto const o = b * pieces[a];
+                return o and o->size() == pieces[a].size();
+            }));
+            for (std::size_t b = a + 1; b < pieces.size(); ++b)
+                EXPECT_FALSE(pieces[a] * pieces[b]);
+        }
+        EXPECT_EQ(piece_cells, cells);
     }
 } // namespace
 
@@ -202,6 +224,107 @@ TEST(Partition, rejectsBadInput)
     EXPECT_THROW(std::ignore = partition(boxes, std::vector<double>(3, 1.), 2), std::runtime_error);
     EXPECT_THROW(std::ignore = partition(boxes, std::vector<double>(4, -1.), 2),
                  std::runtime_error);
+}
+
+
+TEST(Blocks, fromTheLowerCornerRemainderInTheLast)
+{
+    Box<2> const box{std::array{3, -5}, std::array{22, 4}}; // 20 x 10
+    auto const bs = blocks_of(box, std::array{8, 8});
+    ASSERT_EQ(bs.size(), 2u); // x: 8 + 12, y: 10 (less than two blocks)
+    EXPECT_EQ(bs[0], (Box<2>{std::array{3, -5}, std::array{10, 4}}));
+    EXPECT_EQ(bs[1], (Box<2>{std::array{11, -5}, std::array{22, 4}}));
+    expect_covers_once(bs, {box});
+
+    Box<2> const small{std::array{0, 0}, std::array{2, 2}};
+    EXPECT_EQ(blocks_of(small, std::array{8, 8}), std::vector{small});
+    EXPECT_EQ(coalesce(blocks_of(Box<2>{std::array{0, 0}, std::array{63, 40}}, std::array{8, 8})),
+              (std::vector{Box<2>{std::array{0, 0}, std::array{63, 40}}}));
+}
+
+TEST(CutPartition, cutsTheBoxesASharesEndsInWithinABlock)
+{
+    // two large patches (tiled ones): whole boxes cannot balance 3 or more ranks
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{63, 63}},
+                            Box<2>{std::array{64, 0}, std::array{127, 63}}};
+    std::array const block{8, 8};
+    auto const bs    = blocks(boxes, block);
+    auto const w     = cell_weights(bs);
+    auto const total = std::accumulate(w.begin(), w.end(), 0.);
+
+    for (int const n_ranks : {1, 2, 3, 5, 7, 16})
+    {
+        auto const p = cut_partition(boxes, block, w, n_ranks, 0.);
+        ASSERT_EQ(p.boxes.size(), p.ranks.size());
+        expect_covers_once(p.boxes, boxes);
+        EXPECT_TRUE(std::is_sorted(p.ranks.begin(), p.ranks.end()));
+
+        std::vector<double> per_rank(n_ranks, 0);
+        for (std::size_t k = 0; k < p.boxes.size(); ++k)
+            per_rank[p.ranks[k]] += static_cast<double>(p.boxes[k].size());
+        for (auto const r : per_rank)
+            EXPECT_LE(std::abs(r - total / n_ranks), 64.) << n_ranks << " ranks"; // a block
+
+        auto const again = cut_partition(boxes, block, w, n_ranks, 0.); // deterministic
+        EXPECT_EQ(again.boxes, p.boxes);
+        EXPECT_EQ(again.ranks, p.ranks);
+    }
+}
+
+TEST(CutPartition, followsTheBlockWeights)
+{
+    // the particles of PHARE's load balancing test, counted per block of one large patch
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{99, 99}}};
+    std::array const block{10, 10};
+    std::vector<double> w;
+    for (auto const& b : blocks(boxes, block))
+    {
+        double n = 0;
+        core::for_each_point(b, [&](auto const& c) { n += 90 + (c[1] == 50 ? 0 : 120); });
+        w.push_back(n);
+    }
+    auto const total = std::accumulate(w.begin(), w.end(), 0.);
+    auto const p     = cut_partition(boxes, block, w, 4);
+    expect_covers_once(p.boxes, boxes);
+
+    std::vector<double> per_rank(4, 0);
+    for (std::size_t k = 0; k < p.boxes.size(); ++k)
+        core::for_each_point(p.boxes[k], [&](auto const& c) {
+            per_rank[p.ranks[k]] += 90 + (c[1] == 50 ? 0 : 120);
+        });
+    for (auto const r : per_rank)
+        EXPECT_LE(std::abs(r - total / 4), *std::max_element(w.begin(), w.end()));
+}
+
+TEST(CutPartition, smallBoxesWithinTolAreNotCut)
+{
+    auto const boxes = chop(Box<2>{std::array{0, 0}, std::array{99, 69}}, std::array{8, 8});
+    std::array const block{4, 4};
+    auto const w = cell_weights(blocks(boxes, block));
+
+    // a box is at most 64 cells, a share of 4 ranks 1750: tol 0.05 of it is more than half a box
+    auto const p     = cut_partition(boxes, block, w, 4);
+    auto const whole = partition(boxes, cell_weights(boxes), 4);
+    auto const order = curve_order(boxes);
+    ASSERT_EQ(p.boxes.size(), boxes.size());
+    for (std::size_t k = 0; k < order.size(); ++k)
+    {
+        EXPECT_EQ(p.boxes[k], boxes[order[k]]);
+        EXPECT_EQ(p.ranks[k], whole[order[k]]);
+    }
+}
+
+TEST(CutPartition, rejectsBadInput)
+{
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{15, 15}}};
+    std::array const block{8, 8};
+    auto const w = cell_weights(blocks(boxes, block));
+    EXPECT_THROW(std::ignore = cut_partition(boxes, block, w, 0), std::runtime_error);
+    EXPECT_THROW(std::ignore = cut_partition(boxes, block, std::vector<double>(3, 1.), 2),
+                 std::runtime_error);
+    EXPECT_THROW(std::ignore = cut_partition(boxes, block, std::vector<double>(4, -1.), 2),
+                 std::runtime_error);
+    EXPECT_THROW(std::ignore = cut_partition(boxes, std::array{0, 8}, w, 2), std::runtime_error);
 }
 
 } // namespace damn::amr
