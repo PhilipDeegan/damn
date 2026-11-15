@@ -7,6 +7,7 @@
 //  chunk is a mostly idle remainder. The target sizes the grid to the device (SM count)
 
 #include "damn/core/def/damn_config.hpp"
+#include "damn/core/exec/kernels/detail/mkn_launchers.hpp" // IWYU pragma: keep (gpu::sm_count, Vec_t, TileLauncher: GPU builds)
 
 #include <cstdint>
 #include <cstddef>
