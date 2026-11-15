@@ -12,11 +12,14 @@
 //   read_level<dim>(file, group, number)      them back, on any rank (any number of ranks)
 //   write_rows(file, path, rows, spans)       collective: the dataset is created at the total,
 //                                             then each rank writes its patches' rows straight
-//                                             from their memory (one StridedSpan per local
-//                                             patch: a member of an AoS, a column ...)
+//                                             from their memory, one span per local patch:
+//                                             a StridedSpan (a member of an AoS, a column ...) or
+//                                             a BoxRegion (a field's values on its domain, in C
+//                                             order)
 //   read_rows(file, path, offset, span)       span.size() rows from offset into memory, in place
 //
-// No staging copy: a span's stride becomes the memory side's hyperslab stride. Rows and offsets
+// No staging copy: a StridedSpan's stride, or a BoxRegion's sub box, is the memory side's
+// hyperslab. Rows and offsets
 // are 64 bit (a 3d run's particles overflow 32 bits, as VTKHDF's offsets). Writes are
 // independent (each rank its own rows); every rank creates every dataset, as HDF5 needs
 
@@ -25,7 +28,6 @@
 #include "damn/core/memory/strided_span.hpp"
 #include "damn/hdf5/h5_file.hpp"
 #include "damn/mpi/mpi_utils.hpp"
-
 #include "highfive/H5File.hpp"
 
 #include <cstddef>
@@ -35,6 +37,12 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <array>
+
+namespace damn::core {
+template <typename T, std::size_t dim> struct BoxRegion;
+template <typename Type, std::size_t dim> struct Box;
+}  // namespace damn::core
 
 namespace damn::hdf5
 {
@@ -82,6 +90,21 @@ namespace detail
             hsize_t const start = 0, step = stride, count = n;
             H5Sselect_hyperslab(id, H5S_SELECT_SET, &start, &step, &count, nullptr);
         }
+
+        // select, a sub box of a buffer over the points of buffer (C order)
+        template<std::size_t dim>
+        MemorySpace(core::Box<int, dim> const& buffer, core::Box<int, dim> const& select)
+        {
+            std::array<hsize_t, dim> extent{}, start{}, count{};
+            for (std::size_t i = 0; i < dim; ++i)
+            {
+                extent[i] = static_cast<hsize_t>(buffer.upper[i] - buffer.lower[i] + 1);
+                start[i]  = static_cast<hsize_t>(select.lower[i] - buffer.lower[i]);
+                count[i]  = static_cast<hsize_t>(select.upper[i] - select.lower[i] + 1);
+            }
+            id = H5Screate_simple(dim, extent.data(), nullptr);
+            H5Sselect_hyperslab(id, H5S_SELECT_SET, start.data(), nullptr, count.data(), nullptr);
+        }
         ~MemorySpace() { H5Sclose(id); }
         MemorySpace(MemorySpace const&)            = delete;
         MemorySpace& operator=(MemorySpace const&) = delete;
@@ -104,28 +127,52 @@ namespace detail
     };
 
     template<typename T>
-    void write_span(HighFive::DataSet const& ds, std::uint64_t const offset,
-                    core::StridedSpan<T> const& span)
+    NO_DISCARD MemorySpace memory_space(core::StridedSpan<T> const& span)
     {
+        return {span.size(), span.stride_values()};
+    }
+    template<typename T, std::size_t dim>
+    NO_DISCARD MemorySpace memory_space(core::BoxRegion<T, dim> const& region)
+    {
+        return {region.span.box, region.select};
+    }
+    template<typename T>
+    NO_DISCARD T* memory_data(core::StridedSpan<T> const& span)
+    {
+        return span.data();
+    }
+    template<typename T, std::size_t dim>
+    NO_DISCARD T* memory_data(core::BoxRegion<T, dim> const& region)
+    {
+        return region.span.data();
+    }
+
+    template<typename Span>
+    void write_span(HighFive::DataSet const& ds, std::uint64_t const offset, Span const& span)
+    {
+        using T = typename Span::value_type;
         if (span.size() == 0)
             return;
-        MemorySpace const memory{span.size(), span.stride_values()};
+        auto const memory = memory_space(span);
         FileSpace const file{ds.getId(), offset, span.size()};
-        if (H5Dwrite(ds.getId(), native_type<T>(), memory.id, file.id, H5P_DEFAULT, span.data())
+        if (H5Dwrite(ds.getId(), native_type<T>(), memory.id, file.id, H5P_DEFAULT,
+                     memory_data(span))
             < 0)
             throw std::runtime_error("damn::hdf5::write_rows: H5Dwrite failed");
     }
 
-    template<typename T>
-    void read_span(HighFive::DataSet const& ds, std::uint64_t const offset,
-                   core::StridedSpan<T> const& span)
+    template<typename Span>
+    void read_span(HighFive::DataSet const& ds, std::uint64_t const offset, Span const& span)
     {
+        using T = typename Span::value_type;
         static_assert(!std::is_const_v<T>);
         if (span.size() == 0)
             return;
-        MemorySpace const memory{span.size(), span.stride_values()};
+        auto const memory = memory_space(span);
         FileSpace const file{ds.getId(), offset, span.size()};
-        if (H5Dread(ds.getId(), native_type<T>(), memory.id, file.id, H5P_DEFAULT, span.data()) < 0)
+        if (H5Dread(ds.getId(), native_type<T>(), memory.id, file.id, H5P_DEFAULT,
+                    memory_data(span))
+            < 0)
             throw std::runtime_error("damn::hdf5::read_rows: H5Dread failed");
     }
 
@@ -245,10 +292,11 @@ NO_DISCARD StoredLevel<dim> read_level(h5::HighFiveFile& file, std::string const
 
 // collective: path holds rows.table.total() rows; each rank writes its patches' rows from
 // spans, one per local patch in level order
-template<typename T, std::size_t dim>
+template<typename Span, std::size_t dim>
 void write_rows(h5::HighFiveFile& file, std::string const& path, LevelRows<dim> const& rows,
-                std::vector<core::StridedSpan<T const>> const& spans)
+                std::vector<Span> const& spans)
 {
+    using T                          = std::remove_cv_t<typename Span::value_type>;
     auto const& [level, rank, table] = rows;
     auto const ds                    = file.create_data_set<T>(path, table.total());
     std::size_t local                = 0;
@@ -270,9 +318,9 @@ void write_rows(h5::HighFiveFile& file, std::string const& path, LevelRows<dim> 
 }
 
 // span.size() rows of path from offset, into the span's memory
-template<typename T>
+template<typename Span>
 void read_rows(h5::HighFiveFile& file, std::string const& path, std::uint64_t const offset,
-               core::StridedSpan<T> const& span)
+               Span const& span)
 {
     auto const ds = file.getDataSet(path);
     if (offset + span.size() > ds.getElementCount())

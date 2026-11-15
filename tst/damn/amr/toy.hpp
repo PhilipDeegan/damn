@@ -204,7 +204,8 @@ namespace
     double const nan = std::numeric_limits<double>::quiet_NaN();
 
     // 8 x 6 cells, patches of at most 3 x 4: 3 x 2 of them, uneven
-    Hierarchy<2> make_hierarchy(std::array<bool, 2> const periodic, int const n_ranks = 1)
+    [[maybe_unused]] Hierarchy<2> make_hierarchy(std::array<bool, 2> const periodic,
+                                                 int const n_ranks = 1)
     {
         Hierarchy<2> h;
         h.domain   = Box2{std::array{0, 0}, std::array{7, 5}};
@@ -222,7 +223,7 @@ namespace
         return make_neighbours(h, 0, rank, t, reach);
     }
 
-    toy::PatchData make_patch_data(Patch<2> const& patch)
+    [[maybe_unused]] toy::PatchData make_patch_data(Patch<2> const& patch)
     {
         toy::PatchData data;
         data.populations = {{"protons", {{true, true}}, {}}, {"alpha", {{true, true}}, {}}};

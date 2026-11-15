@@ -1,10 +1,13 @@
 // damn::hdf5 level tables: a level's patches' rows (members of an array of structs, through
 // strided spans, and a contiguous column) written by their owners straight from memory, the
 // level (boxes, ids, owners, offsets) with them, then read back by any rank, its own patches or
-// another's, into memory in place; run with any number of ranks, e.g. mpirun -n 3
+// another's, into memory in place; fields' domains from their ghost buffers (n dimensional
+// memory selections), in C order; run with any number of ranks, e.g. mpirun -n 3
 
 #include "damn/hdf5/level_table.hpp"
 #include "damn/amr/hierarchy.hpp"
+#include "damn/core/geometry/box_spans.hpp"
+#include "damn/core/memory/box_span.hpp"
 #include "damn/core/memory/strided_span.hpp"
 #include "damn/hdf5/h5_file.hpp"
 #include "damn/mpi/mpi_utils.hpp"
@@ -149,6 +152,77 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
     MPI_Barrier(MPI_COMM_WORLD);
     if (rank == 0)
         std::filesystem::remove(name);
+}
+
+TEST(LevelTable, aFieldsDomainFromItsGhostBuffer)
+{
+    // 2d "fields": a buffer over the ghost box (2 ghosts), the domain written as rows in C order,
+    //  read back in place into a fresh buffer, its ghosts untouched
+    int const rank = mpi::rank(), size = mpi::size();
+    std::string const name = "test_damn_level_table_fields.h5";
+    using Box2             = core::Box<int, 2>;
+
+    std::vector<Box2> boxes;
+    std::vector<int> owners;
+    for (int k = 0; k < 5; ++k)
+    {
+        boxes.push_back({std::array{8 * k, 0}, std::array{8 * k + 7, 4 + k}}); // 8 x (5 + k)
+        owners.push_back((k + 1) % size);
+    }
+    auto const level = amr::make_level(0, boxes, owners);
+    auto const value = [](auto const& p) { return 1000. * p[0] + p[1]; };
+
+    std::vector<std::vector<double>> buffers; // this rank's
+    std::vector<core::BoxRegion<double const, 2>> regions;
+    std::vector<std::uint64_t> local_rows;
+    for (auto const& p : level.patches)
+        if (p.rank == rank)
+        {
+            auto const ghost = core::grow(p.box, 2);
+            auto& b          = buffers.emplace_back(ghost.size(), -1.);
+            core::BoxSpan<double, 2> const span{b.data(), ghost};
+            core::for_each_point(p.box, [&](auto const& pt) { span(pt) = value(pt); });
+            core::BoxSpan<double const, 2> const read_only = span;
+            regions.push_back(core::region(read_only, p.box));
+            local_rows.push_back(p.box.size());
+        }
+
+    {
+        auto const rows = level_rows(level, rank, local_rows);
+        h5::HighFiveFile file{name, h5::HiFile::Create | h5::HiFile::Truncate};
+        write_level(file, "/level0", rows);
+        write_rows(file, "/level0/f", rows, regions);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    {
+        h5::HighFiveFile file{name, h5::HiFile::ReadOnly};
+        auto const stored = read_level<2>(file, "/level0", 0);
+        for (std::size_t k = 0; k < stored.level.patches.size(); ++k)
+        {
+            auto const& p    = stored.level.patches[k];
+            auto const ghost = core::grow(p.box, 2);
+            std::vector<double> b(ghost.size(), -7.);
+            core::BoxSpan<double, 2> const span{b.data(), ghost};
+            read_rows(file, "/level0/f", stored.table.offset(k), core::region(span, p.box));
+            core::for_each_point(ghost, [&](auto const& pt) {
+                auto const inside = core::isIn(pt, p.box);
+                EXPECT_EQ(span(pt), inside ? value(pt) : -7.); // ghosts not written
+            });
+
+            std::vector<double> flat(p.box.size()); // the rows: the domain in C order
+            read_rows(file, "/level0/f", stored.table.offset(k),
+                      core::strided_span(flat.data(), flat.size(), sizeof(double)));
+            std::size_t i = 0;
+            core::for_each_point(p.box, [&](auto const& pt) { EXPECT_EQ(flat[i++], value(pt)); });
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (rank == 0)
+        std::filesystem::remove(name);
+    EXPECT_THROW(std::ignore = core::region(core::BoxSpan<double, 2>{nullptr, boxes[0]},
+                                            core::grow(boxes[0], 1)),
+                 std::runtime_error);
 }
 
 TEST(LevelTable, rowsMustMatchThePatches)
