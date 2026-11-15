@@ -70,6 +70,7 @@ profile:
         tst/damn/amr/test_time_refinement.cpp
         tst/damn/core/exec/test_thread_pool.cpp
         tst/damn/core/exec/test_thread_pool_sync.cpp
+        tst/damn/core/memory/test_strided_span.cpp
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
