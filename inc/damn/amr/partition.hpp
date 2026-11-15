@@ -15,8 +15,10 @@
 // Deterministic: every rank computes the same partition from the same input weights: whatever
 // costs, e.g. cells, or particles (density above a cutoff times particles per cell)
 //
-//   cut_partition(boxes, block, block_weights, capacity | n_ranks)  boxes and their ranks, boxes
-//                                       cut where a rank's share ends inside them
+//   cut_partition(boxes, block, block_weights, capacity[, tol])  boxes and their ranks, boxes
+//                                       cut where a rank's share ends inside them; the
+//                                       arguments build a CutPartition, which it also takes
+//   equal_capacity(n_ranks)             n_ranks ranks of the same capacity
 //
 // as SAMRAI's CascadePartitioner, but along the curve: with whole boxes the ranks only get within
 // a box's weight of their share, and patches can be large (tiled), one weighing more than the
@@ -96,21 +98,42 @@ struct Partition
     std::vector<int> ranks;                 // non decreasing
 };
 
+// cut_partition's input: boxes cut on blocks of `block` cells, a weight per block (in
+// blocks(boxes, block) order), each rank's capacity (equal_capacity(n_ranks): the same for all),
+// and tol: how much of the smallest (non zero) share may be on one side of a share's end before
+// the box it is in is cut
+template<std::size_t dim>
+struct CutPartition
+{
+    std::vector<core::Box<int, dim>> const& boxes;
+    std::array<int, dim> block;
+    std::vector<double> const& block_weights;
+    std::vector<double> const& capacity;
+    double tol = 0.05;
+};
+
 // boxes partitioned over the ranks of capacity, a box cut on its blocks where a rank's share ends
-// inside it, unless less than tol of the smallest (non zero) share is on one side (the box then
-// goes whole to the rank holding the middle of its weight). Each rank ends within a block's weight
-// of its share, plus tol of the smallest share per end of its run left uncut
+// inside it, unless less than tol of the smallest share is on one side (the box then goes whole to
+// the rank holding the middle of its weight). Each rank ends within a block's weight of its share,
+// plus tol of the smallest share per end of its run left uncut
+template<std::size_t dim>
+NO_DISCARD Partition<dim> cut_partition(CutPartition<dim> const& in);
+
+// the same from CutPartition's members as arguments, in order; missing ones (tol) defaulted
 template<std::size_t dim>
 NO_DISCARD Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
-                                        std::array<int, dim> const& block,
-                                        std::vector<double> const& block_weights,
-                                        std::vector<double> const& capacity, double tol = 0.05);
+                                        auto&&... args)
+{
+    return cut_partition(CutPartition<dim>{boxes, std::forward<decltype(args)>(args)...});
+}
 
-// the same, every rank the same capacity
-template<std::size_t dim>
-NO_DISCARD Partition<dim>
-cut_partition(std::vector<core::Box<int, dim>> const& boxes, std::array<int, dim> const& block,
-              std::vector<double> const& block_weights, int n_ranks, double tol = 0.05);
+// n_ranks ranks of the same capacity
+NO_DISCARD inline std::vector<double> equal_capacity(int const n_ranks)
+{
+    if (n_ranks < 1)
+        throw std::runtime_error("damn::amr::equal_capacity: n_ranks < 1");
+    return std::vector<double>(static_cast<std::size_t>(n_ranks), 1.);
+}
 
 
 namespace detail
@@ -159,13 +182,6 @@ namespace detail
         }
         s.ends.back() = total; // no round off past the last
         return s;
-    }
-
-    NO_DISCARD inline std::vector<double> same_capacity(int const n_ranks, char const* const who)
-    {
-        if (n_ranks < 1)
-            throw std::runtime_error(std::string{who} + ": n_ranks < 1");
-        return std::vector<double>(static_cast<std::size_t>(n_ranks), 1.);
     }
 } // namespace detail
 
@@ -284,7 +300,7 @@ template<std::size_t dim>
 std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
                            std::vector<double> const& weights, int const n_ranks)
 {
-    return partition(boxes, weights, detail::same_capacity(n_ranks, "damn::amr::partition"));
+    return partition(boxes, weights, equal_capacity(n_ranks));
 }
 
 template<std::size_t dim>
@@ -386,12 +402,10 @@ std::vector<core::Box<int, dim>> blocks(std::vector<core::Box<int, dim>> const& 
 }
 
 template<std::size_t dim>
-Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
-                             std::array<int, dim> const& block,
-                             std::vector<double> const& block_weights,
-                             std::vector<double> const& capacity, double const tol)
+Partition<dim> cut_partition(CutPartition<dim> const& in)
 {
     DAMN_LOG_SCOPE(1, "damn::amr::cut_partition");
+    auto const& [boxes, block, block_weights, capacity, tol] = in;
     if (!(tol >= 0))
         throw std::runtime_error("damn::amr::cut_partition: tol < 0");
     for (auto const w : block_weights)
@@ -472,15 +486,6 @@ Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
             }
     }
     return out;
-}
-
-template<std::size_t dim>
-Partition<dim>
-cut_partition(std::vector<core::Box<int, dim>> const& boxes, std::array<int, dim> const& block,
-              std::vector<double> const& block_weights, int const n_ranks, double const tol)
-{
-    return cut_partition(boxes, block, block_weights,
-                         detail::same_capacity(n_ranks, "damn::amr::cut_partition"), tol);
 }
 
 } // namespace damn::amr
