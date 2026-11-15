@@ -21,7 +21,7 @@ auto get_some_boxes(std::size_t const size = 5)
 
     using T                                 = int;
     std::size_t constexpr static dim        = 3; // this is only 3d
-    auto constexpr static extra_ghost_cells = extra_ghost_cells_;
+    [[maybe_unused]] auto constexpr static extra_ghost_cells = extra_ghost_cells_;
     using box_t                             = Box<T, dim>;
     using point_t                           = Point<T, dim>;
 

@@ -262,7 +262,8 @@ TEST(Copy, plansAreMadeOnceAndKeptInTheNeighbours)
     EXPECT_EQ(&n.plans.begin()->second, plan);
 
     // the border sum's buffer holds every copy, no more
-    auto const& sum   = plan_for(Region::Borders, n, ld, same_names({"rho"}));
+    auto const rho    = same_names({"rho"});
+    auto const& sum   = plan_for(Region::Borders, n, ld, rho); // a plan of n, not of the names
     std::size_t bytes = 0;
     for (auto const& c : sum.pieces)
         bytes += c.bytes;
