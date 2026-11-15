@@ -21,6 +21,7 @@
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/math/array.hpp"
 #include "damn/amr/hierarchy.hpp"
+#include "damn/amr/partition.hpp"
 
 #include <algorithm>
 #include <array>
@@ -111,27 +112,6 @@ namespace detail
             tile[i] = core::floor_div(cell[i], size[i]);
         return tile;
     }
-
-    // a and b as one box, if their union is one
-    template<std::size_t dim>
-    NO_DISCARD std::optional<core::Box<int, dim>> union_box(core::Box<int, dim> const& a,
-                                                            core::Box<int, dim> const& b)
-    {
-        std::size_t differ = dim;
-        for (std::size_t i = 0; i < dim; ++i)
-            if (a.lower[i] != b.lower[i] or a.upper[i] != b.upper[i])
-            {
-                if (differ != dim)
-                    return std::nullopt; // more than one direction
-                differ = i;
-            }
-        if (differ == dim)
-            return a;
-        auto const i = differ;
-        if (a.upper[i] + 1 != b.lower[i] and b.upper[i] + 1 != a.lower[i])
-            return std::nullopt; // not adjacent
-        return a.merge(b);
-    }
 } // namespace detail
 
 
@@ -176,25 +156,7 @@ NO_DISCARD std::vector<core::Box<int, dim>> cluster(Hierarchy<dim> const& h, int
             boxes.insert(boxes.end(), nested.begin(), nested.end());
     }
 
-    // coalesce until nothing merges: deterministic, in lower corner order
-    bool merged = true;
-    while (merged)
-    {
-        merged = false;
-        std::sort(boxes.begin(), boxes.end(), [](auto const& a, auto const& b) {
-            auto const al = a.lower.toArray(), bl = b.lower.toArray();
-            return al < bl or (al == bl and a.upper.toArray() < b.upper.toArray());
-        });
-        for (std::size_t i = 0; i < boxes.size() and !merged; ++i)
-            for (std::size_t j = i + 1; j < boxes.size(); ++j)
-                if (auto const u = detail::union_box(boxes[i], boxes[j]))
-                {
-                    boxes[i] = *u;
-                    boxes.erase(boxes.begin() + static_cast<std::ptrdiff_t>(j));
-                    merged = true;
-                    break;
-                }
-    }
+    boxes = coalesce(std::move(boxes));
 
     for (auto& box : boxes)
         box = core::refine(box, h.ratio);

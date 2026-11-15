@@ -127,7 +127,9 @@ TEST(MpiRegrid, aMismatchedMapThrows)
     auto other     = make_hierarchy({true, true}, 1); // every patch on rank 0
     auto ld        = allocate(other.levels[0], mpi_rank(), make_patch_data);
     if (mpi_size() > 1 and ld.patches != map.old_local)
+    {
         EXPECT_THROW((void)mpi::regrid(map, std::move(ld), make_patch_data), std::runtime_error);
+    }
 }
 
 } // namespace damn::amr

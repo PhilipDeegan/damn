@@ -113,8 +113,12 @@ TEST(Regrid, someBoxesKept)
     EXPECT_EQ(map.kept[0], 0u);
     EXPECT_EQ(r.ld.data[0].patch_ghost.items.size(), 1u);
     for (auto const& t : map.transfers) // the kept patch only gives its border points
+    {
         if (t.from.id == old[0].id)
+        {
             EXPECT_FALSE(t.cells.has_value());
+        }
+    }
     EXPECT_EQ(check(r.h, r.ld), 0u);
     EXPECT_EQ(domain_items(r.ld), 48u);
 }
