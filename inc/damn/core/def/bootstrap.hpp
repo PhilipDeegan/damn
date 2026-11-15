@@ -12,6 +12,11 @@
 //   DAMN_HAVE_HDF5_SUBFILING         the subfiling VFD round trip (at MPI_THREAD_MULTIPLE)
 //   DAMN_HAVE_CUDA_DEVICE            a CUDA device
 //   DAMN_HAVE_MPI_VERSION            MPI builds and runs (damn::bootstrap::mpi_version_library)
+//
+//   damn::bootstrap::config()        every fact as a map (bootstrap.json's): "<area>_<name>" "1" /
+//                                    "0", "<area>_<name>_<key>" its values, "settings"; empty
+//                                    without the generated header. For python, as PHARE's
+//                                    build_config
 
 #if __has_include("damn/core/def/_gen_bootstrap.hpp")
 #include "damn/core/def/_gen_bootstrap.hpp" // IWYU pragma: export
@@ -38,5 +43,26 @@
 #ifndef DAMN_HAVE_CUDA_DEVICE
 #define DAMN_HAVE_CUDA_DEVICE 0
 #endif
+
+#include <array>
+#include <map>
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace damn::bootstrap
+{
+#if !DAMN_HAVE_BOOTSTRAP
+inline constexpr std::array<std::pair<std::string_view, std::string_view>, 0> entries{};
+#endif
+
+inline std::map<std::string, std::string> config()
+{
+    std::map<std::string, std::string> out;
+    for (auto const& [k, v] : entries)
+        out.emplace(k, v);
+    return out;
+}
+} // namespace damn::bootstrap
 
 #endif // DAMN_CORE_DEF_BOOTSTRAP_HPP
