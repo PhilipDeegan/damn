@@ -7,6 +7,7 @@
 
 #include "damn/amr/partition.hpp"
 #include "damn/amr/hierarchy.hpp"
+#include "damn/amr/topology.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 
 #include "gtest/gtest.h"
@@ -344,6 +345,26 @@ TEST(CutPartition, followsTheCapacities)
     for (std::size_t r = 0; r < capacity.size(); ++r)
         EXPECT_LE(std::abs(whole[r] - 7000. * capacity[r] / 2.5), 64.) << r;
     EXPECT_EQ(partition(small, sw, std::vector(4, 1.)), partition(small, sw, 4));
+}
+
+TEST(CutPartition, anEqualShareOfEachNode)
+{
+    // 2 nodes, 4 ranks on the first and 2 on the second: a rank of the second does twice the work
+    Topology t = single_node(6);
+    for (int r = 4; r < 6; ++r)
+        t.ranks[r].node = 1;
+    auto const capacity = node_share_capacity(t);
+    EXPECT_EQ(capacity, (std::vector{0.25, 0.25, 0.25, 0.25, 0.5, 0.5}));
+    EXPECT_EQ(node_share_capacity(single_node(3)), (std::vector{1. / 3, 1. / 3, 1. / 3}));
+
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{127, 63}}};
+    std::array const block{8, 8};
+    auto const p = cut_partition(boxes, block, cell_weights(blocks(boxes, block)), capacity, 0.);
+    std::vector<double> per_rank(capacity.size(), 0);
+    for (std::size_t k = 0; k < p.boxes.size(); ++k)
+        per_rank[p.ranks[k]] += static_cast<double>(p.boxes[k].size());
+    for (std::size_t r = 0; r < capacity.size(); ++r)
+        EXPECT_LE(std::abs(per_rank[r] - 128. * 64 * capacity[r] / 2), 64.) << r;
 }
 
 TEST(CutPartition, rejectsBadInput)
