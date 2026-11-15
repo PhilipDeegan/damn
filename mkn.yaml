@@ -47,6 +47,15 @@ profile:
   inc: tpp/highfive/include
   lib: hdf5
 
+# etc/bootstrap's probes, built one at a time by etc/bootstrap/bootstrap.py (-M <probe>):
+# the build's compilers, flags and find paths, nothing of damn's. bootstrap_hdf5: links HDF5
+- name: bootstrap
+  arg: -std=c++20
+
+- name: bootstrap_hdf5
+  parent: bootstrap
+  lib: hdf5
+
 - name: test_damn_hdf5
   inc: .
   self: damn_hdf5
