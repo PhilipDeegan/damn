@@ -53,6 +53,7 @@ profile:
   dep: google.test
   mode: none
   test: tst/damn/hdf5/test_h5_file.cpp
+        tst/damn/hdf5/test_level_table.cpp
 
 - name: test_damn_core
   inc: .

@@ -45,6 +45,10 @@ TEST(StridedSpan, aMemberOfAnArrayOfStructs)
     dy[3] = -1;
     EXPECT_EQ(ps[3].d[1], -1.); // in place
 
+    StridedSpan<double const> const ro = w; // read only view of the same values
+    EXPECT_EQ(ro[2], 2.);
+    EXPECT_EQ(ro.data(), w.data());
+
     std::vector<P> const cps = ps;
     auto const cw            = strided_span(&cps[0].w, cps.size(), sizeof(P)); // const
     EXPECT_EQ(cw[4], 4.);
