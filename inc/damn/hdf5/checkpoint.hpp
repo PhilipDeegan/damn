@@ -128,8 +128,10 @@ namespace detail
             case 'u': return fn.template operator()<std::uint32_t>();
             case 'l': return fn.template operator()<std::int64_t>();
             case 'L': return fn.template operator()<std::uint64_t>();
+            default:
+                throw std::runtime_error(std::string{"damn::hdf5::checkpoint: no type for "}
+                                         + code);
         }
-        throw std::runtime_error(std::string{"damn::hdf5::checkpoint: no type for "} + code);
     }
 
     // what a resource is written as: "b<type>" (BoxData values), or "c" then "<type><name>;"

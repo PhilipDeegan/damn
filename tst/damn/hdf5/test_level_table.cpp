@@ -107,6 +107,8 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
 
         std::vector<core::StridedSpan<double const>> columns; // contiguous
         std::vector<std::vector<double>> per_patch;
+        columns.reserve(local_rows.size());
+        per_patch.reserve(local_rows.size());
         for (auto const n : local_rows)
             per_patch.emplace_back(n, 10. * rank);
         for (auto const& v : per_patch)
