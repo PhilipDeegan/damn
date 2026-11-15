@@ -55,6 +55,7 @@ NO_DISCARD inline bool subfiling_requested()
 }
 
 #if defined(H5_HAVE_SUBFILING_VFD) && H5_HAVE_SUBFILING_VFD
+#include "H5FDsubfiling.h" // not in hdf5.h
 // HighFive's FileAccessProps::add takes anything with apply(fapl)
 struct SubfilingFileAccess
 {
