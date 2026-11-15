@@ -44,12 +44,15 @@
 #include <vector>
 #include <concepts>
 
-namespace damn::amr {
-template <std::size_t dim> struct Level;
-}  // namespace damn::amr
-namespace damn::hdf5::h5 {
+namespace damn::amr
+{
+template<std::size_t dim>
+struct Level;
+} // namespace damn::amr
+namespace damn::hdf5::h5
+{
 class HighFiveFile;
-}  // namespace damn::hdf5::h5
+} // namespace damn::hdf5::h5
 
 namespace damn::hdf5
 {

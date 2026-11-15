@@ -39,10 +39,13 @@
 #include <vector>
 #include <array>
 
-namespace damn::core {
-template <typename T, std::size_t dim> struct BoxRegion;
-template <typename Type, std::size_t dim> struct Box;
-}  // namespace damn::core
+namespace damn::core
+{
+template<typename T, std::size_t dim>
+struct BoxRegion;
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
 
 namespace damn::hdf5
 {
