@@ -7,12 +7,16 @@
 //   Topology:  the Location of every rank (gathered once, the same on every rank)
 //   Distance:  ordered, so that code can ask "is it at most Local?"; how data moves between
 //              two patches (direct copy, shared memory, messages) follows from it
+//   node_share_capacity(t)  each rank's capacity for partition / cut_partition: an equal share of
+//              its node, 1 / (ranks on the node); nodes taken as equal (hwloc or a benchmark at
+//              init could measure them)
 //
 // a Topology with one entry is a single rank; see damn/mpi for gathering one over ranks
 
 #include "damn/core/def.hpp"
 
 #include <cstdint>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -86,6 +90,18 @@ NO_DISCARD inline Location const& location(Topology const& t, int const rank)
 NO_DISCARD inline Distance distance(Topology const& t, int const rank_a, int const rank_b)
 {
     return distance(location(t, rank_a), location(t, rank_b));
+}
+
+NO_DISCARD inline std::vector<double> node_share_capacity(Topology const& t)
+{
+    std::map<int, int> per_node; // ranks
+    for (auto const& l : t.ranks)
+        ++per_node[l.node];
+    std::vector<double> capacity;
+    capacity.reserve(t.ranks.size());
+    for (auto const& l : t.ranks)
+        capacity.push_back(1. / per_node[l.node]);
+    return capacity;
 }
 
 } // namespace damn::amr
