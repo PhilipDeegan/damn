@@ -255,11 +255,7 @@ TEST(CutPartition, cutsTheBoxesASharesEndsInWithinABlock)
 
     for (int const n_ranks : {1, 2, 3, 5, 7, 16})
     {
-        auto const p = cut_partition(CutPartition{.boxes         = boxes,
-                                                  .block         = block,
-                                                  .block_weights = w,
-                                                  .capacity      = equal_capacity(n_ranks),
-                                                  .tol           = 0.});
+        auto const p = cut_partition(boxes, block, w, equal_capacity(n_ranks), 0.);
         ASSERT_EQ(p.boxes.size(), p.ranks.size());
         expect_covers_once(p.boxes, boxes);
         EXPECT_TRUE(std::is_sorted(p.ranks.begin(), p.ranks.end()));
@@ -270,11 +266,8 @@ TEST(CutPartition, cutsTheBoxesASharesEndsInWithinABlock)
         for (auto const r : per_rank)
             EXPECT_LE(std::abs(r - total / n_ranks), 64.) << n_ranks << " ranks"; // a block
 
-        auto const again = cut_partition(CutPartition{.boxes         = boxes,
-                                                      .block         = block,
-                                                      .block_weights = w,
-                                                      .capacity      = equal_capacity(n_ranks),
-                                                      .tol           = 0.}); // deterministic
+        auto const again
+            = cut_partition(boxes, block, w, equal_capacity(n_ranks), 0.); // deterministic
         EXPECT_EQ(again.boxes, p.boxes);
         EXPECT_EQ(again.ranks, p.ranks);
     }
@@ -293,8 +286,7 @@ TEST(CutPartition, followsTheBlockWeights)
         w.push_back(n);
     }
     auto const total = std::accumulate(w.begin(), w.end(), 0.);
-    auto const p     = cut_partition(CutPartition{
-        .boxes = boxes, .block = block, .block_weights = w, .capacity = equal_capacity(4)});
+    auto const p     = cut_partition(boxes, block, w, equal_capacity(4));
     expect_covers_once(p.boxes, boxes);
 
     std::vector<double> per_rank(4, 0);
@@ -313,8 +305,7 @@ TEST(CutPartition, smallBoxesWithinTolAreNotCut)
     auto const w = cell_weights(blocks(boxes, block));
 
     // a box is at most 64 cells, a share of 4 ranks 1750: tol 0.05 of it is more than half a box
-    auto const p     = cut_partition(CutPartition{
-        .boxes = boxes, .block = block, .block_weights = w, .capacity = equal_capacity(4)});
+    auto const p     = cut_partition(boxes, block, w, equal_capacity(4));
     auto const whole = partition(boxes, cell_weights(boxes), 4);
     auto const order = curve_order(boxes);
     ASSERT_EQ(p.boxes.size(), boxes.size());
@@ -335,8 +326,7 @@ TEST(CutPartition, followsTheCapacities)
     std::vector const capacity{1., 0.5, 1., 0.};
     double const total = 128. * 64;
 
-    auto const p = cut_partition(CutPartition{
-        .boxes = boxes, .block = block, .block_weights = w, .capacity = capacity, .tol = 0.});
+    auto const p = cut_partition(boxes, block, w, capacity, 0.);
     expect_covers_once(p.boxes, boxes);
     EXPECT_TRUE(std::is_sorted(p.ranks.begin(), p.ranks.end()));
     std::vector<double> per_rank(capacity.size(), 0);
@@ -370,11 +360,7 @@ TEST(CutPartition, anEqualShareOfEachNode)
 
     std::vector const boxes{Box<2>{std::array{0, 0}, std::array{127, 63}}};
     std::array const block{8, 8};
-    auto const p = cut_partition(CutPartition{.boxes         = boxes,
-                                              .block         = block,
-                                              .block_weights = cell_weights(blocks(boxes, block)),
-                                              .capacity      = capacity,
-                                              .tol           = 0.});
+    auto const p = cut_partition(boxes, block, cell_weights(blocks(boxes, block)), capacity, 0.);
     std::vector<double> per_rank(capacity.size(), 0);
     for (std::size_t k = 0; k < p.boxes.size(); ++k)
         per_rank[p.ranks[k]] += static_cast<double>(p.boxes[k].size());
@@ -382,37 +368,45 @@ TEST(CutPartition, anEqualShareOfEachNode)
         EXPECT_LE(std::abs(per_rank[r] - 128. * 64 * capacity[r] / 2), 64.) << r;
 }
 
+TEST(CutPartition, argumentsOrACutPartition)
+{
+    // the arguments build the CutPartition, tol defaulted when not given
+    std::vector const boxes{Box<2>{std::array{0, 0}, std::array{63, 63}}};
+    std::array const block{8, 8};
+    auto const w        = cell_weights(blocks(boxes, block));
+    auto const capacity = equal_capacity(3);
+
+    auto const by_args = cut_partition(boxes, block, w, capacity);
+    auto const by_dao  = cut_partition(
+        CutPartition{.boxes = boxes, .block = block, .block_weights = w, .capacity = capacity});
+    EXPECT_EQ(by_args.boxes, by_dao.boxes);
+    EXPECT_EQ(by_args.ranks, by_dao.ranks);
+
+    auto const tol_args = cut_partition(boxes, block, w, capacity, 0.);
+    auto const tol_dao  = cut_partition(CutPartition{
+        .boxes = boxes, .block = block, .block_weights = w, .capacity = capacity, .tol = 0.});
+    EXPECT_EQ(tol_args.boxes, tol_dao.boxes);
+    EXPECT_EQ(tol_args.ranks, tol_dao.ranks);
+}
+
 TEST(CutPartition, rejectsBadInput)
 {
     std::vector const boxes{Box<2>{std::array{0, 0}, std::array{15, 15}}};
     std::array const block{8, 8};
     auto const w = cell_weights(blocks(boxes, block));
-    EXPECT_THROW(
-        std::ignore = cut_partition(CutPartition{
-            .boxes = boxes, .block = block, .block_weights = w, .capacity = equal_capacity(0)}),
-        std::runtime_error);
-    EXPECT_THROW(std::ignore
-                 = cut_partition(CutPartition{.boxes         = boxes,
-                                              .block         = block,
-                                              .block_weights = std::vector<double>(3, 1.),
-                                              .capacity      = equal_capacity(2)}),
+    EXPECT_THROW(std::ignore = cut_partition(boxes, block, w, equal_capacity(0)),
                  std::runtime_error);
     EXPECT_THROW(std::ignore
-                 = cut_partition(CutPartition{.boxes         = boxes,
-                                              .block         = block,
-                                              .block_weights = std::vector<double>(4, -1.),
-                                              .capacity      = equal_capacity(2)}),
+                 = cut_partition(boxes, block, std::vector<double>(3, 1.), equal_capacity(2)),
                  std::runtime_error);
-    EXPECT_THROW(std::ignore = cut_partition(CutPartition{.boxes         = boxes,
-                                                          .block         = std::array{0, 8},
-                                                          .block_weights = w,
-                                                          .capacity      = equal_capacity(2)}),
+    EXPECT_THROW(std::ignore
+                 = cut_partition(boxes, block, std::vector<double>(4, -1.), equal_capacity(2)),
+                 std::runtime_error);
+    EXPECT_THROW(std::ignore = cut_partition(boxes, std::array{0, 8}, w, equal_capacity(2)),
                  std::runtime_error);
     for (auto const& capacity : {std::vector<double>{}, std::vector{1., -1.}, std::vector{0., 0.}})
     {
-        EXPECT_THROW(std::ignore = cut_partition(CutPartition{
-                         .boxes = boxes, .block = block, .block_weights = w, .capacity = capacity}),
-                     std::runtime_error);
+        EXPECT_THROW(std::ignore = cut_partition(boxes, block, w, capacity), std::runtime_error);
         EXPECT_THROW(std::ignore = partition(boxes, std::vector(1, 1.), capacity),
                      std::runtime_error);
     }

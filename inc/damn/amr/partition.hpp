@@ -15,8 +15,9 @@
 // Deterministic: every rank computes the same partition from the same input weights: whatever
 // costs, e.g. cells, or particles (density above a cutoff times particles per cell)
 //
-//   cut_partition(CutPartition{boxes, block, block_weights, capacity, tol})  boxes and their
-//                                       ranks, boxes cut where a rank's share ends inside them
+//   cut_partition(boxes, block, block_weights, capacity[, tol])  boxes and their ranks, boxes
+//                                       cut where a rank's share ends inside them; the
+//                                       arguments build a CutPartition, which it also takes
 //   equal_capacity(n_ranks)             n_ranks ranks of the same capacity
 //
 // as SAMRAI's CascadePartitioner, but along the curve: with whole boxes the ranks only get within
@@ -117,6 +118,14 @@ struct CutPartition
 // plus tol of the smallest share per end of its run left uncut
 template<std::size_t dim>
 NO_DISCARD Partition<dim> cut_partition(CutPartition<dim> const& in);
+
+// the same from CutPartition's members as arguments, in order; missing ones (tol) defaulted
+template<std::size_t dim>
+NO_DISCARD Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
+                                        auto&&... args)
+{
+    return cut_partition(CutPartition<dim>{boxes, std::forward<decltype(args)>(args)...});
+}
 
 // n_ranks ranks of the same capacity
 NO_DISCARD inline std::vector<double> equal_capacity(int const n_ranks)
