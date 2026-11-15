@@ -1,5 +1,5 @@
 
-super: settings
+super: base # settings, and the hdf5 find for the _mpi profiles
 
 property:
   cuda.arch: 120

@@ -74,6 +74,13 @@ profile:
         tst/damn/core/exec/test_thread_pool_sync.cpp
         tst/damn/core/memory/test_strided_span.cpp
 
+# clang-tidy report (.clang-tidy) over the core tests and the damn headers they include, needs
+# clang-tidy on PATH
+- name: tidy
+  parent: test_damn_core
+  mod:
+  - name: clang.tidy
+
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
   parent: damn_hdf5 # base, MPI, HighFive and HDF5: every header parses
