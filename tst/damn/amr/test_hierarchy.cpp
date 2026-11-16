@@ -220,9 +220,9 @@ TEST(Hierarchy, coveredByLevelIncludesPeriodicImages)
 }
 
 // every cell some patch image holds in its grown box has exactly one owner: the patches' grown
-//  boxes less held_by_earlier partition them, periodic images included (a cell counted in the
+//  boxes less owned_elsewhere partition them, periodic images included (a cell counted in the
 //  domain's index space)
-TEST(Hierarchy, heldByEarlierLeavesEveryHeldCellOneOwner)
+TEST(Hierarchy, ownedElsewhereLeavesEveryHeldCellOneOwner)
 {
     for (auto const periodic : {false, true})
         for (int const width : {1, 2, 3})
@@ -244,10 +244,10 @@ TEST(Hierarchy, heldByEarlierLeavesEveryHeldCellOneOwner)
                 std::map<std::array<int, 2>, int> owners;
                 for (auto const& patch : h.levels[ln].patches)
                 {
-                    auto const held = held_by_earlier(h, ln, patch.box, width);
+                    auto const elsewhere = owned_elsewhere(h, ln, patch.box, width);
                     core::for_each_point(core::grow(patch.box, width), [&](auto const& c) {
                         auto& n = owners[canonical(c)];
-                        n += !isIn(c, held);
+                        n += !isIn(c, elsewhere);
                     });
                 }
                 for (auto const& [cell, n] : owners)
@@ -255,6 +255,24 @@ TEST(Hierarchy, heldByEarlierLeavesEveryHeldCellOneOwner)
                                     << periodic << " cell " << cell[0] << "," << cell[1];
             }
         }
+}
+
+// a cell diagonal to one patch's corner and next to another's side is the latter's (nearer),
+//  though the former comes first in box order
+TEST(Hierarchy, ownedElsewhereGivesACellToItsNearestHolder)
+{
+    auto h = hierarchy_2d();
+    set_level(h, uniform_level_0(h, {5, 4}));
+    auto const a = box<2>({4, 4}, {7, 7}), b = box<2>({8, 4}, {11, 7}); // side by side
+    set_level(h, make_level<2>(1, {a, b}));
+
+    core::Point<int, 2> const below_b{std::array{8, 3}}; // diagonal to a's corner (7, 4)
+    EXPECT_TRUE(isIn(below_b, owned_elsewhere(h, 1, a, 2)));
+    EXPECT_FALSE(isIn(below_b, owned_elsewhere(h, 1, b, 2)));
+
+    core::Point<int, 2> const below_a{std::array{7, 3}}; // next to a's side, diagonal to b's corner
+    EXPECT_FALSE(isIn(below_a, owned_elsewhere(h, 1, a, 2)));
+    EXPECT_TRUE(isIn(below_a, owned_elsewhere(h, 1, b, 2)));
 }
 
 } // namespace damn::amr
