@@ -309,6 +309,34 @@ NO_DISCARD std::vector<core::Box<int, dim>> covered_by_level(Hierarchy<dim> cons
     return covered;
 }
 
+// the cells of box grown by width (a patch's ghost box, level ln index space) that a patch of
+//  level ln earlier in lexicographic box order (core::lexicographic_less), periodic images
+//  included, also holds in its box grown by width: the owner of a cell is the first patch
+//  image holding it, so box owns the rest (PHAREHUB/PHARE#1580's level ghost cell owner). Every
+//  holder of a cell agrees: the order is translation invariant, and the same on every rank
+template<std::size_t dim>
+NO_DISCARD std::vector<core::Box<int, dim>> held_by_earlier(Hierarchy<dim> const& h, int const ln,
+                                                            core::Box<int, dim> const& box,
+                                                            int const width)
+{
+    std::vector<core::Point<int, dim>> shifts{core::Point<int, dim>{}};
+    for (auto const& s : periodic_shifts(h, ln))
+        shifts.push_back(s);
+
+    auto const grown = core::grow(box, core::ConstArray<int, dim>(width));
+    std::vector<core::Box<int, dim>> held;
+    for (auto const& patch : h.levels.at(ln).patches)
+        for (auto const& shift : shifts)
+        {
+            auto const image = core::shift(patch.box, shift);
+            if (!core::lexicographic_less(image, box))
+                continue;
+            if (auto const overlap = grown * core::grow(image, core::ConstArray<int, dim>(width)))
+                held.push_back(*overlap);
+        }
+    return held;
+}
+
 } // namespace damn::amr
 
 #endif // DAMN_AMR_HIERARCHY_HPP
