@@ -50,6 +50,23 @@ namespace
         void synchronize(int ln, double t) { log("sync", ln, t); }
     };
 
+    // advance and after_step only
+    struct AfterSteps
+    {
+        std::vector<std::string> calls;
+        void advance(int ln, double t, double) { calls.push_back("advance " + label(ln, t)); }
+        void after_step(int ln, double t, bool last)
+        {
+            calls.push_back("after " + label(ln, t) + (last ? " last" : ""));
+        }
+        static std::string label(int ln, double t)
+        {
+            std::stringstream ss;
+            ss << ln << " " << t;
+            return ss.str();
+        }
+    };
+
     // advance only
     struct Minimal
     {
@@ -94,6 +111,30 @@ TEST(TimeRefinement, finerLevelsSubcycleAfterTheCoarserThenSynchronize)
                            "last 2",
                            "sync 2 1", //
                            "sync 1 1",
+                       }));
+}
+
+// after a step of a level and of its finer levels with it, the finest level's too: each
+//  substep's last flag, level 0's always set
+TEST(TimeRefinement, afterStepFollowsTheFinerLevelsCatchingUp)
+{
+    AfterSteps r;
+    advance(levels(3), r, 0., 1.);
+    EXPECT_EQ(r.calls, (std::vector<std::string>{
+                           "advance 0 0",
+                           "advance 1 0",
+                           "advance 2 0",
+                           "after 2 0.25",
+                           "advance 2 0.25",
+                           "after 2 0.5 last",
+                           "after 1 0.5",
+                           "advance 1 0.5",
+                           "advance 2 0.5",
+                           "after 2 0.75",
+                           "advance 2 0.75",
+                           "after 2 1 last",
+                           "after 1 1 last",
+                           "after 0 1 last",
                        }));
 }
 
