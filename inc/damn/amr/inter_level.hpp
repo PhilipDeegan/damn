@@ -50,11 +50,11 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
+#include "damn/amr/particle_items.hpp"
 
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -171,19 +171,7 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
     bool found = with_resource(coarse_data, pair.coarse, [&](auto const& src) {
         using R = std::decay_t<decltype(src)>;
         if constexpr (ParticleData<R, dim>)
-        {
-            auto const count_at = out.size();
-            detail::write(out, std::uint64_t{0});
-            std::uint64_t count = 0;
-            for_each_item(src, [&](auto const& item) {
-                if (core::isIn(cell(item) + shift, piece.box))
-                {
-                    detail::write(out, item);
-                    ++count;
-                }
-            });
-            std::memcpy(out.data() + count_at, &count, sizeof(count));
-        }
+            particle_items::pack(src, piece.box, shift, out);
         else if constexpr (BoxData<R, dim>)
         {
             using T = box_data_value_t<R, dim>;
@@ -239,11 +227,7 @@ void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Fin
         if constexpr (ParticleData<R, dim>)
         {
             using Item       = typename R::value_type;
-            auto const count = detail::read<std::uint64_t>(at);
-            std::vector<Item> items(count);
-            if (count)
-                std::memcpy(items.data(), at, count * sizeof(Item));
-            at += count * sizeof(Item);
+            auto const items = particle_items::read(dst, at); // the coarse items
             if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
                                          core::Box<int, dim> const&, std::span<Item const>,
                                          core::Point<int, dim> const&>)

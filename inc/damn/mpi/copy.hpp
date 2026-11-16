@@ -125,6 +125,8 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
         amr::detail::fold_sums(plan, ld, sources);
     else if constexpr (arrival == Arrival::Max)
         amr::detail::unpack_local<arrival>(plan, ld);
+    else if constexpr (arrival == Arrival::Append) // local and received items in, each once
+        amr::detail::appended(plan, ld);
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 

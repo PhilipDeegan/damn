@@ -34,6 +34,7 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/particle_data.hpp"
+#include "damn/amr/particle_items.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
@@ -44,9 +45,11 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <string_view>
 #include <type_traits>
 #include <vector>
+#include <iterator>
 
 namespace damn::amr
 {
@@ -140,6 +143,10 @@ namespace detail
     template<std::size_t dim, typename PatchData>
     void append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
 
+    // after a copy appended to them: each destination resource once (particle_items::appended)
+    template<std::size_t dim, typename PatchData>
+    void appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
+
     // sums and maxes: every local source read into the buffer, then (unpack) written
     template<std::size_t dim, typename PatchData>
     void pack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld);
@@ -212,7 +219,10 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
     if constexpr (arrival == Arrival::Assign)
         detail::assign(plan, ld);
     else if constexpr (arrival == Arrival::Append)
+    {
         detail::append_items(plan, ld);
+        detail::appended(plan, ld);
+    }
     else
     {
         detail::pack_local(plan, ld);
@@ -567,29 +577,26 @@ void detail::append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
             with_particle_data<dim>(
                 ld.data[piece.src.local], piece.names.src, [&](auto const& src) {
                     with_particle_data<dim>(ld.data[piece.dst], piece.names.dst, [&](auto& dst) {
-                        using Item         = typename std::decay_t<decltype(dst)>::value_type;
-                        auto const leaving = [&](auto const& item) {
-                            return isIn(cell(item) + piece.src.shift, piece.box);
-                        };
-
-                        if (static_cast<void const*>(&src) != static_cast<void const*>(&dst))
-                        {
-                            for_each_item(src, [&](auto const& item) {
-                                if (leaving(item))
-                                    append(dst, item, piece.src.shift);
-                            });
-                            return;
-                        }
-                        // the same array: collect first, appending invalidates it
-                        std::vector<Item> items;
-                        for_each_item(src, [&](auto const& item) {
-                            if (leaving(item))
-                                items.push_back(item);
-                        });
-                        for (auto const& item : items)
-                            append(dst, item, piece.src.shift);
+                        particle_items::append_from(dst, src, piece.box, piece.src.shift);
                     });
                 });
+}
+
+template<std::size_t dim, typename PatchData>
+void detail::appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
+{
+    std::vector<std::pair<std::size_t, std::string const*>> done;
+    for (auto const& piece : plan.pieces)
+    {
+        auto const key = std::pair{piece.dst, &piece.names.dst};
+        if (std::any_of(done.begin(), done.end(), [&](auto const& d) {
+                return d.first == key.first and *d.second == *key.second;
+            }))
+            continue;
+        done.push_back(key);
+        with_particle_data<dim>(ld.data[piece.dst], piece.names.dst,
+                                [&](auto& dst) { particle_items::appended(dst); });
+    }
 }
 
 
@@ -603,17 +610,7 @@ void pack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, Pat
     if (region == Region::Leaving)
     {
         detail::with_particle_data<dim>(src_data, piece.names.src, [&](auto const& src) {
-            auto const count_at = out.size();
-            detail::write(out, std::uint64_t{0});
-            std::uint64_t count = 0;
-            for_each_item(src, [&](auto const& item) {
-                if (isIn(cell(item) + piece.src.shift, piece.box))
-                {
-                    detail::write(out, item);
-                    ++count;
-                }
-            });
-            std::memcpy(out.data() + count_at, &count, sizeof(count));
+            particle_items::pack(src, piece.box, piece.src.shift, out);
         });
         return;
     }
@@ -634,10 +631,7 @@ void unpack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, P
     if (region == Region::Leaving)
     {
         detail::with_particle_data<dim>(dst_data, piece.names.dst, [&](auto& dst) {
-            using Item       = typename std::decay_t<decltype(dst)>::value_type;
-            auto const count = detail::read<std::uint64_t>(at);
-            for (std::uint64_t i = 0; i < count; ++i)
-                append(dst, detail::read<Item>(at), piece.src.shift);
+            particle_items::unpack(dst, at, piece.src.shift);
         });
         return;
     }

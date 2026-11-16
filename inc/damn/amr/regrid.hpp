@@ -34,10 +34,10 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/particle_data.hpp"
+#include "damn/amr/particle_items.hpp"
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -55,8 +55,8 @@ struct Transfer
     Patch<dim> from{}, to{};
     core::Point<int, dim> shift{};              // the old patch's image is at from.box + shift
     std::optional<core::Box<int, dim>> cells{}; // (from.box + shift) * to.box, if they share any
-    std::size_t src = not_local; // old LevelData index, if this rank holds from
-    std::size_t dst = not_local; // new LevelData index, if this rank holds to
+    std::size_t src = not_local;                // old LevelData index, if this rank holds from
+    std::size_t dst = not_local;                // new LevelData index, if this rank holds to
 };
 
 // what moves where in a regrid, from one rank's point of view. Both ranks of a pair list the
@@ -163,18 +163,10 @@ namespace detail
             using R = std::decay_t<decltype(res)>;
             if constexpr (ParticleData<R, dim>)
             {
-                auto const count_at = out.size();
-                write(out, std::uint64_t{0});
-                std::uint64_t count = 0;
                 if (t.cells)
-                    for_each_item(res, [&](auto const& item) {
-                        if (core::isIn(cell(item) + t.shift, *t.cells))
-                        {
-                            write(out, item);
-                            ++count;
-                        }
-                    });
-                std::memcpy(out.data() + count_at, &count, sizeof(count));
+                    particle_items::pack(res, *t.cells, t.shift, out);
+                else // no cells: a zero count, damn's (both sides have the transfer)
+                    write(out, std::uint64_t{0});
             }
             else if (auto const box = shared_points(t, res))
             {
@@ -195,10 +187,10 @@ namespace detail
             using R = std::decay_t<decltype(res)>;
             if constexpr (ParticleData<R, dim>)
             {
-                using Item       = typename R::value_type;
-                auto const count = read<std::uint64_t>(at);
-                for (std::uint64_t i = 0; i < count; ++i)
-                    append(res, read<Item>(at), t.shift);
+                if (t.cells)
+                    particle_items::unpack(res, at, t.shift);
+                else
+                    (void)read<std::uint64_t>(at);
             }
             else if (auto const box = shared_points(t, res))
             {
@@ -221,10 +213,7 @@ namespace detail
                     if constexpr (ParticleData<R, dim>)
                     {
                         if (t.cells)
-                            for_each_item(s, [&](auto const& item) {
-                                if (core::isIn(cell(item) + t.shift, *t.cells))
-                                    append(d, item, t.shift);
-                            });
+                            particle_items::append_from(d, s, *t.cells, t.shift);
                     }
                     else if (auto const box = shared_points(t, d))
                         core::for_each_point(*box, [&](auto const& p) {
@@ -308,7 +297,14 @@ namespace detail
         LevelData<dim, PatchData> out{map.level, map.new_local, {}};
         out.data.reserve(news.size());
         for (std::size_t d = 0; d < news.size(); ++d)
-            out.data.emplace_back(std::move(make_new(d))); // made, if nothing reached it
+        {
+            auto& made = make_new(d); // made, if nothing reached it
+            for_each_regridded<dim>(made, [](std::string_view, auto& res) {
+                if constexpr (ParticleData<std::decay_t<decltype(res)>, dim>)
+                    particle_items::appended(res); // items in from every transfer
+            });
+            out.data.emplace_back(std::move(made));
+        }
         return out;
     }
 } // namespace detail
