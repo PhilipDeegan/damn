@@ -1,0 +1,21 @@
+# the /opt/hpc stack (hpc-containers' build_mpi.sh cuda + build_hdf5.sh, see /opt/hpc/env.sh):
+# Open MPI (PMIx, UCX, CUDA aware) and parallel HDF5 with subfiling; -x res/mkn/hpc instead of
+# res/mkn/mpi. Run with /opt/hpc/mpi/bin first on PATH (source /opt/hpc/env.sh) for its mpirun
+super: base
+
+find:
+  hdf5:
+    inc: /opt/hpc/hdf5/include
+    lib: /opt/hpc/hdf5/lib
+
+compiler:
+  mask:
+    g++:
+      /opt/hpc/mpi/bin/mpicc
+      /opt/hpc/mpi/bin/mpicxx
+
+file:
+  - type: cpp:cxx:cc
+    archiver: ar -cr
+    compiler: /opt/hpc/mpi/bin/mpicxx -std=c++20 -fPIC
+    linker: /opt/hpc/mpi/bin/mpicxx
