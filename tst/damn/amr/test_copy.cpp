@@ -9,7 +9,9 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cmath>
 #include <limits>
@@ -105,6 +107,61 @@ TEST_P(BorderOps, sumCountsEveryPatchImageCoveringAPoint)
             EXPECT_EQ(value(f, patch.box, p), count) << "patch " << patch.id << " " << p;
         });
     });
+}
+
+// values whose sums depend on the order they are added in: every patch holding a point ends
+//  with the same bits, those of the contributions added from 0 in the lexicographic order of
+//  their patch images' boxes (PHAREHUB/PHARE#1581)
+TEST_P(BorderOps, sumIsTheSameBitsOnEveryPatchHoldingAPoint)
+{
+    auto const h = make_hierarchy({GetParam(), GetParam()});
+    auto ld      = allocate(h.levels[0], 0, make_patch_data);
+
+    // a patch's deposit at a point: one value per patch and physical point
+    auto const deposit = [&](Patch<2> const& patch, Point2 const& p) {
+        return 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(h, p) / 7.;
+    };
+    for_each_patch(ld, [&](auto const& patch, auto& data) {
+        auto& f = data.rho;
+        core::for_each_point(ghost_box(f, patch.box),
+                             [&](auto const& p) { value(f, patch.box, p) = deposit(patch, p); });
+    });
+
+    auto n = neighbours_of(h);
+    copy(sum_borders, n, {"rho"}, ld);
+
+    // every (patch, shift) image, ordered by its box
+    std::vector<Point2> shifts{Point2{}};
+    for (auto const& s : periodic_shifts(h, 0))
+        shifts.push_back(s);
+    std::vector<std::pair<Patch<2>, Point2>> imgs;
+    for (auto const& p : h.levels[0].patches)
+        for (auto const& s : shifts)
+            imgs.emplace_back(p, s);
+    std::sort(imgs.begin(), imgs.end(), [](auto const& a, auto const& b) {
+        return core::lexicographic_less(core::shift(a.first.box, a.second),
+                                        core::shift(b.first.box, b.second));
+    });
+
+    std::size_t n_shared = 0;
+    for_each_patch(ld, [&](auto const& patch, auto& data) {
+        auto& f = data.rho;
+        core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+            double sum         = 0;
+            std::size_t owners = 0;
+            for (auto const& [img, shift] : imgs)
+                if (isIn(p, core::shift(ghost_box(f, img.box), shift)))
+                {
+                    sum += deposit(img, p - shift);
+                    ++owners;
+                }
+            n_shared += owners > 2;
+            auto const v = value(f, patch.box, p);
+            EXPECT_EQ(std::bit_cast<std::uint64_t>(v), std::bit_cast<std::uint64_t>(sum))
+                << "patch " << patch.id << " " << p << ": " << v << " vs " << sum;
+        });
+    });
+    EXPECT_GT(n_shared, 0u); // points held by 3 patches or more, where the order matters
 }
 
 TEST_P(BorderOps, maxIsTheLargestOfEveryPatchImageCoveringAPoint)

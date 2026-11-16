@@ -231,7 +231,19 @@ NO_DISCARD Box<Type, dim> shift_idx(Box<Type, dim> const& box, Type const& offse
     return copy;
 }
 
-
+// boxes ordered by their lower corner, then their upper one, direction by direction: a
+//  translation invariant order (shifting both boxes alike keeps it)
+template<typename Type, std::size_t dim>
+NO_DISCARD bool lexicographic_less(Box<Type, dim> const& a, Box<Type, dim> const& b)
+{
+    for (std::size_t i = 0; i < dim; ++i)
+        if (a.lower[i] != b.lower[i])
+            return a.lower[i] < b.lower[i];
+    for (std::size_t i = 0; i < dim; ++i)
+        if (a.upper[i] != b.upper[i])
+            return a.upper[i] < b.upper[i];
+    return false;
+}
 
 
 template<typename Type, std::size_t dim>
