@@ -34,6 +34,13 @@ struct StridedSpan
     NO_DISCARD bool contiguous() const { return stride == sizeof(T); }
     NO_DISCARD std::size_t stride_values() const { return stride / sizeof(T); }
 
+    // the same values, read only (as std::span<T> to std::span<T const>)
+    operator StridedSpan<T const>() const
+        requires(!std::is_const_v<T>)
+    {
+        return {ptr, n, stride};
+    }
+
     NO_DISCARD T& operator[](std::size_t const i) const
     {
         return *reinterpret_cast<T*>(reinterpret_cast<byte_type*>(ptr) + i * stride);
