@@ -1,4 +1,4 @@
-#! clean build test -p test_damn_core -dKO -t 8
+#! clean build test -p test_damn_core -dKO -t 8 -x res/mkn/thrust
 
 name: damn
 
@@ -6,14 +6,13 @@ profile:
 
 # subprojects are fetched along the profile/parent chain, before sources are checked
 # cccl: thrust (zip iterators, partition, sort, scan) on the host too, see
-#  damn/core/def/detail/thrust.hpp; the version of the CUDA toolkit's (GPU builds see both)
+#  damn/core/def/detail/thrust.hpp; the version of the CUDA toolkit's. Cloned here, included only
+#  by CPU settings (cpu.thrust in res/mkn/base.yaml: mpi, hpc, thrust), so GPU builds see their
+#  toolkit's thrust alone
 - name: base
   inc: inc
        tpp/bto/include
        tpp/phlop/inc
-       tpp/cccl/thrust
-       tpp/cccl/libcudacxx/include
-       tpp/cccl/cub
   sub: bto&tpp/bto(https://github.com/bshoshany/thread-pool)
        phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
        cccl#v3.5.0&tpp/cccl(https://github.com/NVIDIA/cccl)
