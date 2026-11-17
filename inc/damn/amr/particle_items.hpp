@@ -29,10 +29,13 @@
 #include <type_traits>
 #include <vector>
 
-namespace damn::core {
-template <typename Type, std::size_t dim> class Point;
-template <typename Type, std::size_t dim> struct Box;
-}  // namespace damn::core
+namespace damn::core
+{
+template<typename Type, std::size_t dim>
+class Point;
+template<typename Type, std::size_t dim>
+struct Box;
+} // namespace damn::core
 
 namespace damn::amr::particle_items
 {
