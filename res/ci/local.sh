@@ -11,7 +11,7 @@ mb=$(git merge-base "$BASE" HEAD)
 step() { echo; echo "== $*"; }
 
 step "core tests"
-mkn build test -p test_damn_core -dKO -t "$J"
+mkn build test -p test_damn_core -dKO -t "$J" -x res/mkn/thrust
 
 tests() { find "bin/$1/test" -type f -perm -u+x -name "*.cpp" | sort; }
 
