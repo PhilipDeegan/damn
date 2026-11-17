@@ -130,8 +130,9 @@ struct LevelMap
     std::vector<std::vector<Link<dim>>> under{};          // per local fine patch
     std::vector<std::vector<Link<dim>>> over{};           // per local coarse patch
     std::vector<std::pair<Patch<dim>, std::vector<Link<dim>>>> remote{};
-    std::vector<core::Point<int, dim>> fine_shifts{}; // the fine level's periodic images, and
-                                                      //  no shift first
+    std::vector<core::Point<int, dim>> fine_shifts{};   // the fine level's periodic images, and
+                                                        //  no shift first
+    std::vector<core::Point<int, dim>> coarse_shifts{}; // the coarse level's, likewise
     std::map<PlanKey, std::unique_ptr<LevelPlan<dim>>> plans{};
 };
 
@@ -230,7 +231,8 @@ NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int const coars
             if (f.rank != rank)
                 if (auto links = under_links(f, true); !links.empty())
                     map.remote.emplace_back(f, std::move(links));
-    map.fine_shifts = fine_shifts;
+    map.fine_shifts   = fine_shifts;
+    map.coarse_shifts = coarse_shifts;
 
     map.over.resize(map.local_coarse.size());
     for (std::size_t i = 0; i < map.local_coarse.size(); ++i)

@@ -1,11 +1,13 @@
 // damn::amr::Hierarchy: level index spaces, decomposition, level replacement, periodicity
 
 #include "damn/amr/hierarchy.hpp"
+#include "damn/core/geometry/box_spans.hpp"
 
 #include "gtest/gtest.h"
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <vector>
 
 namespace damn::amr
@@ -215,6 +217,62 @@ TEST(Hierarchy, coveredByLevelIncludesPeriodicImages)
         cells += b.size();
     // all but the y ghost rows: x is periodic, y is not
     EXPECT_EQ(cells, 7u * 8u);
+}
+
+// every cell some patch image holds in its grown box has exactly one owner: the patches' grown
+//  boxes less owned_elsewhere partition them, periodic images included (a cell counted in the
+//  domain's index space)
+TEST(Hierarchy, ownedElsewhereLeavesEveryHeldCellOneOwner)
+{
+    for (auto const periodic : {false, true})
+        for (int const width : {1, 2, 3})
+        {
+            auto h = hierarchy_2d({periodic, periodic});
+            set_level(h, uniform_level_0(h, {5, 4}));
+            // level 1 (20 x 16): patches touching, one cell apart, and further than 2 * width
+            set_level(h, make_level<2>(1, {box<2>({0, 0}, {5, 6}), box<2>({6, 0}, {9, 4}),
+                                           box<2>({11, 0}, {14, 4}), box<2>({6, 9}, {19, 15})}));
+            for (int const ln : {0, 1})
+            {
+                auto const shape     = level_domain(h, ln).shape();
+                auto const canonical = [&](core::Point<int, 2> p) {
+                    if (periodic)
+                        for (std::size_t i = 0; i < 2; ++i)
+                            p[i] = ((p[i] % shape[i]) + shape[i]) % shape[i];
+                    return std::array{p[0], p[1]};
+                };
+                std::map<std::array<int, 2>, int> owners;
+                for (auto const& patch : h.levels[ln].patches)
+                {
+                    auto const elsewhere = owned_elsewhere(h, ln, patch.box, width);
+                    core::for_each_point(core::grow(patch.box, width), [&](auto const& c) {
+                        auto& n = owners[canonical(c)];
+                        n += !isIn(c, elsewhere);
+                    });
+                }
+                for (auto const& [cell, n] : owners)
+                    EXPECT_EQ(n, 1) << "level " << ln << " width " << width << " periodic "
+                                    << periodic << " cell " << cell[0] << "," << cell[1];
+            }
+        }
+}
+
+// a cell diagonal to one patch's corner and next to another's side is the latter's (nearer),
+//  though the former comes first in box order
+TEST(Hierarchy, ownedElsewhereGivesACellToItsNearestHolder)
+{
+    auto h = hierarchy_2d();
+    set_level(h, uniform_level_0(h, {5, 4}));
+    auto const a = box<2>({4, 4}, {7, 7}), b = box<2>({8, 4}, {11, 7}); // side by side
+    set_level(h, make_level<2>(1, {a, b}));
+
+    core::Point<int, 2> const below_b{std::array{8, 3}}; // diagonal to a's corner (7, 4)
+    EXPECT_TRUE(isIn(below_b, owned_elsewhere(h, 1, a, 2)));
+    EXPECT_FALSE(isIn(below_b, owned_elsewhere(h, 1, b, 2)));
+
+    core::Point<int, 2> const below_a{std::array{7, 3}}; // next to a's side, diagonal to b's corner
+    EXPECT_FALSE(isIn(below_a, owned_elsewhere(h, 1, a, 2)));
+    EXPECT_TRUE(isIn(below_a, owned_elsewhere(h, 1, b, 2)));
 }
 
 } // namespace damn::amr

@@ -5,12 +5,18 @@ name: damn
 profile:
 
 # subprojects are fetched along the profile/parent chain, before sources are checked
+# cccl: thrust (zip iterators, partition, sort, scan) on the host too, see
+#  damn/core/def/detail/thrust.hpp; the version of the CUDA toolkit's (GPU builds see both)
 - name: base
   inc: inc
        tpp/bto/include
        tpp/phlop/inc
+       tpp/cccl/thrust
+       tpp/cccl/libcudacxx/include
+       tpp/cccl/cub
   sub: bto&tpp/bto(https://github.com/bshoshany/thread-pool)
        phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
+       cccl#v3.5.0&tpp/cccl(https://github.com/NVIDIA/cccl)
   dep: mkn.kul mkn.gpu
   arg: -std=c++20
 
@@ -47,12 +53,24 @@ profile:
   inc: tpp/highfive/include
   lib: hdf5
 
+# etc/bootstrap's probes, built one at a time by etc/bootstrap/bootstrap.py (-M <probe>):
+# the build's compilers, flags and find paths, nothing of damn's. bootstrap_hdf5: links HDF5
+- name: bootstrap
+  arg: -std=c++20
+
+- name: bootstrap_hdf5
+  parent: bootstrap
+  lib: hdf5
+
 - name: test_damn_hdf5
   inc: .
   self: damn_hdf5
   dep: google.test
   mode: none
   test: tst/damn/hdf5/test_h5_file.cpp
+        tst/damn/hdf5/test_level_table.cpp
+        tst/damn/hdf5/test_checkpoint.cpp
+        tst/damn/hdf5/test_vtkhdf.cpp
 
 - name: test_damn_core
   inc: .
@@ -89,7 +107,8 @@ profile:
       paths: inc
       headers: -x c++-header
       # namespace a::b in forward declarations, damn's include mappings
-      args: -Xiwyu --cxx17ns -Xiwyu --mapping_file=res/iwyu.imp
+      # without thrust, as before host thrust: iwyu would map thrust's and libcudacxx's internals
+      args: -DDAMN_HAVE_THRUST=0 -Xiwyu --cxx17ns -Xiwyu --mapping_file=res/iwyu.imp
 
 # iwyu's suggestions applied (fix_include): CI builds this and fails on any resulting diff
 # mpicxx adds MPI's include directories itself, iwyu needs them given (Debian/Ubuntu openmpi)
@@ -105,7 +124,8 @@ profile:
       inc: /usr/lib/x86_64-linux-gnu/openmpi/include /usr/lib/x86_64-linux-gnu/openmpi/include/openmpi
       headers: -x c++-header
       # namespace a::b in forward declarations, damn's include mappings
-      args: -Xiwyu --cxx17ns -Xiwyu --mapping_file=res/iwyu.imp
+      # without thrust, as before host thrust: iwyu would map thrust's and libcudacxx's internals
+      args: -DDAMN_HAVE_THRUST=0 -Xiwyu --cxx17ns -Xiwyu --mapping_file=res/iwyu.imp
       # --noreorder keeps the include order (damn, other, system), --nosafe_headers lets it
       # remove unused includes from headers too
       fix: --nocomments --noreorder --nosafe_headers

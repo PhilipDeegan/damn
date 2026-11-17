@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # what CI runs (build_nix.yml, format.yml), locally: before marking a PR ready, instead of
 # spending Actions minutes. From the repository root; JOBS=8 compile jobs by default.
-#   res/ci/local.sh [base, default origin/master]
+#   res/ci/local.sh [base, default origin/next: PRs target next]
 set -euo pipefail
-BASE=${1:-origin/master}
+BASE=${1:-origin/next}
 J=${JOBS:-8}
 MPI="mpirun --oversubscribe"
 mb=$(git merge-base "$BASE" HEAD)
@@ -37,7 +37,7 @@ mkn build -dKOqp iwyu_fix -t "$J" -Wx res/mkn/mpi >/dev/null
 git diff --exit-code -- inc src tst
 
 step "clang-tidy (changed lines)"
-python3 res/ci/compile_db.py test_damn_core -dKO
+python3 res/ci/compile_db.py test_damn_core,test_damn_mpi,test_damn_hdf5 -dKO -x res/mkn/mpi
 git diff -U0 "$mb" -- inc src tst \
   | clang-tidy-diff-22.py -clang-tidy-binary clang-tidy-22 -p1 -path . -j "$J" -quiet \
                           -iregex '.*\.(c|cc|cpp|h|hpp|ipp)' || true

@@ -11,8 +11,9 @@
 //   1. outgoing pieces packed per peer and sent (MPI_Isend)
 //   2. local pieces: ghosts and leaving items copied, sums and maxes read into the buffer
 //   3. per peer with pieces for me: probed (particle messages vary in size), received,
-//      unpacked
-//   4. local sums and maxes written, sends waited for
+//      unpacked; sums kept in the received buffers
+//   4. local maxes written, sums folded with the received ones in a fixed order
+//      (damn::amr::detail::fold_sums), sends waited for
 // every source is read (1, 2) before anything is written (3, 4), so sums and maxes use the
 // values from before the copy
 
@@ -80,6 +81,9 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     }
 
     // 3. receive: pieces from each peer, in plan order
+    std::vector<std::byte const*> sources; // sums: each piece's values, local or received
+    if constexpr (arrival == Arrival::Sum)
+        sources = amr::detail::local_sources(plan);
     std::map<int, std::vector<Piece<dim> const*>> from;
     for (auto const& piece : plan.pieces)
         if (piece.src.local == not_local)
@@ -101,7 +105,15 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::unpack");
         std::byte const* at = buffer.data();
         for (auto const* piece : pieces)
-            unpack_piece<arrival>(region, *piece, ld, at);
+            if constexpr (arrival == Arrival::Sum)
+            {
+                if (at + piece->bytes > buffer.data() + buffer.size())
+                    break; // checked below
+                sources[static_cast<std::size_t>(piece - plan.pieces.data())] = at;
+                at += piece->bytes;
+            }
+            else
+                unpack_piece<arrival>(region, *piece, ld, at);
         if (at != buffer.data() + buffer.size())
             throw std::runtime_error("damn::mpi::copy: rank " + std::to_string(peer)
                                      + "'s message does not match this rank's plan");
@@ -109,8 +121,12 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
 
     // 4.
     DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
-    if constexpr (arrival == Arrival::Sum or arrival == Arrival::Max)
+    if constexpr (arrival == Arrival::Sum)
+        amr::detail::fold_sums(plan, ld, sources);
+    else if constexpr (arrival == Arrival::Max)
         amr::detail::unpack_local<arrival>(plan, ld);
+    else if constexpr (arrival == Arrival::Append) // local and received items in, each once
+        amr::detail::appended(plan, ld);
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 

@@ -17,8 +17,8 @@
 #include "highfive/H5Easy.hpp"
 
 #include <string>
+#include <cstdlib>
 #include <vector>
-#include <cstddef>
 #include <algorithm>
 #include <stdexcept>
 
@@ -39,6 +39,49 @@ NO_DISCARD auto vector_for_dim()
         return std::vector<std::vector<std::vector<Data>>>();
 }
 
+// HDF5's subfiling VFD for parallel files, as PHAREHUB/PHARE#1177: DAMN_H5_SUB_FILES=<n> (0 or
+// unset: MPI-IO) subfiles per file, n the stripe count, the rest HDF5's defaults (one I/O
+// concentrator per node, H5FD_SUBFILING_STRIPE_SIZE, H5FD_SUBFILING_IOC_PER_NODE,
+// H5FD_IOC_THREAD_POOL_SIZE adjust them). Its concentrators are threads calling MPI: MPI at
+// MPI_THREAD_MULTIPLE (mpi_thread_multiple_required, for whoever starts MPI). Asked for and not
+// possible (HDF5 without it, MPI below MPI_THREAD_MULTIPLE): opening throws, saying why. Subfiled
+// files are read through the same driver, or merged first (HDF5's h5fuse)
+NO_DISCARD inline int sub_files()
+{
+    static int const n = [] {
+        auto const* v = std::getenv("DAMN_H5_SUB_FILES");
+        return v and *v ? std::stoi(v) : 0;
+    }();
+    return n;
+}
+
+NO_DISCARD inline bool mpi_thread_multiple_required()
+{
+    return sub_files() > 0;
+}
+
+#if defined(H5_HAVE_SUBFILING_VFD) && H5_HAVE_SUBFILING_VFD
+#include "H5FDsubfiling.h" // not in hdf5.h
+// HighFive's FileAccessProps::add takes anything with apply(fapl)
+struct SubfilingFileAccess
+{
+    int subfiles  = sub_files();
+    MPI_Comm comm = MPI_COMM_WORLD;
+    void apply(hid_t const fapl) const
+    {
+        H5FD_subfiling_config_t config{};
+        if (H5Pset_mpi_params(fapl, comm, MPI_INFO_NULL) < 0
+            or H5Pget_fapl_subfiling(fapl, &config) < 0) // the defaults, environment applied
+            throw std::runtime_error("damn::hdf5: the subfiling defaults failed");
+        config.shared_cfg.stripe_count = subfiles;
+        auto const set                 = H5Pset_fapl_subfiling(fapl, &config);
+        H5Pclose(config.ioc_fapl_id);
+        if (set < 0)
+            throw std::runtime_error("damn::hdf5: the subfiling file access properties failed");
+    }
+};
+#endif
+
 class HighFiveFile
 {
 public:
@@ -46,6 +89,23 @@ public:
     static auto createHighFiveFile(std::string const path, FileOp flags, bool para,
                                    FileAccessProps& fapl)
     {
+        if (para and sub_files() > 0)
+        {
+#if defined(H5_HAVE_SUBFILING_VFD) && H5_HAVE_SUBFILING_VFD
+            int level = 0;
+            MPI_Query_thread(&level);
+            if (level < MPI_THREAD_MULTIPLE)
+                throw std::runtime_error("damn::hdf5: DAMN_H5_SUB_FILES needs MPI at "
+                                         "MPI_THREAD_MULTIPLE ("
+                                         + path + ")");
+            fapl.add(SubfilingFileAccess{});
+            return HiFile{path, flags, fapl};
+#else
+            throw std::runtime_error("damn::hdf5: DAMN_H5_SUB_FILES, HDF5 built without "
+                                     "the subfiling VFD ("
+                                     + path + ")");
+#endif
+        }
         if (para)
         {
 #if defined(H5_HAVE_PARALLEL)

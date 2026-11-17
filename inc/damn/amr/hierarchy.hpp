@@ -12,8 +12,10 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
+#include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/partition.hpp"
+#include "damn/core/math/array.hpp"
 
 #include <array>
 #include <vector>
@@ -307,6 +309,73 @@ NO_DISCARD std::vector<core::Box<int, dim>> covered_by_level(Hierarchy<dim> cons
             if (auto const overlap = box * core::shift(patch.box, shift))
                 covered.push_back(*overlap);
     return covered;
+}
+
+// the cells of box grown by width (a patch's ghost box, level ln index space) another patch of
+//  level ln owns, periodic images included. A cell's owner is, of the patch images holding it
+//  in their box grown by width, the nearest to it (the L1 distance from the cell to the image's
+//  box), the first in box order (core::lexicographic_less) on a tie: every holder agrees (both
+//  are translation invariant, the same on every rank). A level ghost particle held by its
+//  cell's owner only (PHAREHUB/PHARE#1580's owner, nearest rather than first): it stays in its
+//  holder's ghost box the longest, e.g. a cell diagonal to one patch's corner and next to
+//  another's side is the latter's. As boxes of cells, along the last direction
+template<std::size_t dim>
+NO_DISCARD std::vector<core::Box<int, dim>> owned_elsewhere(Hierarchy<dim> const& h, int const ln,
+                                                            core::Box<int, dim> const& box,
+                                                            int const width)
+{
+    using Box_t   = core::Box<int, dim>;
+    using Point_t = core::Point<int, dim>;
+    auto const w  = core::ConstArray<int, dim>(width);
+
+    std::vector<Point_t> shifts{Point_t{}};
+    for (auto const& s : periodic_shifts(h, ln))
+        shifts.push_back(s);
+
+    auto const grown = core::grow(box, w);
+    std::vector<Box_t> others; // the other images holding some of grown
+    for (auto const& patch : h.levels.at(ln).patches)
+        for (auto const& shift : shifts)
+            if (auto const image = core::shift(patch.box, shift);
+                image != box and grown * core::grow(image, w))
+                others.push_back(image);
+
+    auto const distance = [](Box_t const& b, Point_t const& c) {
+        int d = 0;
+        for (std::size_t i = 0; i < dim; ++i)
+            d += std::max({0, b.lower[i] - c[i], c[i] - b.upper[i]});
+        return d;
+    };
+
+    std::vector<Box_t> out;
+    core::for_each_point(grown, [&](auto const& point) {
+        Point_t const c{point};
+        if (isIn(c, box))
+            return; // distance 0: its own
+        auto const mine = distance(box, c);
+        for (auto const& o : others)
+            if (isIn(c, core::grow(o, w)))
+                if (auto const d = distance(o, c);
+                    d < mine or (d == mine and core::lexicographic_less(o, box)))
+                {
+                    // along the last direction: extends the previous box when contiguous
+                    if (!out.empty())
+                    {
+                        auto& last = out.back();
+                        bool row   = last.upper[dim - 1] + 1 == c[dim - 1];
+                        for (std::size_t i = 0; i + 1 < dim; ++i)
+                            row = row and last.lower[i] == c[i];
+                        if (row)
+                        {
+                            last.upper[dim - 1] = c[dim - 1];
+                            return;
+                        }
+                    }
+                    out.push_back(Box_t{c, c});
+                    return;
+                }
+    });
+    return out;
 }
 
 } // namespace damn::amr

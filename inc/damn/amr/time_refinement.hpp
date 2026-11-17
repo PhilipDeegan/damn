@@ -20,9 +20,14 @@
 //   hooks.last_step(ln)                    after the last of ln's substeps (ln > 0)
 //   hooks.synchronize(ln, t)               after ln's substeps (ln > 0), its data onto level
 //                                          ln - 1, both at t
+//   hooks.after_step(ln, t, last)          after a step of ln to t and the finer levels with it
+//                                          (synchronized), finest level included: e.g. a regrid
+//                                          of the finer levels (SAMRAI's regrid points); last:
+//                                          ln's last substep of the coarser level's step (true
+//                                          for level 0)
 //
 // per step of level ln: first_step (first substep), prepare_step, advance, last_step (last
-// substep), then the finer level's ratio substeps and its synchronize
+// substep), then the finer level's ratio substeps and its synchronize, then after_step
 
 #include "damn/amr/hierarchy.hpp"
 
@@ -49,14 +54,17 @@ namespace detail
             if (ln > 0 and last)
                 hooks.last_step(ln);
 
-        if (!level_exists(h, ln + 1))
-            return;
-        double const fine_dt = dt / time_ratio;
-        for (int k = 0; k < time_ratio; ++k)
-            advance_level(h, hooks, time_ratio, ln + 1, t + k * fine_dt, fine_dt, k == 0,
-                          k == time_ratio - 1, t, dt);
-        if constexpr (requires { hooks.synchronize(ln + 1, t + dt); })
-            hooks.synchronize(ln + 1, t + dt);
+        if (level_exists(h, ln + 1))
+        {
+            double const fine_dt = dt / time_ratio;
+            for (int k = 0; k < time_ratio; ++k)
+                advance_level(h, hooks, time_ratio, ln + 1, t + k * fine_dt, fine_dt, k == 0,
+                              k == time_ratio - 1, t, dt);
+            if constexpr (requires { hooks.synchronize(ln + 1, t + dt); })
+                hooks.synchronize(ln + 1, t + dt);
+        }
+        if constexpr (requires { hooks.after_step(ln, t + dt, last); })
+            hooks.after_step(ln, t + dt, last);
     }
 } // namespace detail
 

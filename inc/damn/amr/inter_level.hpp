@@ -9,7 +9,11 @@
 //     region LevelGhosts: fine ghost points (or cells) on no fine patch's domain, periodic
 //                         images included: the coarse-fine border
 //     for each fine target box, the coarse points (or cells) of
-//       grow(coarsen(box), op.stencil) are gathered from the coarse patches' domains, then
+//       grow(coarsen(box), op.stencil) are gathered from the coarse patches' domains; field
+//       points on no coarse domain (past the coarse level's border: a fine level nearer the
+//       coarse level's border than its ghosts' reach, nesting_buffer 1 say) from the first
+//       coarse patch, in level order, whose ghosts hold them (the coarse level's level ghosts,
+//       filled from the level below it, so a level only ever reads the next coarser one), then
 //       BoxData:      op(fine_resource, fine_patch_box, box, BoxValues<T const> coarse)
 //                     fills the fine points of box from the coarse values
 //       ParticleData: op(fine_resource, fine_patch_box, box, std::span<Item const> coarse,
@@ -46,11 +50,11 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
+#include "damn/amr/particle_items.hpp"
 
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -98,6 +102,13 @@ namespace detail
     template<std::size_t dim>
     NO_DISCARD std::vector<core::Box<int, dim>>
     fine_boxes(LevelRegion region, LevelMap<dim> const& map, Patch<dim> const& f, auto const& res);
+
+    // refine: coarse points past the coarse level's domains, from coarse patches' ghosts
+    template<std::size_t dim>
+    NO_DISCARD std::vector<std::pair<Link<dim>, core::Box<int, dim>>>
+    coarse_ghost_sources(LevelMap<dim> const& map, Patch<dim> const& f, auto const& cres,
+                         core::Box<int, dim> const& coarse_box,
+                         std::vector<Link<dim>> const& links);
 
     template<std::size_t dim>
     NO_DISCARD std::size_t aligned(std::size_t bytes);
@@ -160,19 +171,7 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
     bool found = with_resource(coarse_data, pair.coarse, [&](auto const& src) {
         using R = std::decay_t<decltype(src)>;
         if constexpr (ParticleData<R, dim>)
-        {
-            auto const count_at = out.size();
-            detail::write(out, std::uint64_t{0});
-            std::uint64_t count = 0;
-            for_each_item(src, [&](auto const& item) {
-                if (core::isIn(cell(item) + shift, piece.box))
-                {
-                    detail::write(out, item);
-                    ++count;
-                }
-            });
-            std::memcpy(out.data() + count_at, &count, sizeof(count));
-        }
+            particle_items::pack(src, piece.box, shift, out);
         else if constexpr (BoxData<R, dim>)
         {
             using T = box_data_value_t<R, dim>;
@@ -228,11 +227,7 @@ void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Fin
         if constexpr (ParticleData<R, dim>)
         {
             using Item       = typename R::value_type;
-            auto const count = detail::read<std::uint64_t>(at);
-            std::vector<Item> items(count);
-            if (count)
-                std::memcpy(items.data(), at, count * sizeof(Item));
-            at += count * sizeof(Item);
+            auto const items = particle_items::read(dst, at); // the coarse items
             if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
                                          core::Box<int, dim> const&, std::span<Item const>,
                                          core::Point<int, dim> const&>)
@@ -467,6 +462,54 @@ std::vector<core::Box<int, dim>> detail::fine_boxes(LevelRegion const region,
     return boxes;
 }
 
+// refine: the parts of coarse_box on no coarse patch's domain (images included), each from the
+// first coarse patch image, in level order, under f (as the links: its box meets f's footprint)
+// whose ghost box holds it. Decided from the coarse level's geometry, the same on every rank;
+// returned for the images in links only (another rank's fine patch: my coarse patches')
+template<std::size_t dim>
+std::vector<std::pair<Link<dim>, core::Box<int, dim>>>
+detail::coarse_ghost_sources(LevelMap<dim> const& map, Patch<dim> const& f, auto const& cres,
+                             core::Box<int, dim> const& coarse_box,
+                             std::vector<Link<dim>> const& links)
+{
+    std::vector<core::Box<int, dim>> rest{coarse_box};
+    auto const remove = [&](core::Box<int, dim> const& b) {
+        std::vector<core::Box<int, dim>> left;
+        for (auto const& r : rest)
+            for (auto const& piece : r.remove(b))
+                left.push_back(piece);
+        rest = std::move(left);
+    };
+    for (auto const& c : map.coarse_built_on)
+        for (auto const& s : map.coarse_shifts)
+            if (!rest.empty())
+                remove(domain_box(cres, core::shift(c.box, s)));
+    if (rest.empty())
+        return {};
+
+    std::vector<std::pair<Link<dim>, core::Box<int, dim>>> sources;
+    auto const footprint = core::coarsen(core::grow(f.box, map.reach), map.ratio);
+    for (auto const& c : map.coarse_built_on)
+        for (auto const& s : map.coarse_shifts)
+        {
+            if (rest.empty() or !(footprint * core::shift(c.box, s)))
+                continue;
+            auto const ghosts = ghost_box(cres, core::shift(c.box, s));
+            std::vector<core::Box<int, dim>> held;
+            for (auto const& r : rest)
+                if (auto const overlap = r * ghosts)
+                    held.push_back(*overlap);
+            for (auto const& h : held)
+            {
+                remove(h);
+                for (auto const& link : links)
+                    if (link.patch.id == c.id and link.shift == s)
+                        sources.emplace_back(link, h);
+            }
+        }
+    return sources; // what is left: past a non periodic edge, NaN as before
+}
+
 template<std::size_t dim>
 std::size_t detail::aligned(std::size_t const bytes)
 {
@@ -572,6 +615,11 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
                             plan->pieces.push_back({plan->targets.size() - 1, link, *overlap,
                                                     overlap->size() * value_size});
                     }
+                    if (!particles)
+                        for (auto const& [link, overlap] :
+                             coarse_ghost_sources(map, f, cres, coarse_box, *links))
+                            plan->pieces.push_back({plan->targets.size() - 1, link, overlap,
+                                                    overlap.size() * value_size});
                 }
             }
         };

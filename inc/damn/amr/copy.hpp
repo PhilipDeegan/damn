@@ -9,7 +9,8 @@
 //     fill_ghosts     Ghosts,  Assign   (BoxData) neighbours' domain values into my ghosts;
 //                                       my own domain points are never written
 //     sum_borders     Borders, Sum      (BoxData) where ghost boxes overlap, every patch ends
-//                                       with the sum of all patches' values (deposits)
+//                                       with the sum of all patches' values (deposits), the
+//                                       same bits on every patch (see fold_sums)
 //     max_borders     Borders, Max      as sum_borders, with the max
 //     gather_leaving  Leaving, Append   (ParticleData) items a neighbour holds outside its
 //                                       domain are appended to the domain of the patch owning
@@ -33,6 +34,7 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/particle_data.hpp"
+#include "damn/amr/particle_items.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
@@ -43,9 +45,11 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <string_view>
 #include <type_traits>
 #include <vector>
+#include <iterator>
 
 namespace damn::amr
 {
@@ -139,12 +143,31 @@ namespace detail
     template<std::size_t dim, typename PatchData>
     void append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
 
+    // after a copy appended to them: each destination resource once (particle_items::appended)
+    template<std::size_t dim, typename PatchData>
+    void appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
+
     // sums and maxes: every local source read into the buffer, then (unpack) written
     template<std::size_t dim, typename PatchData>
     void pack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld);
 
     template<Arrival arrival, std::size_t dim, typename PatchData>
     void unpack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld);
+
+    // where each piece's packed values are (by its index in plan.pieces): local ones in the
+    //  plan's buffer; other ranks' set by damn::mpi::copy
+    template<std::size_t dim>
+    NO_DISCARD std::vector<std::byte const*> local_sources(Plan<dim> const& plan);
+
+    // the sums, in the same order on every patch holding a point (PHAREHUB/PHARE#1581): per
+    //  destination and resource, the summed points are zeroed, then the contributions added in
+    //  the lexicographic order of their patch's box in the destination's space (its image), the
+    //  destination's own included. Every holder of a point has the same contributing patches,
+    //  their images one shift apart, and the order is translation invariant: the same values
+    //  added in the same order, the same bits ((a + b) + c and (a + c) + b can differ)
+    template<std::size_t dim, typename PatchData>
+    void fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
+                   std::vector<std::byte const*> const& sources);
 } // namespace detail
 
 
@@ -196,11 +219,17 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
     if constexpr (arrival == Arrival::Assign)
         detail::assign(plan, ld);
     else if constexpr (arrival == Arrival::Append)
+    {
         detail::append_items(plan, ld);
+        detail::appended(plan, ld);
+    }
     else
     {
         detail::pack_local(plan, ld);
-        detail::unpack_local<arrival>(plan, ld);
+        if constexpr (arrival == Arrival::Sum)
+            detail::fold_sums(plan, ld, detail::local_sources(plan));
+        else
+            detail::unpack_local<arrival>(plan, ld);
     }
 }
 
@@ -439,6 +468,107 @@ void detail::unpack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld)
         }
 }
 
+template<std::size_t dim>
+std::vector<std::byte const*> detail::local_sources(Plan<dim> const& plan)
+{
+    std::vector<std::byte const*> sources(plan.pieces.size(), nullptr);
+    for (std::size_t i = 0; i < plan.pieces.size(); ++i)
+        if (is_local(plan.pieces[i]))
+            sources[i] = plan.buffer.data() + plan.pieces[i].offset;
+    return sources;
+}
+
+template<std::size_t dim, typename PatchData>
+void detail::fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
+                       std::vector<std::byte const*> const& sources)
+{
+    auto const& pieces = plan.pieces;
+    auto const image   = [&](std::size_t const i) {
+        return core::shift(pieces[i].src.patch.box, pieces[i].src.shift);
+    };
+
+    // the pieces by destination and resource, then image
+    std::vector<std::size_t> order(pieces.size());
+    for (std::size_t i = 0; i < order.size(); ++i)
+        order[i] = i;
+    std::sort(order.begin(), order.end(), [&](auto const i, auto const j) {
+        if (pieces[i].dst != pieces[j].dst)
+            return pieces[i].dst < pieces[j].dst;
+        if (pieces[i].names != pieces[j].names)
+            return pieces[i].names < pieces[j].names;
+        return core::lexicographic_less(image(i), image(j));
+    });
+
+    for (std::size_t begin = 0; begin < order.size();)
+    {
+        auto const& first = pieces[order[begin]];
+        auto end          = begin + 1;
+        while (end < order.size() and pieces[order[end]].dst == first.dst
+               and pieces[order[end]].names == first.names)
+            ++end;
+
+        auto const& dst_box = ld.patches[first.dst].box;
+        with_box_data<dim>(ld.data[first.dst], first.names.dst, [&](auto& dst) {
+            using T = box_data_value_t<decltype(dst), dim>;
+
+            // the summed points (the pieces' boxes), within their bounding box: the
+            //  destination's own values kept, then zeroed
+            auto bounds = pieces[order[begin]].box;
+            for (auto k = begin + 1; k < end; ++k)
+                for (std::size_t d = 0; d < dim; ++d)
+                {
+                    bounds.lower[d] = std::min(bounds.lower[d], pieces[order[k]].box.lower[d]);
+                    bounds.upper[d] = std::max(bounds.upper[d], pieces[order[k]].box.upper[d]);
+                }
+            auto const shape = bounds.shape();
+            auto const index = [&](auto const& p) {
+                std::size_t at = 0;
+                for (std::size_t d = 0; d < dim; ++d)
+                    at = at * static_cast<std::size_t>(shape[d])
+                         + static_cast<std::size_t>(p[d] - bounds.lower[d]);
+                return at;
+            };
+            std::vector<T> own(static_cast<std::size_t>(bounds.size()));
+            std::vector<char> summed(own.size(), 0);
+            for (auto k = begin; k < end; ++k)
+                core::for_each_point(pieces[order[k]].box, [&](auto const& p) {
+                    auto const at = index(p);
+                    if (summed[at])
+                        return;
+                    summed[at] = 1;
+                    auto& d    = value(dst, dst_box, p);
+                    own[at]    = d;
+                    d          = T{0};
+                });
+
+            auto const add_own = [&]() {
+                core::for_each_point(bounds, [&](auto const& p) {
+                    if (auto const at = index(p); summed[at])
+                        value(dst, dst_box, p) += own[at];
+                });
+            };
+            bool own_added = false;
+            for (auto k = begin; k < end; ++k)
+            {
+                auto const i = order[k];
+                if (!own_added and core::lexicographic_less(dst_box, image(i)))
+                {
+                    add_own();
+                    own_added = true;
+                }
+                if (!sources[i])
+                    throw std::runtime_error("damn::amr::copy: a border sum piece not received");
+                std::byte const* at = sources[i];
+                core::for_each_point(pieces[i].box,
+                                     [&](auto const& p) { value(dst, dst_box, p) += read<T>(at); });
+            }
+            if (!own_added)
+                add_own();
+        });
+        begin = end;
+    }
+}
+
 template<std::size_t dim, typename PatchData>
 void detail::append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
 {
@@ -447,29 +577,26 @@ void detail::append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
             with_particle_data<dim>(
                 ld.data[piece.src.local], piece.names.src, [&](auto const& src) {
                     with_particle_data<dim>(ld.data[piece.dst], piece.names.dst, [&](auto& dst) {
-                        using Item         = typename std::decay_t<decltype(dst)>::value_type;
-                        auto const leaving = [&](auto const& item) {
-                            return isIn(cell(item) + piece.src.shift, piece.box);
-                        };
-
-                        if (static_cast<void const*>(&src) != static_cast<void const*>(&dst))
-                        {
-                            for_each_item(src, [&](auto const& item) {
-                                if (leaving(item))
-                                    append(dst, item, piece.src.shift);
-                            });
-                            return;
-                        }
-                        // the same array: collect first, appending invalidates it
-                        std::vector<Item> items;
-                        for_each_item(src, [&](auto const& item) {
-                            if (leaving(item))
-                                items.push_back(item);
-                        });
-                        for (auto const& item : items)
-                            append(dst, item, piece.src.shift);
+                        particle_items::append_from(dst, src, piece.box, piece.src.shift);
                     });
                 });
+}
+
+template<std::size_t dim, typename PatchData>
+void detail::appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
+{
+    std::vector<std::pair<std::size_t, std::string const*>> done;
+    for (auto const& piece : plan.pieces)
+    {
+        auto const key = std::pair{piece.dst, &piece.names.dst};
+        if (std::any_of(done.begin(), done.end(), [&](auto const& d) {
+                return d.first == key.first and *d.second == *key.second;
+            }))
+            continue;
+        done.push_back(key);
+        with_particle_data<dim>(ld.data[piece.dst], piece.names.dst,
+                                [&](auto& dst) { particle_items::appended(dst); });
+    }
 }
 
 
@@ -483,17 +610,7 @@ void pack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, Pat
     if (region == Region::Leaving)
     {
         detail::with_particle_data<dim>(src_data, piece.names.src, [&](auto const& src) {
-            auto const count_at = out.size();
-            detail::write(out, std::uint64_t{0});
-            std::uint64_t count = 0;
-            for_each_item(src, [&](auto const& item) {
-                if (isIn(cell(item) + piece.src.shift, piece.box))
-                {
-                    detail::write(out, item);
-                    ++count;
-                }
-            });
-            std::memcpy(out.data() + count_at, &count, sizeof(count));
+            particle_items::pack(src, piece.box, piece.src.shift, out);
         });
         return;
     }
@@ -514,10 +631,7 @@ void unpack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, P
     if (region == Region::Leaving)
     {
         detail::with_particle_data<dim>(dst_data, piece.names.dst, [&](auto& dst) {
-            using Item       = typename std::decay_t<decltype(dst)>::value_type;
-            auto const count = detail::read<std::uint64_t>(at);
-            for (std::uint64_t i = 0; i < count; ++i)
-                append(dst, detail::read<Item>(at), piece.src.shift);
+            particle_items::unpack(dst, at, piece.src.shift);
         });
         return;
     }
