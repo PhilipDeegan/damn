@@ -140,6 +140,76 @@ NO_DISCARD std::vector<LevelMetrics> metrics(Hierarchy<dim> const& h, Topology c
     return out;
 }
 
+// what moving from hierarchy `from` to `to` (a regrid, a rebalance) costs, without data, per level
+// of `to`, by Distance from the old owner to the new one:
+//
+//   moved[d]:   cells of a new patch the old level held (any patch), owned at distance d
+//   refined[d]: cells of a new patch the old level did not hold, refined from the old coarser
+//               level's cells under them (coarsened), whose owner is at distance d (level 0: none,
+//               it always covers the domain)
+//
+// Self and Local are free (the data stays on its rank); the rest is copied between ranks
+struct LevelMigration
+{
+    int level = 0;
+    std::array<std::size_t, n_distances> moved{};
+    std::array<std::size_t, n_distances> refined{};
+};
+
+template<std::size_t dim>
+NO_DISCARD std::vector<LevelMigration> migration(Hierarchy<dim> const& from,
+                                                 Hierarchy<dim> const& to, Topology const& t)
+{
+    if (from.ratio != to.ratio)
+        throw std::runtime_error("damn::amr::migration: different refinement ratios");
+    auto const at = [](std::array<std::size_t, n_distances>& a, Distance const d) -> auto& {
+        return a[static_cast<std::size_t>(d)];
+    };
+    auto const local = [](Distance const d) { return d == Distance::Self ? Distance::Local : d; };
+
+    std::vector<LevelMigration> out;
+    for (std::size_t ln = 0; ln < to.levels.size(); ++ln)
+    {
+        LevelMigration m;
+        m.level                = static_cast<int>(ln);
+        bool const had         = ln < from.levels.size();
+        bool const has_coarser = ln > 0 and ln - 1 < from.levels.size();
+        for (auto const& p : to.levels[ln].patches)
+        {
+            std::size_t held = 0;
+            if (had)
+                for (auto const& o : from.levels[ln].patches)
+                    if (auto const overlap = p.box * o.box)
+                    {
+                        held += overlap->size();
+                        at(m.moved, local(distance(t, o.rank, p.rank))) += overlap->size();
+                    }
+            if (held == p.box.size() or !has_coarser)
+                continue;
+            // the cells the old level did not hold: from the old coarser level under them, a
+            //  coarse cell for ratio^dim fine ones (whole coarse cells: levels are)
+            std::size_t fine_per_coarse = 1;
+            for (std::size_t i = 0; i < dim; ++i)
+                fine_per_coarse *= static_cast<std::size_t>(to.ratio);
+            auto const coarse = core::coarsen(p.box, to.ratio);
+            for (auto const& o : from.levels[ln - 1].patches)
+                if (auto const under = coarse * o.box)
+                {
+                    // the part of the coarse overlap the old level ln did not cover
+                    auto fine = under->size() * fine_per_coarse;
+                    if (had)
+                        for (auto const& prev : from.levels[ln].patches)
+                            if (auto const kept = core::refine(*under, to.ratio) * prev.box)
+                                if (auto const in_p = *kept * p.box)
+                                    fine -= in_p->size();
+                    at(m.refined, local(distance(t, o.rank, p.rank))) += fine;
+                }
+        }
+        out.push_back(m);
+    }
+    return out;
+}
+
 } // namespace damn::amr
 
 #endif // DAMN_AMR_METRICS_HPP

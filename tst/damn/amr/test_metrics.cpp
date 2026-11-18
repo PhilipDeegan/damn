@@ -78,6 +78,36 @@ TEST(Metrics, weightsPerPatchAndRemoteRanks)
     EXPECT_EQ(m[1].weight, (std::vector<double>{20., 0.})); // no weights given: cells
 }
 
+TEST(Metrics, migrationCountsMovedAndRefinedCellsByDistance)
+{
+    using Boxes    = std::vector<core::Box<int, 1>>;
+    auto from      = two_levels(); // level 0 ranks 0 0 1 1, level 1 fine 20..39 on rank 0
+    from.levels[0] = make_level(0, Boxes{box1(0, 19), box1(20, 39)}, std::vector<int>{0, 1});
+
+    auto to      = two_levels();
+    to.levels[0] = make_level(0, Boxes{box1(0, 19), box1(20, 39)}, std::vector<int>{1, 0});
+    to.levels[1] = make_level(1, Boxes{box1(20, 59)}, std::vector<int>{1}); // coarse 10..29
+
+    auto const m = migration(from, to, single_node(2));
+    ASSERT_EQ(m.size(), 2u);
+    // level 0: both halves change rank
+    EXPECT_EQ(at(m[0].moved, Distance::Node), 40u);
+    EXPECT_EQ(at(m[0].moved, Distance::Local), 0u);
+    // level 1: fine 20..39 held on rank 0, now rank 1; fine 40..59 new, refined from the old
+    //  coarse 20..29 of rank 1: stays on its rank
+    EXPECT_EQ(at(m[1].moved, Distance::Node), 20u);
+    EXPECT_EQ(at(m[1].refined, Distance::Local), 20u);
+    EXPECT_EQ(at(m[1].refined, Distance::Node), 0u);
+
+    // nothing changes: nothing moves off its rank
+    auto const same = migration(from, from, single_node(2));
+    for (auto const& lm : same)
+    {
+        EXPECT_EQ(at(lm.moved, Distance::Node), 0u);
+        EXPECT_EQ(at(lm.refined, Distance::Node) + at(lm.refined, Distance::Local), 0u);
+    }
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
