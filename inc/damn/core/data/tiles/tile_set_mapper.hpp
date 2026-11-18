@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <utility>
-#include <iterator>
 
 namespace damn::core
 {

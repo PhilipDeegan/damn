@@ -28,7 +28,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <iterator>
 
 namespace damn::amr
 {

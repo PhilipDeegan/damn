@@ -9,7 +9,7 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "damn/core/memory/strided_span.hpp"
+#include "mkn/kul/strided_span.hpp"
 #include "damn/hdf5/h5_file.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
@@ -68,8 +68,8 @@ void columns_of(P& p, auto&& fn)
     auto const n   = p.items.size();
     auto* const it = p.items.data();
     auto const of  = [&](auto* const first) {
-        return damn::core::StridedSpan<std::remove_reference_t<decltype(*first)>>{
-            n ? first : nullptr, n, sizeof(Item)};
+        return mkn::kul::StridedSpan<std::remove_reference_t<decltype(*first)>>{n ? first : nullptr,
+                                                                                n, sizeof(Item)};
     };
     fn("cell_x", of(n ? &it->cell[0] : nullptr));
     fn("cell_y", of(n ? &it->cell[1] : nullptr));

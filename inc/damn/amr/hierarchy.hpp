@@ -15,7 +15,7 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/partition.hpp"
-#include "damn/core/math/array.hpp"
+#include "mkn/kul/std/array.hpp"
 
 #include <array>
 #include <vector>
@@ -326,7 +326,7 @@ NO_DISCARD std::vector<core::Box<int, dim>> owned_elsewhere(Hierarchy<dim> const
 {
     using Box_t   = core::Box<int, dim>;
     using Point_t = core::Point<int, dim>;
-    auto const w  = core::ConstArray<int, dim>(width);
+    auto const w  = mkn::kul::ConstArray<int, dim>(width);
 
     std::vector<Point_t> shifts{Point_t{}};
     for (auto const& s : periodic_shifts(h, ln))

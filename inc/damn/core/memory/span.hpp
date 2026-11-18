@@ -6,7 +6,7 @@
 
 
 #include "damn/core/def.hpp"
-#include "damn/core/math/array.hpp"
+#include "mkn/kul/std/vector.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <cassert>
@@ -171,7 +171,7 @@ struct SpanSet
     SpanSet(std::vector<SIZE>&& sizes_)
         : size{std::accumulate(sizes_.begin(), sizes_.end(), SIZE{0})}
         , sizes(sizes_)
-        , displs(core::displacementFrom(sizes))
+        , displs(mkn::kul::displacementFrom(sizes))
         , vec(size)
     {
     }

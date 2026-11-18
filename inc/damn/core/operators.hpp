@@ -2,7 +2,7 @@
 #define DAMN_CORE_OPERATORS_HPP
 
 #include "damn/core/def.hpp"
-#include "damn/core/meta/type_meta.hpp"
+#include "mkn/kul/meta.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include "mkn/gpu.hpp"
@@ -127,7 +127,7 @@ struct Operators
             return compare;
         }
         else
-            static_assert(dependent_false_v<T>, "compare_and_swap requires atomic");
+            static_assert(mkn::kul::dependent_false_v<T>, "compare_and_swap requires atomic");
     }
 
     T& t;

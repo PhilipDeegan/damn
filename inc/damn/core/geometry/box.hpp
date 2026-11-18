@@ -4,10 +4,11 @@
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
 #include "damn/core/memory/span.hpp"
-#include "damn/core/math/numeric.hpp"
+#include "mkn/kul/math.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/def/damn_config.hpp"
-#include "damn/core/math/array.hpp"
+#include "mkn/kul/std/array.hpp"
+#include "mkn/kul/for.hpp"
 
 #include <cassert>
 #include <limits>
@@ -51,8 +52,8 @@ struct Box
     using Point_t = Point<Type, dim>;
 
 
-    Point_t lower{ConstArray<Type, dim>()};
-    Point_t upper{ConstArray<Type, dim>()};
+    Point_t lower{mkn::kul::ConstArray<Type, dim>()};
+    Point_t upper{mkn::kul::ConstArray<Type, dim>()};
 
 
     Box()                      = default;
@@ -129,7 +130,7 @@ struct Box
 
 
     NO_DISCARD auto shape() const DAMN_ALL { return upper - lower + 1; }
-    NO_DISCARD std::size_t size() const DAMN_ALL { return core::product(shape()); }
+    NO_DISCARD std::size_t size() const DAMN_ALL { return mkn::kul::math::product(shape()); }
 
 
 
@@ -385,8 +386,8 @@ Box<Type, dim> Box<Type, dim>::remove_edge(Box<Type, dim> const& to_remove) cons
     if (remaining.size() == 1)
         return remaining[0];
 
-    Box<Type, dim> leftover{ConstArray<Type, dim>(std::numeric_limits<Type>::max()),
-                            ConstArray<Type, dim>(std::numeric_limits<Type>::min())};
+    Box<Type, dim> leftover{mkn::kul::ConstArray<Type, dim>(std::numeric_limits<Type>::max()),
+                            mkn::kul::ConstArray<Type, dim>(std::numeric_limits<Type>::min())};
 
     for (auto const& rem : remaining)
         leftover = leftover.merge(rem);
@@ -485,7 +486,7 @@ template<template<typename, std::size_t> typename Point_t, typename Type, std::s
 auto box_from_zero_to_upper(Point_t<Type, SIZE> const& upper)
 {
     return core::Box<std::uint32_t, SIZE>{
-        core::Point<std::uint32_t, SIZE>{core::ConstArray<std::uint32_t, SIZE>()},
+        core::Point<std::uint32_t, SIZE>{mkn::kul::ConstArray<std::uint32_t, SIZE>()},
         core::Point<std::uint32_t, SIZE>{upper}};
 }
 
@@ -493,9 +494,9 @@ template<template<typename, std::size_t> typename Point_t, typename Type, std::s
 auto box_from_zero_to_upper_minus_one(Point_t<Type, SIZE> const& upper) DAMN_ALL
 {
     return core::Box<std::uint32_t, SIZE>{
-        core::Point<std::uint32_t, SIZE>{core::ConstArray<std::uint32_t, SIZE>()},
+        core::Point<std::uint32_t, SIZE>{mkn::kul::ConstArray<std::uint32_t, SIZE>()},
         core::Point<std::uint32_t, SIZE>{
-            core::generate_from([](auto& u) { return u - 1; }, upper)}};
+            mkn::kul::generate_from([](auto& u) { return u - 1; }, upper)}};
 }
 
 template<std::size_t SIZE>
