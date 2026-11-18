@@ -5,11 +5,10 @@
 #include "damn/core/logger.hpp"
 #include "damn/core/memory/span.hpp"
 #include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
-#include "mkn/kul/int.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/def/damn_config.hpp"
 #include "mkn/kul/std/array.hpp"
+#include "mkn/kul/for.hpp"
 
 #include <cassert>
 #include <limits>

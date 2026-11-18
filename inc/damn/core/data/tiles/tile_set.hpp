@@ -5,8 +5,6 @@
 #include "damn/core/vector.hpp"
 #include "damn/core/memory/span.hpp"
 #include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
-#include "mkn/kul/int.hpp"
 #include "mkn/kul/for.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
@@ -15,7 +13,6 @@
 #include "damn/core/data/tiles/tiling_options.hpp"
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/geometry/point.hpp"
-
 #include "tile_set_mapper.hpp"
 
 #include <cassert>

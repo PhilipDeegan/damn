@@ -24,38 +24,24 @@
 #include "damn/core/def.hpp"                           // IWYU pragma: export
 #include "damn/core/def/constants.hpp"                 // IWYU pragma: export
 #include "damn/core/def/damn_config.hpp"               // IWYU pragma: export
-#include "mkn/kul/enum.hpp"
-#include "damn/core/def/phlop.hpp"                  // IWYU pragma: export
-#include "damn/core/errors.hpp"                     // IWYU pragma: export
-#include "damn/core/exec/kernels.hpp"               // IWYU pragma: export
-#include "damn/core/exec/kernels/launchers.hpp"     // IWYU pragma: export
-#include "damn/core/exec/kernels/region_chunks.hpp" // IWYU pragma: export
-#include "damn/core/exec/thread_pool.hpp"           // IWYU pragma: export
-#include "damn/core/geometry/box.hpp"               // IWYU pragma: export
-#include "damn/core/geometry/box_spans.hpp"         // IWYU pragma: export
-#include "damn/core/geometry/point.hpp"             // IWYU pragma: export
-#include "damn/core/geometry/range.hpp"             // IWYU pragma: export
-#include "damn/core/logger.hpp"                     // IWYU pragma: export
-#include "mkn/kul/std/array.hpp"
-#include "mkn/kul/equality.hpp"
-#include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
-#include "mkn/kul/int.hpp"
-#include "damn/core/math/random.hpp"   // IWYU pragma: export
-#include "damn/core/math/sort.hpp"     // IWYU pragma: export
-#include "damn/core/memory/memory.hpp" // IWYU pragma: export
-#include "damn/core/memory/span.hpp"   // IWYU pragma: export
-#include "mkn/kul/constexprifier.hpp"
-#include "mkn/kul/meta.hpp"
-#include "mkn/kul/for.hpp"
-#include "mkn/kul/tuple.hpp"
-#include "mkn/kul/zip.hpp"
-#include "damn/core/operators.hpp" // IWYU pragma: export
-#include "mkn/kul/env.hpp"
-#include "damn/core/sys/logger_defaults.hpp" // IWYU pragma: export
-#include "damn/core/sys/monitoring.hpp"      // IWYU pragma: export
-#include "mkn/kul/string.hpp"
-#include "mkn/kul/time.hpp"
-#include "damn/core/vector.hpp" // IWYU pragma: export
+#include "damn/core/def/phlop.hpp"                     // IWYU pragma: export
+#include "damn/core/errors.hpp"                        // IWYU pragma: export
+#include "damn/core/exec/kernels.hpp"                  // IWYU pragma: export
+#include "damn/core/exec/kernels/launchers.hpp"        // IWYU pragma: export
+#include "damn/core/exec/kernels/region_chunks.hpp"    // IWYU pragma: export
+#include "damn/core/exec/thread_pool.hpp"              // IWYU pragma: export
+#include "damn/core/geometry/box.hpp"                  // IWYU pragma: export
+#include "damn/core/geometry/box_spans.hpp"            // IWYU pragma: export
+#include "damn/core/geometry/point.hpp"                // IWYU pragma: export
+#include "damn/core/geometry/range.hpp"                // IWYU pragma: export
+#include "damn/core/logger.hpp"                        // IWYU pragma: export
+#include "damn/core/math/random.hpp"                   // IWYU pragma: export
+#include "damn/core/math/sort.hpp"                     // IWYU pragma: export
+#include "damn/core/memory/memory.hpp"                 // IWYU pragma: export
+#include "damn/core/memory/span.hpp"                   // IWYU pragma: export
+#include "damn/core/operators.hpp"                     // IWYU pragma: export
+#include "damn/core/sys/logger_defaults.hpp"           // IWYU pragma: export
+#include "damn/core/sys/monitoring.hpp"                // IWYU pragma: export
+#include "damn/core/vector.hpp"                        // IWYU pragma: export
 
 #endif /* DAMN_DAMN_CORE_HPP */

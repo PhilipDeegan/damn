@@ -3,8 +3,6 @@
 
 #include "damn/core/def.hpp"
 #include "mkn/kul/std/array.hpp"
-#include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
 #include "mkn/kul/int.hpp"
 #include "mkn/kul/string.hpp"
 #include "mkn/kul/meta.hpp"
@@ -23,6 +21,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <concepts>
 
 namespace damn
 {

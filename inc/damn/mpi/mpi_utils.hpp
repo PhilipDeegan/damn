@@ -7,7 +7,6 @@
 
 #include "damn/core/def.hpp"
 #include "damn/mpi/damn_mpi.hpp" // IWYU pragma: keep
-#include "mkn/kul/std/array.hpp"
 #include "mkn/kul/std/vector.hpp"
 #include "damn/core/memory/span.hpp"
 #include "mkn/kul/meta.hpp"

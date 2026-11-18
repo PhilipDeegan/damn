@@ -4,8 +4,6 @@
 
 #include "damn/core/memory/span.hpp"
 #include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
-#include "mkn/kul/int.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/tiles/tile_set.hpp"
