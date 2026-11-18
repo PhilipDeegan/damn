@@ -15,5 +15,5 @@ compiler:
 file:
   - type: cpp:cxx:cc:c:S
     archiver: ar -cr
-    compiler: mpicxx ${cxx.flags}
+    compiler: mpicxx -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX ${cxx.flags}
     linker: mpicxx ${lnk.flags}
