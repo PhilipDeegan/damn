@@ -4,8 +4,10 @@
 #include "damn/core/def.hpp"
 #include "damn/core/vector.hpp"
 #include "damn/core/memory/span.hpp"
-#include "damn/core/math/numeric.hpp"
-#include "damn/core/meta/for_N.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
+#include "mkn/kul/for.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/ndarray/ndarray_vector.hpp"
@@ -38,7 +40,7 @@ public:
                 std::array<std::uint32_t, dimension> const& nbr_cells)
         : box_{box}
         , tiles_{tiles, tile_nbr}
-        , cells_{cells, product(nbr_cells)}
+        , cells_{cells, mkn::kul::math::product(nbr_cells)}
         , cells_shape_{nbr_cells}
     {
     }
@@ -296,7 +298,7 @@ private:
     void static _link(Args&&... args)
     {
         auto const& [tile_set, tile, box_shape, point, idx] = std::forward_as_tuple(args...);
-        if (for_N_all<dimension>([&](auto i) { return point[i] < box_shape[i]; }))
+        if (mkn::kul::for_N_all<dimension>([&](auto i) { return point[i] < box_shape[i]; }))
             tile->link(idx) = tile_set.cells_(point);
     }
 

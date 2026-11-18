@@ -9,7 +9,7 @@
 // values with damn::mpi so each rank creates all of them, then writes only its own
 
 #include "damn/core/def.hpp"
-#include "damn/core/meta/container_meta.hpp"
+#include "mkn/kul/meta.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 
@@ -239,7 +239,7 @@ public:
                 throw std::runtime_error("Function does not support different paths per mpi core");
         })
 
-        constexpr bool data_is_vector = core::IsStdVector<Data>;
+        constexpr bool data_is_vector = mkn::kul::IsStdVector<Data>;
 
         auto doAttribute = [&](auto node, auto const& _key, auto const& value) {
             if constexpr (data_is_vector)
@@ -278,7 +278,7 @@ public:
     template<typename Data>
     void write_attributes_per_mpi(std::string path, std::string key, Data const& data)
     {
-        constexpr bool data_is_vector = core::IsStdVector<Data>;
+        constexpr bool data_is_vector = mkn::kul::IsStdVector<Data>;
 
         auto doAttribute = [&](auto node, auto const& _key, auto const& value) {
             if constexpr (data_is_vector)

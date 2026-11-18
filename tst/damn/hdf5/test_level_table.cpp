@@ -8,7 +8,7 @@
 #include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "damn/core/memory/strided_span.hpp"
+#include "mkn/kul/strided_span.hpp"
 #include "damn/hdf5/h5_file.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
@@ -54,7 +54,7 @@ namespace
     template<typename T>
     auto member(std::vector<Item>& v, T Item::* const m)
     {
-        return core::strided_span(&(v[0].*m), v.size(), sizeof(Item));
+        return mkn::kul::strided_span(&(v[0].*m), v.size(), sizeof(Item));
     }
 } // namespace
 
@@ -93,26 +93,26 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
         write_level(file, "/level2", rows);
         write_boxes(file, "/level2/clustered", boxes); // a list of boxes
 
-        std::vector<core::StridedSpan<double const>> w, dy;
-        std::vector<core::StridedSpan<int const>> c;
+        std::vector<mkn::kul::StridedSpan<double const>> w, dy;
+        std::vector<mkn::kul::StridedSpan<int const>> c;
         for (auto& v : local)
         {
             w.push_back(member(v, &Item::w));
             c.push_back(member(v, &Item::c));
-            dy.push_back(core::strided_span<double const>(&v[0].d[1], v.size(), sizeof(Item)));
+            dy.push_back(mkn::kul::strided_span<double const>(&v[0].d[1], v.size(), sizeof(Item)));
         }
         write_rows(file, "/level2/w", rows, w);
         write_rows(file, "/level2/c", rows, c);
         write_rows(file, "/level2/d_y", rows, dy);
 
-        std::vector<core::StridedSpan<double const>> columns; // contiguous
+        std::vector<mkn::kul::StridedSpan<double const>> columns; // contiguous
         std::vector<std::vector<double>> per_patch;
         columns.reserve(local_rows.size());
         per_patch.reserve(local_rows.size());
         for (auto const n : local_rows)
             per_patch.emplace_back(n, 10. * rank);
         for (auto const& v : per_patch)
-            columns.push_back(core::strided_span(v.data(), v.size(), sizeof(double)));
+            columns.push_back(mkn::kul::strided_span(v.data(), v.size(), sizeof(double)));
         write_rows(file, "/level2/column", rows, columns);
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -131,7 +131,7 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
             read_rows(file, "/level2/w", stored.table.offset(k), member(back, &Item::w));
             read_rows(file, "/level2/c", stored.table.offset(k), member(back, &Item::c));
             read_rows(file, "/level2/d_y", stored.table.offset(k),
-                      core::strided_span(&back[0].d[1], back.size(), sizeof(Item)));
+                      mkn::kul::strided_span(&back[0].d[1], back.size(), sizeof(Item)));
             for (std::size_t i = 0; i < back.size(); ++i)
             {
                 auto const expect = item(id, i);
@@ -143,14 +143,14 @@ TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
 
             std::vector<double> column(stored.table.rows(k));
             read_rows(file, "/level2/column", stored.table.offset(k),
-                      core::strided_span(column.data(), column.size(), sizeof(double)));
+                      mkn::kul::strided_span(column.data(), column.size(), sizeof(double)));
             for (auto const v : column)
                 EXPECT_EQ(v, 10. * stored.level.patches[k].rank);
         }
 
         std::vector<double> past(1);
         EXPECT_THROW(read_rows(file, "/level2/w", stored.table.total(),
-                               core::strided_span(past.data(), 1, sizeof(double))),
+                               mkn::kul::strided_span(past.data(), 1, sizeof(double))),
                      std::runtime_error);
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -216,7 +216,7 @@ TEST(LevelTable, aFieldsDomainFromItsGhostBuffer)
 
             std::vector<double> flat(p.box.size()); // the rows: the domain in C order
             read_rows(file, "/level0/f", stored.table.offset(k),
-                      core::strided_span(flat.data(), flat.size(), sizeof(double)));
+                      mkn::kul::strided_span(flat.data(), flat.size(), sizeof(double)));
             std::size_t i = 0;
             core::for_each_point(p.box, [&](auto const& pt) { EXPECT_EQ(flat[i++], value(pt)); });
         }

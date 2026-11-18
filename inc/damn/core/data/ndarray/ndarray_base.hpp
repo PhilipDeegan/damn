@@ -3,8 +3,10 @@
 
 
 #include "damn/core/def.hpp"
-#include "damn/core/math/numeric.hpp"
-#include "damn/core/meta/for_N.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
+#include "mkn/kul/for.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <cassert>
@@ -20,7 +22,7 @@ struct NdArrayViewer
     static inline std::size_t idx(NCells const& nCells,
                                   Indexes<Index, dim> const& indexes) DAMN_ALL
     {
-        return for_N_fold<dim>([&](auto... d) { return idx(nCells, indexes[d]...); });
+        return mkn::kul::for_N_fold<dim>([&](auto... d) { return idx(nCells, indexes[d]...); });
     }
 
     static inline std::size_t idx(auto const& /*nCells*/, std::size_t const i) DAMN_ALL
@@ -55,14 +57,14 @@ struct NdArrayViewer
 
     {
         auto const& i = idx(nCells, indexes);
-        assert(i < product(nCells, std::size_t{1}));
+        assert(i < mkn::kul::math::product(nCells, std::size_t{1}));
         return data[i];
     }
 
     static inline auto& at(auto* data, auto const& nCells, auto const... indexes) DAMN_ALL
     {
         auto const& i = idx(nCells, indexes...);
-        assert(i < product(nCells, std::size_t{1}));
+        assert(i < mkn::kul::math::product(nCells, std::size_t{1}));
         return data[i];
     }
 };

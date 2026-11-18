@@ -3,6 +3,7 @@
 
 #include "damn/damn_core.hpp"
 #include "damn/core/geometry/box.hpp"
+#include "mkn/kul/assert.hpp"
 
 #include <array>
 #include <tuple>
@@ -17,7 +18,7 @@ namespace damn::core
 template<std::size_t extra_ghost_cells_ = 2>
 auto get_some_boxes(std::size_t const size = 5)
 {
-    abort_if(size < 3); // no
+    mkn::kul::abort_if(size < 3); // no
 
     using T                                 = int;
     std::size_t constexpr static dim        = 3; // this is only 3d

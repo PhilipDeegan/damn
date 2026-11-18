@@ -7,9 +7,9 @@
 
 #include "damn/core/def.hpp"
 #include "damn/mpi/damn_mpi.hpp" // IWYU pragma: keep
-#include "damn/core/math/array.hpp"
+#include "mkn/kul/array.hpp"
 #include "damn/core/memory/span.hpp"
-#include "damn/core/meta/container_meta.hpp"
+#include "mkn/kul/meta.hpp"
 
 #include <array>
 #include <string>
@@ -102,7 +102,7 @@ auto all_get_from(int const& rank_, Fn&& fn, Args&&... args)
 
     int count = 1; // default
     MPI_Datatype sendtype;
-    if constexpr (std::is_same_v<std::string, Data> or core::IsStdVector<Data>)
+    if constexpr (std::is_same_v<std::string, Data> or mkn::kul::IsStdVector<Data>)
     {
         sendtype = mpi_type_for<typename Data::value_type>();
         count    = all_get_from(rank_, [&]() { return var.size(); });
@@ -179,7 +179,7 @@ NO_DISCARD std::vector<Vector> collectVector(Vector const& sendBuff, int mpi_siz
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
     std::vector<int> const perMPISize = collect(static_cast<int>(sendBuff.size()), mpi_size);
-    std::vector<int> const displs     = core::displacementFrom(perMPISize);
+    std::vector<int> const displs     = mkn::kul::displacementFrom(perMPISize);
     std::vector<Data> rcvBuff(std::accumulate(perMPISize.begin(), perMPISize.end(), 0));
     _collect_vector<Data>(sendBuff, rcvBuff, perMPISize, displs, mpi_size);
 
@@ -248,9 +248,9 @@ NO_DISCARD std::vector<Data> collect(Data const& data, int mpi_size)
     if (mpi_size == 0)
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
-    if constexpr (std::is_same_v<std::string, Data> or core::IsStdVector<Data>)
+    if constexpr (std::is_same_v<std::string, Data> or mkn::kul::IsStdVector<Data>)
         return collectVector(data, mpi_size);
-    else if constexpr (core::IsStdArray<Data>)
+    else if constexpr (mkn::kul::IsStdArray<Data>)
         return collectArrays(data, mpi_size);
     else
     {

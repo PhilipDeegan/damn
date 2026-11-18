@@ -4,6 +4,7 @@
 
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
+#include "mkn/kul/for.hpp"
 
 #include "mkn/gpu.hpp"
 
@@ -55,7 +56,7 @@ namespace damn::core::mem
 template<auto alloc_mode, typename T0, typename T1, typename Size>
 void copy(T0* dst, T1* src, Size const size)
 {
-    if constexpr (any_in(AllocatorMode::GPU_UNIFIED, alloc_mode))
+    if constexpr (mkn::kul::any_in(AllocatorMode::GPU_UNIFIED, alloc_mode))
         damn::core::gpu::copy(dst, src, size);
     else
         std::copy(src, src + size, dst);
@@ -64,7 +65,7 @@ void copy(T0* dst, T1* src, Size const size)
 template<auto alloc_mode0, auto alloc_mode1, typename T0, typename T1, typename Size>
 void copy(T0* dst, T1* src, Size const size)
 {
-    if constexpr (any_in(AllocatorMode::GPU_UNIFIED, alloc_mode0, alloc_mode1))
+    if constexpr (mkn::kul::any_in(AllocatorMode::GPU_UNIFIED, alloc_mode0, alloc_mode1))
         damn::core::gpu::copy(dst, src, size);
     else
         std::copy(src, src + size, dst);

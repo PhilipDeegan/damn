@@ -19,7 +19,7 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
-#include "damn/core/math/array.hpp"
+#include "mkn/kul/array.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/partition.hpp"
 
@@ -37,9 +37,9 @@ namespace damn::amr
 template<std::size_t dim>
 struct ClusteringOptions
 {
-    int tag_buffer                 = 1;                             // level ln cells
-    int nesting_buffer             = 1;                             // level ln cells
-    std::array<int, dim> tile_size = core::ConstArray<int, dim>(8); // level ln cells
+    int tag_buffer                 = 1;                                 // level ln cells
+    int nesting_buffer             = 1;                                 // level ln cells
+    std::array<int, dim> tile_size = mkn::kul::ConstArray<int, dim>(8); // level ln cells
 };
 
 // a tile: its index on the tile grid of level ln (std::array: ordered)

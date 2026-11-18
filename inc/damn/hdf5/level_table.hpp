@@ -27,7 +27,7 @@
 
 #include "damn/amr/hierarchy.hpp"
 #include "damn/core/def.hpp"
-#include "damn/core/memory/strided_span.hpp"
+#include "mkn/kul/strided_span.hpp"
 #include "damn/hdf5/h5_file.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 #include "highfive/H5File.hpp"
@@ -132,7 +132,7 @@ namespace detail
     };
 
     template<typename T>
-    NO_DISCARD MemorySpace memory_space(core::StridedSpan<T> const& span)
+    NO_DISCARD MemorySpace memory_space(mkn::kul::StridedSpan<T> const& span)
     {
         return {span.size(), span.stride_values()};
     }
@@ -142,7 +142,7 @@ namespace detail
         return {region.span.box, region.select};
     }
     template<typename T>
-    NO_DISCARD T* memory_data(core::StridedSpan<T> const& span)
+    NO_DISCARD T* memory_data(mkn::kul::StridedSpan<T> const& span)
     {
         return span.data();
     }
@@ -188,7 +188,8 @@ namespace detail
     {
         auto const ds = file.create_data_set<T>(path, values.size());
         if (mpi::rank() == 0)
-            write_span(ds, 0, core::StridedSpan<T const>{values.data(), values.size(), sizeof(T)});
+            write_span(ds, 0,
+                       mkn::kul::StridedSpan<T const>{values.data(), values.size(), sizeof(T)});
     }
 
     template<typename T>
@@ -196,7 +197,7 @@ namespace detail
     {
         auto const ds = file.getDataSet(path);
         std::vector<T> values(ds.getElementCount());
-        read_span(ds, 0, core::StridedSpan<T>{values.data(), values.size(), sizeof(T)});
+        read_span(ds, 0, mkn::kul::StridedSpan<T>{values.data(), values.size(), sizeof(T)});
         return values;
     }
 } // namespace detail

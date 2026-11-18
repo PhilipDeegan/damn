@@ -17,7 +17,7 @@
 //                       box_span(resource, patch_box) -> core::BoxSpan over its ghost box (a C
 //                       ordered buffer), else through value() per point
 //   columns             group/<name>/<column>: a resource with
-//                         for_each_column(resource, fn(name, core::StridedSpan<T>))
+//                         for_each_column(resource, fn(name, mkn::kul::StridedSpan<T>))
 //                         resize_columns(resource, n)
 //                       (e.g. a particle array's components: each one a column, a row per item),
 //                       written and read in place through the spans
@@ -32,7 +32,7 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "damn/core/memory/strided_span.hpp"
+#include "mkn/kul/strided_span.hpp"
 #include "damn/hdf5/level_table.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
@@ -296,7 +296,7 @@ void write_checkpoint(LevelCheckpoint<dim, PatchData> const& c)
         else
             for (auto const& column : detail::columns_of(schema))
                 detail::with_type(column.type, [&]<typename T>() {
-                    std::vector<core::StridedSpan<T const>> spans;
+                    std::vector<mkn::kul::StridedSpan<T const>> spans;
                     detail::for_local(c, name, [&](auto, auto, auto& r) {
                         if constexpr (HasColumns<std::decay_t<decltype(r)>>)
                             for_each_column(r, [&](std::string_view const n, auto const& span) {
@@ -360,7 +360,7 @@ void read_checkpoint(LevelCheckpoint<dim, PatchData> const& c)
                     using T = amr::box_data_value_t<R, dim>;
                     std::vector<T> s(domain.size());
                     read_rows(c.file, path + "/values", table.offset(k),
-                              core::strided_span(s.data(), s.size(), sizeof(T)));
+                              mkn::kul::strided_span(s.data(), s.size(), sizeof(T)));
                     std::size_t i = 0;
                     core::for_each_point(domain,
                                          [&](auto const& p) { value(r, cells(k), p) = s[i++]; });

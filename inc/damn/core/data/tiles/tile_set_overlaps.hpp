@@ -3,7 +3,9 @@
 
 
 #include "damn/core/memory/span.hpp"
-#include "damn/core/math/numeric.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/data/tiles/tile_set.hpp"
@@ -97,7 +99,7 @@ auto make_nd_span_set_from(GridLayout_t const& layout, auto const ghostboxer)
 
     map([&](auto&, auto const& bix) { tiles_per_cell(bix) += 1; });
 
-    spanset.resize(sum(tiles_per_cell));
+    spanset.resize(mkn::kul::math::sum(tiles_per_cell));
 
     std::size_t offset = 0;
     for_each_point(patch_ghost_box, [&](auto const& bix) {
@@ -158,7 +160,7 @@ auto make_nd_span_set_from(TileSet_t& tiles, GridLayout_t const& layout, auto&& 
 
     map([&](auto, auto const& bix) { tiles_per_cell(bix) += 1; });
 
-    NdSpanSet<dim, Tile_t*> spanset{patch_ghost_box, sum(tiles_per_cell)};
+    NdSpanSet<dim, Tile_t*> spanset{patch_ghost_box, mkn::kul::math::sum(tiles_per_cell)};
 
     std::size_t offset = 0;
     for_each_point(patch_ghost_box, [&](auto const& bix) {

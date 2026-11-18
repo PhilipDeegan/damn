@@ -3,7 +3,7 @@
 
 
 #include "damn/core/def/damn_config.hpp"
-#include "damn/core/meta/container_meta.hpp"
+#include "mkn/kul/meta.hpp"
 #include "damn/core/memory/memory.hpp"
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
@@ -150,7 +150,7 @@ struct Vector
 
     auto static make(std::size_t size, bool reserve = false)
     {
-        static_assert(core::IsStdVector<vector_t>);
+        static_assert(mkn::kul::IsStdVector<vector_t>);
         vector_t vec(allocator<Type, allocator_mode, mode>()());
         if (size)
         {

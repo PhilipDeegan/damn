@@ -4,7 +4,9 @@
 #include "damn/core/vector.hpp"
 #include "damn/core/memory/span.hpp"
 #include "damn/core/data/ndarray/ndarray_view.hpp"
-#include "damn/core/math/numeric.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <cassert>
@@ -58,12 +60,12 @@ public:
                            std::optional<Type> const& value = std::nullopt)
         : Storage{[&] {
             if constexpr (std::is_trivially_copyable_v<Type>)
-                return value ? vec_helper::make(core::product(ncells), *value)
-                             : vec_helper::make(core::product(ncells));
+                return value ? vec_helper::make(mkn::kul::math::product(ncells), *value)
+                             : vec_helper::make(mkn::kul::math::product(ncells));
             else
             {
                 (void)value;
-                auto v = vec_helper::make(core::product(ncells));
+                auto v = vec_helper::make(mkn::kul::math::product(ncells));
                 // NoConstructAllocator skips element construction; place-new each element.
                 if constexpr (allocator_mode_ != AllocatorMode::CPU)
                     for (std::size_t i = 0; i < v.size(); ++i)
@@ -106,7 +108,7 @@ public:
 
     auto& operator=(std::array<std::uint32_t, dim> const& ncells)
     {
-        Storage::var = std::move(vec_helper::make(core::product(ncells)));
+        Storage::var = std::move(vec_helper::make(mkn::kul::math::product(ncells)));
         View::reset(this->var, ncells);
         return *this;
     }
@@ -160,7 +162,7 @@ public:
 
     auto& reshape(auto const& shape)
     {
-        assert(product(shape) <= vector().capacity());
+        assert(mkn::kul::math::product(shape) <= vector().capacity());
         View::reshape(shape);
         return *this;
     }

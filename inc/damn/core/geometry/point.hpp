@@ -2,11 +2,12 @@
 #define DAMN_CORE_GEOMETRY_POINT_HPP
 
 #include "damn/core/def.hpp"
-#include "damn/core/math/array.hpp"
-#include "damn/core/math/numeric.hpp"
-#include "damn/core/sys/strings.hpp"
-#include "damn/core/meta/type_equality_meta.hpp"
-#include "damn/core/meta/container_meta.hpp"
+#include "mkn/kul/array.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
+#include "mkn/kul/string.hpp"
+#include "mkn/kul/meta.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include <array>
@@ -48,7 +49,7 @@ namespace core
         template<typename... Indexes>
         constexpr Point(Indexes... index) DAMN_ALL : r{{static_cast<Type>(index)...}}
         {
-            allsame(index...);
+            mkn::kul::allsame(index...);
             static_assert(sizeof...(Indexes) == dimension,
                           "Error dimension does match number of arguments");
         }
@@ -56,7 +57,7 @@ namespace core
 
         constexpr Point(std::array<Type, dim> const& coords) DAMN_ALL : r{coords} {}
 
-        template<Subscriptable Container>
+        template<mkn::kul::Subscriptable Container>
         Point(Container c) DAMN_ALL
         {
             for (std::size_t i = 0; i < dim; ++i)
@@ -65,7 +66,7 @@ namespace core
             }
         }
 
-        constexpr Point() { core::fill(Type{0}, r); }
+        constexpr Point() { mkn::kul::fill(Type{0}, r); }
 
         NO_DISCARD constexpr auto& operator[](std::size_t const i) DAMN_ALL { return r[i]; }
         NO_DISCARD constexpr auto const& operator[](std::size_t const i) const DAMN_ALL
@@ -83,7 +84,7 @@ namespace core
                 static_assert(std::is_integral_v<Type>,
                               "this function is only valid for integral type of Point");
 
-                areEqual &= int_equals((*this)[i], p[i]); // handles signed differences
+                areEqual &= mkn::kul::int_equals((*this)[i], p[i]); // handles signed differences
             }
             return areEqual;
         }
@@ -151,14 +152,14 @@ namespace core
 
         NO_DISCARD std::string str(std::uint8_t const precision = 6,
                                    bool left_pad_positive       = true) const
-            requires(FloatingPoint<Type>)
+            requires(std::floating_point<Type>)
         {
             std::stringstream ss;
             for (auto const v : r)
             {
                 if (left_pad_positive and v >= 0)
                     ss << " ";
-                ss << to_string_with_precision(v, precision) << ",";
+                ss << mkn::kul::to_string_with_precision(v, precision) << ",";
             }
             auto s = ss.str(); // drop last comma
             s.pop_back();
@@ -167,7 +168,7 @@ namespace core
 
 
         NO_DISCARD std::string str() const
-            requires(!FloatingPoint<Type>)
+            requires(!std::floating_point<Type>)
         {
             std::stringstream ss;
             ss << r[0];

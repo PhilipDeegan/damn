@@ -3,8 +3,10 @@
 
 
 #include "damn/core/def.hpp"
-#include "damn/core/math/numeric.hpp"
-#include "damn/core/meta/for_N.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/int.hpp"
+#include "mkn/kul/for.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 #include "damn/core/data/ndarray/ndarray_mask.hpp"
 #include "damn/core/def/damn_config.hpp"
@@ -39,7 +41,7 @@ public:
 
     NdArrayView(pointer_type ptr, std::array<std::uint32_t, dim> const nCells) DAMN_ALL
         : ptr_{ptr},
-          size_{core::product(nCells)},
+          size_{mkn::kul::math::product(nCells)},
           nCells_{nCells}
     {
     }
@@ -101,7 +103,7 @@ public:
     void zero() DAMN_ALL { fill(0); }
     auto zeros() const
     {
-        return sum_from(*this, [](auto const e) { return e == 0 ? 1 : 0; });
+        return mkn::kul::math::sum_from(*this, [](auto const e) { return e == 0 ? 1 : 0; });
     }
     // void check() const
     // {
@@ -134,7 +136,7 @@ public:
         if (this->size() != that.size())
             return false;
         for (std::size_t i = 0; i < this->size(); ++i)
-            if (!float_equals(this->data()[i], that.data()[i], diff))
+            if (!mkn::kul::float_equals(this->data()[i], that.data()[i], diff))
                 return false;
         return true;
     }
@@ -167,7 +169,7 @@ public:
 
     void fill_from(NdArrayView const& that)
     {
-        if (for_N_any<dim>([&](auto i) { return shape()[i] != that.shape()[i]; }))
+        if (mkn::kul::for_N_any<dim>([&](auto i) { return shape()[i] != that.shape()[i]; }))
             throw std::runtime_error("ArrayView::fill_from: Incompatible input shape");
         std::copy(that.data(), that.data() + size(), data());
     }
@@ -176,7 +178,7 @@ public:
     void setShape(std::array<std::uint32_t, dim> const nCells) DAMN_ALL
     {
         nCells_ = nCells;
-        size_   = core::product(nCells);
+        size_   = mkn::kul::math::product(nCells);
     }
 
     auto& reshape(auto const& shape)
@@ -224,9 +226,9 @@ public:
     NdArrayViewSpan() DAMN_ALL = default;
 
     NdArrayViewSpan(V* ptr, std::array<std::uint32_t, dim> const& nCells) DAMN_ALL
-        : ptr_{ptr}
-        , size_{core::product(nCells)}
-        , nCells_{nCells}
+        : ptr_{ptr},
+          size_{mkn::kul::math::product(nCells)},
+          nCells_{nCells}
     {
     }
 

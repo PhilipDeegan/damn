@@ -48,10 +48,6 @@
 namespace damn::core
 {
 
-template<typename T>
-concept FloatingPoint = std::is_floating_point_v<T>;
-
-
 NO_DISCARD bool isUsable(auto const&... args)
 {
     static_assert(sizeof...(args) > 0);
@@ -79,27 +75,6 @@ NO_DISCARD bool isSettable(auto const&... args)
 
 } // namespace damn::core
 
-
-namespace damn
-{
-// device code can't throw: args are unused there and it asserts instead
-template<typename Exception, typename... Args>
-inline void throw_exception([[maybe_unused]] Args&&... args) DAMN_ALL
-{
-#if defined(__HIPCC__) || defined(__CUDACC__)
-    DAMN_ASSERT(false);
-#else
-    throw Exception{std::forward<Args>(args)...};
-#endif
-}
-
-template<typename T>
-inline void throw_runtime_error(T const& err) DAMN_ALL
-{
-    throw_exception<std::runtime_error>(err);
-}
-
-} // namespace damn
 
 
 

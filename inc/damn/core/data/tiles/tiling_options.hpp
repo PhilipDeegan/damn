@@ -1,7 +1,7 @@
 #ifndef DAMN_CORE_DATA_TILES_TILING_OPTIONS_HPP
 #define DAMN_CORE_DATA_TILES_TILING_OPTIONS_HPP
 
-#include "damn/core/sys/env.hpp"
+#include "mkn/kul/env.hpp"
 #include "damn/core/def.hpp"
 
 #include <string>
@@ -30,10 +30,11 @@ struct TilingOptions
     NO_DISCARD static TilingOptions from_env()
     {
         TilingOptions opts;
-        opts.min_tile_size = get_env_as(min_tile_key, opts.min_tile_size);
+        opts.min_tile_size = mkn::kul::env::get_as(min_tile_key, opts.min_tile_size);
         opts.max_tile_size
-            = get_env_as(max_tile_key, std::max(opts.min_tile_size, opts.max_tile_size));
-        opts.min_patch_size_before_split = get_env_as(min_before_split, 2 * opts.min_tile_size);
+            = mkn::kul::env::get_as(max_tile_key, std::max(opts.min_tile_size, opts.max_tile_size));
+        opts.min_patch_size_before_split
+            = mkn::kul::env::get_as(min_before_split, 2 * opts.min_tile_size);
         return opts.validate();
     }
 
