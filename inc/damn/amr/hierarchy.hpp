@@ -257,9 +257,10 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
 
 // box cut into as many boxes per direction as chop, the cells shared evenly between them in
 // units of `granularity` cells from the box's lower corner (e.g. the refinement ratio: refined
-// boxes of whole coarser cells), so no box is left with a few cells: 122 cells by 60, granularity
-// 2: 40, 40, 42 (chop: 60, 60, 2). With `size` a multiple of the granularity no box is wider than
-// `size`; once the box is wider than `size`, none is narrower than about size / 2
+// boxes of whole coarser cells), the leftover units one each to the first boxes (SAMRAI's chop on
+// one rank), so no box is left with a few cells: 122 cells by 60, granularity 2: 42, 40, 40
+// (chop: 60, 60, 2); 165 by 60: 55, 55, 55. With `size` a multiple of the granularity no box is
+// wider than `size`; once the box is wider than `size`, none is narrower than about size / 2
 template<std::size_t dim>
 NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
                                                         std::array<int, dim> const& size,
@@ -276,8 +277,9 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> cons
         auto const n     = (width + size[i] - 1) / size[i];
         auto const units = (width + granularity - 1) / granularity;
         for (int k = 0; k < n; ++k)
-            cuts[i].push_back(box.lower[i]
-                              + granularity * static_cast<int>(static_cast<long>(k) * units / n));
+            cuts[i].push_back(box.lower[i] // ceil(k units / n)
+                              + granularity
+                                    * static_cast<int>((static_cast<long>(k) * units + n - 1) / n));
         cuts[i].push_back(box.upper[i] + 1);
     }
 
