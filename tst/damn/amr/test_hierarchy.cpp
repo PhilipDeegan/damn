@@ -121,6 +121,42 @@ TEST(Hierarchy, chopCoversTheBoxWithDisjointBoxes)
     EXPECT_EQ(cells, domain.size());
 }
 
+TEST(Hierarchy, chopEvenlySharesTheCellsInUnitsOfTheGranularity)
+{
+    auto const level1 = box<1>({100}, {221});         // 122 cells
+    auto const boxes  = chop_evenly(level1, {60}, 2); // chop: 60, 60, 2
+
+    ASSERT_EQ(boxes.size(), 3u);
+    EXPECT_EQ(boxes[0], box<1>({100}, {139})); // 40
+    EXPECT_EQ(boxes[1], box<1>({140}, {179})); // 40
+    EXPECT_EQ(boxes[2], box<1>({180}, {221})); // 42
+    for (auto const& b : boxes)
+    {
+        EXPECT_EQ((b.lower[0] - level1.lower[0]) % 2, 0); // whole coarser cells
+        EXPECT_LE(b.upper[0] - b.lower[0] + 1, 60);
+    }
+}
+
+TEST(Hierarchy, chopEvenlyCoversTheBoxWithDisjointBoxes)
+{
+    auto const domain = box<2>({0, 0}, {164, 7});
+    auto const boxes  = chop_evenly(domain, {60, 3}); // x: 55 each, y: 2, 3, 3
+
+    ASSERT_EQ(boxes.size(), 9u);
+    EXPECT_EQ(boxes[0], box<2>({0, 0}, {54, 1}));
+    EXPECT_EQ(boxes[2], box<2>({110, 0}, {164, 1})); // x fastest
+    EXPECT_EQ(boxes[8], box<2>({110, 5}, {164, 7}));
+
+    std::size_t cells = 0;
+    for (std::size_t i = 0; i < boxes.size(); ++i)
+    {
+        cells += boxes[i].size();
+        for (std::size_t j = i + 1; j < boxes.size(); ++j)
+            EXPECT_FALSE(boxes[i] * boxes[j]);
+    }
+    EXPECT_EQ(cells, domain.size());
+}
+
 TEST(Hierarchy, uniformLevel0PartitionsCellsOverRanks)
 {
     auto const level = uniform_level_0(hierarchy_2d(), {4, 4}, 2);

@@ -255,6 +255,54 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
     return boxes;
 }
 
+// box cut into as many boxes per direction as chop, the cells shared evenly between them in
+// units of `granularity` cells from the box's lower corner (e.g. the refinement ratio: refined
+// boxes of whole coarser cells), so no box is left with a few cells: 122 cells by 60, granularity
+// 2: 40, 40, 42 (chop: 60, 60, 2). With `size` a multiple of the granularity no box is wider than
+// `size`; once the box is wider than `size`, none is narrower than about size / 2
+template<std::size_t dim>
+NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
+                                                        std::array<int, dim> const& size,
+                                                        int const granularity = 1)
+{
+    if (granularity < 1)
+        throw std::runtime_error("damn::amr::chop_evenly: granularity < 1");
+    std::array<std::vector<int>, dim> cuts; // per direction: each box's lower, then upper + 1
+    for (std::size_t i = 0; i < dim; ++i)
+    {
+        if (size[i] < 1)
+            throw std::runtime_error("damn::amr::chop_evenly: size < 1");
+        auto const width = box.upper[i] - box.lower[i] + 1;
+        auto const n     = (width + size[i] - 1) / size[i];
+        auto const units = (width + granularity - 1) / granularity;
+        for (int k = 0; k < n; ++k)
+            cuts[i].push_back(box.lower[i]
+                              + granularity * static_cast<int>(static_cast<long>(k) * units / n));
+        cuts[i].push_back(box.upper[i] + 1);
+    }
+
+    std::size_t total = 1;
+    for (auto const& c : cuts)
+        total *= c.size() - 1;
+    std::vector<core::Box<int, dim>> boxes;
+    boxes.reserve(total);
+    for (std::size_t flat = 0; flat < total; ++flat)
+    {
+        auto rest = flat;
+        core::Box<int, dim> b{box};
+        for (std::size_t i = 0; i < dim; ++i)
+        {
+            auto const n = cuts[i].size() - 1;
+            auto const k = rest % n;
+            rest /= n;
+            b.lower[i] = cuts[i][k];
+            b.upper[i] = cuts[i][k + 1] - 1;
+        }
+        boxes.push_back(b);
+    }
+    return boxes;
+}
+
 // level 0 as the domain chopped into patches of `size`, partitioned over n_ranks by cells along
 // the Hilbert curve (partition.hpp; for other weights: make_level(0, boxes, partition(...)))
 template<std::size_t dim>
