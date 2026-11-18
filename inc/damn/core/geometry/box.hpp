@@ -9,7 +9,7 @@
 #include "mkn/kul/int.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/def/damn_config.hpp"
-#include "mkn/kul/array.hpp"
+#include "mkn/kul/std/array.hpp"
 
 #include <cassert>
 #include <limits>

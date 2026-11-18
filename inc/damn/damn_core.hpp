@@ -36,7 +36,7 @@
 #include "damn/core/geometry/point.hpp"             // IWYU pragma: export
 #include "damn/core/geometry/range.hpp"             // IWYU pragma: export
 #include "damn/core/logger.hpp"                     // IWYU pragma: export
-#include "mkn/kul/array.hpp"
+#include "mkn/kul/std/array.hpp"
 #include "mkn/kul/equality.hpp"
 #include "mkn/kul/math.hpp"
 #include "mkn/kul/float.hpp"

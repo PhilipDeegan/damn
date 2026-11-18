@@ -15,7 +15,7 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/partition.hpp"
-#include "mkn/kul/array.hpp"
+#include "mkn/kul/std/array.hpp"
 
 #include <array>
 #include <vector>

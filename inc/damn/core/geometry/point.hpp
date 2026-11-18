@@ -2,7 +2,7 @@
 #define DAMN_CORE_GEOMETRY_POINT_HPP
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/array.hpp"
+#include "mkn/kul/std/array.hpp"
 #include "mkn/kul/math.hpp"
 #include "mkn/kul/float.hpp"
 #include "mkn/kul/int.hpp"
