@@ -10,27 +10,37 @@ mb=$(git merge-base "$BASE" HEAD)
 
 step() { echo; echo "== $*"; }
 
+# warnings as CI's: -W 9 (-Wall -Wextra -pedantic -Werror with gcc), PHARE's devMode exceptions
+#  (unused parameters, variables), and strict aliasing a warning only (third party sources)
+W=(-W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing")
+
 step "core tests"
-mkn build test -p test_damn_core -dKO -t "$J" -x res/mkn/thrust
+mkn build test -p test_damn_core -dKO -t "$J" "${W[@]}" -x res/mkn/thrust
 
 tests() { find "bin/$1/test" -type f -perm -u+x -name "*.cpp" | sort; }
 
 step "MPI tests: 1 (mkn's run), 2 and 3 ranks"
-mkn build test -p test_damn_mpi -dKO -t "$J" -x res/mkn/mpi
+mkn build test -p test_damn_mpi -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
 for n in 2 3; do
   for t in $(tests test_damn_mpi); do $MPI -n $n "$t" --gtest_brief=1; done
 done
 
 step "HDF5 tests: 1 and 3 ranks"
-mkn build -p test_damn_hdf5 -dKO -t "$J" -x res/mkn/mpi
-mkn build test -p test_damn_hdf5 -dKO -t "$J" -x res/mkn/mpi >/dev/null # links them
+mkn build -p test_damn_hdf5 -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
+mkn build test -p test_damn_hdf5 -dKO -t "$J" "${W[@]}" -x res/mkn/mpi >/dev/null # links them
 for n in 1 3; do
   for t in $(tests test_damn_hdf5); do (cd "$(mktemp -d)" && $MPI -n $n "$OLDPWD/$t" --gtest_brief=1); done
 done
 
 step "clang-format (changed lines)"
-git clang-format-22 --binary clang-format-22 --extensions c,cc,cpp,h,hpp,ipp --diff "$mb" -- inc src tst \
-  | grep -q "^diff" && { echo "clang-format would change files: git clang-format-22 $mb"; exit 1; } || true
+# (git clang-format --diff exits 1 when it has a diff: under pipefail a pipe into grep never
+#  failed this step; capture the diff, then look at it)
+fmt=$(git clang-format-22 --binary clang-format-22 --extensions c,cc,cpp,h,hpp,ipp --diff "$mb" -- inc src tst || true)
+if grep -q "^diff" <<<"$fmt"; then
+  echo "$fmt"
+  echo "clang-format would change files: git clang-format-22 $mb"
+  exit 1
+fi
 
 step "iwyu (applying its fixes changes nothing)"
 mkn build -dKOqp iwyu_fix -t "$J" -Wx res/mkn/mpi >/dev/null

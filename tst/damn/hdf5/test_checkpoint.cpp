@@ -16,7 +16,7 @@
 #include "tst/damn/amr/toy.hpp"
 
 #include "gtest/gtest.h"
-#include "mpi.h"
+#include "damn/mpi/damn_mpi.hpp"
 
 #include <array>
 #include <cmath>

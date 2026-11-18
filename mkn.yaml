@@ -84,6 +84,7 @@ profile:
         tst/damn/amr/test_regrid.cpp
         tst/damn/amr/test_inter_level.cpp
         tst/damn/amr/test_clustering.cpp
+        tst/damn/amr/test_metrics.cpp
         tst/damn/amr/test_time_refinement.cpp
         tst/damn/core/exec/test_thread_pool.cpp
         tst/damn/core/exec/test_thread_pool_sync.cpp

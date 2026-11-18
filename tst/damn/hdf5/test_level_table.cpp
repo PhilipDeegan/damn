@@ -13,7 +13,7 @@
 #include "damn/mpi/mpi_utils.hpp"
 
 #include "gtest/gtest.h"
-#include "mpi.h"
+#include "damn/mpi/damn_mpi.hpp"
 
 #include <array>
 #include <cstddef>
