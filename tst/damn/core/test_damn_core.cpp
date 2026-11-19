@@ -32,6 +32,16 @@ TEST(DamnCore, ndarray_vector_shape_and_zero)
 
 } // namespace damn::core
 
+// DAMN_DEBUG_DO: on unless NDEBUG; DAMN_SUPER_DEBUG_DO: only with -DDAMN_SUPER_DEBUG
+TEST(DamnCore, debug_do_switches)
+{
+    int light = 0, heavy = 0;
+    DAMN_DEBUG_DO(++light);
+    DAMN_SUPER_DEBUG_DO(++heavy);
+    EXPECT_EQ(light, DAMN_DEBUG);
+    EXPECT_EQ(heavy, DAMN_SUPER_DEBUG);
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);

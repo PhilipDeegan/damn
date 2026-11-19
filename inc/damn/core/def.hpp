@@ -27,6 +27,18 @@
 #define DAMN_DEBUG 0
 #endif
 
+// heavy checks (whole level sums, per stage invariants, ...): opt in at compile time with
+//  -DDAMN_SUPER_DEBUG (1; =0 off), in any build (-g 0 too); nothing otherwise. DAMN_DEBUG_DO
+//  is the light kind, on unless NDEBUG
+#if !defined(DAMN_SUPER_DEBUG)
+#define DAMN_SUPER_DEBUG 0
+#endif
+#if DAMN_SUPER_DEBUG
+#define DAMN_SUPER_DEBUG_DO(...) __VA_ARGS__
+#else
+#define DAMN_SUPER_DEBUG_DO(...)
+#endif
+
 
 #if !defined(DAMN_UNDEF_ASSERT)
 //  Cuda can fail to compile with assertions
