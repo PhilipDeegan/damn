@@ -18,7 +18,8 @@
 //       the ranks again with no rank above (1 + tol) times its share of the weight (its node's
 //       share, node_share_capacity): an overloaded rank, the most loaded first, hands patches
 //       (the heaviest that fits in its excess, else its lightest) to the least loaded rank with
-//       room on its node, else on any node; it keeps its last patch. Deterministic
+//       room, the closest first (its memory domain, its node, any node: Distance); it keeps
+//       its last patch. Deterministic
 //
 // as plamn/amr.py's Chopper (partition "keep", spill), its proof of concept
 
@@ -189,13 +190,14 @@ NO_DISCARD std::vector<int> spill(std::vector<core::Box<int, dim>> const& boxes,
                     })));
             auto const i = own[pick];
             auto const w = weights[i];
-            // the least loaded rank with room: its node first
+            // the least loaded rank with room, the closest first: its memory domain (Node), its
+            //  node (Socket), any (Remote)
             auto best = n;
-            for (bool const same_node : {true, false})
+            for (auto const within : {Distance::Node, Distance::Socket, Distance::Remote})
             {
                 for (std::size_t t = 0; t < n; ++t)
                     if (t != r and load[t] + w <= limit[t]
-                        and (topology.ranks[t].node == topology.ranks[r].node) == same_node
+                        and distance(topology.ranks[r], topology.ranks[t]) <= within
                         and (best == n or load[t] < load[best]))
                         best = t;
                 if (best != n)

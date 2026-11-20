@@ -136,6 +136,21 @@ TEST(Spill, itsNodeFirst)
     EXPECT_EQ(count, (std::vector<int>{2, 1, 1, 0}));
 }
 
+TEST(Spill, itsMemoryDomainBeforeItsNode)
+{
+    // one node, two memory domains: ranks 0, 1 in domain 0, ranks 2, 3 in domain 1; rank 0's
+    //  excess goes to rank 1 (its domain), not to the emptier rank 3 (the other socket)
+    std::vector<Box2> const boxes{box(0, 0, 0, 0), box(1, 0, 1, 0), box(2, 0, 2, 0),
+                                  box(3, 0, 3, 0)};
+    auto t          = single_node(4);
+    t.ranks[2].numa = t.ranks[3].numa = 1;
+    auto const ranks = spill(boxes, {0, 0, 0, 2}, std::vector<double>(4, 1.), t, 1.);
+    std::vector<int> count(4, 0);
+    for (auto const r : ranks)
+        ++count[static_cast<std::size_t>(r)];
+    EXPECT_EQ(count, (std::vector<int>{2, 1, 1, 0}));
+}
+
 TEST(Spill, keepsARanksLastPatch)
 {
     // one heavy patch over the share: nowhere to split it
