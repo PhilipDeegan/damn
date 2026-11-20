@@ -25,7 +25,7 @@ jobs:
 
     - run: |
         apt update && apt install -y curl
-        curl -Lo mkn https://github.com/mkn/mkn/releases/latest/download/mkn_nix
+        curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o mkn https://github.com/mkn/mkn/releases/latest/download/mkn_nix
         chmod +x mkn
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_core -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
         KLOG=3 ./mkn clean build test -dtKOqp test_damn_mpi -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
