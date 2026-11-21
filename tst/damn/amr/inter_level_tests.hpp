@@ -339,4 +339,111 @@ TEST(Coarsen, theCoarsePointsUnderTheFineDomains)
 
 } // namespace damn::amr
 
+
+// two patch data types, as two models' levels (one under the other): the fine level's its own
+//  resource names, ghost widths and no particles, the pairs name both sides
+namespace toy
+{
+struct OtherPatchData
+{
+    Field B_x{{true, false}, 3}, density{{true, true}, 1};
+};
+inline void for_each_resource(OtherPatchData& d, auto&& fn)
+{
+    fn("B_x", d.B_x);
+    fn("density", d.density);
+}
+} // namespace toy
+
+namespace damn::amr
+{
+namespace
+{
+    std::vector<LevelPair> const across{{"Bx", "B_x", ""}, {"rho", "density", ""}};
+
+    toy::OtherPatchData make_other(Patch<2> const& patch)
+    {
+        toy::OtherPatchData d;
+        d.B_x.v.assign(ghost_box(d.B_x, patch.box).size(), nan);
+        d.density.v.assign(ghost_box(d.density, patch.box).size(), nan);
+        return d;
+    }
+    toy::Field& other_field(toy::OtherPatchData& d, std::string const& name)
+    {
+        return name == "B_x" ? d.B_x : d.density;
+    }
+} // namespace
+
+TEST(Refine, intoAnotherPatchDataType)
+{
+    for (auto const periodic : {false, true})
+        for (auto const region : {LevelRegion::Interior, LevelRegion::LevelGhosts})
+        {
+            auto l     = make_levels({periodic, periodic});
+            auto other = allocate(l.h.levels[1], test_rank(), make_other);
+            do_refine(Inject{}, region, l.map, across, l.coarse, other, 0.);
+            for (std::size_t i = 0; i < size(other); ++i)
+                for (auto const& pair : across)
+                {
+                    auto& f          = other_field(other.data[i], pair.fine);
+                    auto const& cell = other.patches[i].box;
+                    std::size_t n    = 0;
+                    core::for_each_point(ghost_box(f, cell), [&](auto const& p) {
+                        if (in_region(l, region, f, cell, p))
+                        {
+                            if (!core::isIn(core::floor_div(p, 2), domain_box(f, l.h.domain))
+                                and region == LevelRegion::LevelGhosts)
+                                return;
+                            ++n;
+                            EXPECT_EQ(value(f, cell, p), f_on(l.h, 0, core::floor_div(p, 2)))
+                                << pair.fine << " " << i << " " << p;
+                        }
+                        else
+                            EXPECT_TRUE(std::isnan(value(f, cell, p)))
+                                << pair.fine << " " << i << " " << p;
+                    });
+                    EXPECT_GT(n, 0u) << pair.fine << " " << i;
+                }
+        }
+}
+
+TEST(Coarsen, fromAnotherPatchDataType)
+{
+    for (auto const periodic : {false, true})
+    {
+        auto l     = make_levels({periodic, periodic});
+        auto other = allocate(l.h.levels[1], test_rank(), make_other);
+        for (std::size_t i = 0; i < size(other); ++i)
+            for (auto const& pair : across)
+            {
+                auto& f          = other_field(other.data[i], pair.fine);
+                auto const& cell = other.patches[i].box;
+                core::for_each_point(ghost_box(f, cell),
+                                     [&](auto const& p) { value(f, cell, p) = -f_on(l.h, 1, p); });
+            }
+        do_coarsen(InjectCoarse{}, l.map, across, other, l.coarse);
+
+        std::vector<Point2> shifts{Point2{}};
+        for (auto const& s : periodic_shifts(l.h, 0))
+            shifts.push_back(s);
+        for (std::size_t i = 0; i < size(l.coarse); ++i)
+            for (auto const& pair : across)
+            {
+                auto& f          = field(l.coarse.data[i], pair.coarse);
+                auto const& cell = l.coarse.patches[i].box;
+                core::for_each_point(domain_box(f, cell), [&](auto const& q) {
+                    bool under = false;
+                    for (auto const& g : l.h.levels[1].patches)
+                        for (auto const& s : shifts)
+                            under |= core::isIn(
+                                q, domain_box(f, core::shift(core::coarsen(g.box, 2), s)));
+                    EXPECT_EQ(value(f, cell, q), under ? -f_on(l.h, 1, q * 2) : f_on(l.h, 0, q))
+                        << pair.coarse << " " << i << " " << q;
+                });
+            }
+    }
+}
+
+} // namespace damn::amr
+
 #endif // DAMN_TST_AMR_INTER_LEVEL_TESTS_HPP
