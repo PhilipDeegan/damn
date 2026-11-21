@@ -20,6 +20,7 @@
 #include "damn/mpi/damn_mpi.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/core/def.hpp"
+#include "damn/amr/copy.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -84,17 +85,20 @@ namespace detail
 } // namespace detail
 
 
-template<std::size_t dim, typename CoarseLD, typename FineLD>
+// access: as damn::amr::refine's (amr::by_name, or accessors one per pair)
+template<std::size_t dim, typename Access, typename CoarseLD, typename FineLD>
+    requires amr::LevelDataLike<FineLD>
 void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
-            std::vector<amr::LevelPair> const& pairs, CoarseLD& coarse_ld, FineLD& fine_ld,
-            double const alpha = 0, MPI_Comm const comm = MPI_COMM_WORLD)
+            std::vector<amr::LevelPair> const& pairs, Access const& access, CoarseLD& coarse_ld,
+            FineLD& fine_ld, double const alpha = 0, MPI_Comm const comm = MPI_COMM_WORLD)
 {
     using namespace amr;
     DAMN_LOG_SCOPE(2, "damn::mpi::refine");
     if (region == LevelRegion::Coarsened)
         throw std::runtime_error("damn::mpi::refine: not a refine region");
+    check_access(access, pairs.size());
     auto& plan = level_plan_for(region, op.stencil, map, pairs, coarse_ld, fine_ld);
-    clear_scratch(plan, fine_ld);
+    clear_scratch(plan, access, fine_ld);
 
     auto const fine_rank = [&](auto const& piece) { return plan.targets[piece.target].fine.rank; };
 
@@ -103,7 +107,7 @@ void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
         buffer.clear();
     for (auto const& piece : plan.pieces)
         if (amr::detail::coarse_is_local(piece) and !amr::detail::fine_is_local(plan, piece))
-            pack_coarse_piece(plan, piece, coarse_ld, alpha, plan.sent[fine_rank(piece)]);
+            pack_coarse_piece(plan, piece, access, coarse_ld, alpha, plan.sent[fine_rank(piece)]);
     auto sends = detail::send_all(plan.sent, comm);
 
     // local
@@ -119,25 +123,37 @@ void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
             continue;
         }
         bytes.clear();
-        pack_coarse_piece(plan, piece, coarse_ld, alpha, bytes);
+        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, bytes);
         std::byte const* at = bytes.data();
-        unpack_coarse_piece(plan, piece, fine_ld, op, at);
+        unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     }
 
     detail::receive_all(from, plan.received, comm, [&](auto const& piece, auto& at) {
-        unpack_coarse_piece(plan, piece, fine_ld, op, at);
+        unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     });
 
-    refine_fields(plan, fine_ld, op);
+    refine_fields(plan, access, fine_ld, op);
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 
-template<std::size_t dim, typename FineLD, typename CoarseLD>
+template<std::size_t dim, typename CoarseLD, typename FineLD>
+    requires amr::LevelDataLike<FineLD>
+void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
+            std::vector<amr::LevelPair> const& pairs, CoarseLD& coarse_ld, FineLD& fine_ld,
+            double const alpha = 0, MPI_Comm const comm = MPI_COMM_WORLD)
+{
+    refine(op, region, map, pairs, amr::by_name, coarse_ld, fine_ld, alpha, comm);
+}
+
+template<std::size_t dim, typename Access, typename FineLD, typename CoarseLD>
+    requires amr::LevelDataLike<CoarseLD>
 void coarsen(auto op, amr::LevelMap<dim>& map, std::vector<amr::LevelPair> const& pairs,
-             FineLD& fine_ld, CoarseLD& coarse_ld, MPI_Comm const comm = MPI_COMM_WORLD)
+             Access const& access, FineLD& fine_ld, CoarseLD& coarse_ld,
+             MPI_Comm const comm = MPI_COMM_WORLD)
 {
     using namespace amr;
     DAMN_LOG_SCOPE(2, "damn::mpi::coarsen");
+    check_access(access, pairs.size());
     auto& plan = level_plan_for(LevelRegion::Coarsened, 0, map, pairs, coarse_ld, fine_ld);
 
     // computed on my fine patches: assigned, or sent to the coarse patch's rank
@@ -156,20 +172,28 @@ void coarsen(auto op, amr::LevelMap<dim>& map, std::vector<amr::LevelPair> const
         }
         if (!amr::detail::coarse_is_local(piece))
         {
-            pack_coarsened(plan, target, fine_ld, op, plan.sent[piece.coarse.patch.rank]);
+            pack_coarsened(plan, target, access, fine_ld, op, plan.sent[piece.coarse.patch.rank]);
             continue;
         }
         bytes.clear();
-        pack_coarsened(plan, target, fine_ld, op, bytes);
+        pack_coarsened(plan, target, access, fine_ld, op, bytes);
         std::byte const* at = bytes.data();
-        unpack_coarsened(plan, piece, coarse_ld, at);
+        unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
     auto sends = detail::send_all(plan.sent, comm);
 
     detail::receive_all(from, plan.received, comm, [&](auto const& piece, auto& at) {
-        unpack_coarsened(plan, piece, coarse_ld, at);
+        unpack_coarsened(plan, piece, access, coarse_ld, at);
     });
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
+}
+
+template<std::size_t dim, typename FineLD, typename CoarseLD>
+    requires amr::LevelDataLike<CoarseLD>
+void coarsen(auto op, amr::LevelMap<dim>& map, std::vector<amr::LevelPair> const& pairs,
+             FineLD& fine_ld, CoarseLD& coarse_ld, MPI_Comm const comm = MPI_COMM_WORLD)
+{
+    coarsen(op, map, pairs, amr::by_name, fine_ld, coarse_ld, comm);
 }
 
 } // namespace damn::mpi

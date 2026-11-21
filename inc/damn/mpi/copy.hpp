@@ -39,13 +39,17 @@ namespace damn::mpi
 {
 inline constexpr int copy_tag = 0xda;
 
-template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename PatchData>
+// access: how the pieces' resources are reached (amr::by_name, or accessors one per pair, as
+//  damn::amr::copy)
+template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename Access,
+         typename PatchData>
 void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
-          std::vector<amr::ResourcePair> const& pairs, amr::LevelData<dim, PatchData>& ld,
-          MPI_Comm const comm = MPI_COMM_WORLD)
+          std::vector<amr::ResourcePair> const& pairs, Access const& access,
+          amr::LevelData<dim, PatchData>& ld, MPI_Comm const comm = MPI_COMM_WORLD)
 {
     using namespace amr;
     DAMN_LOG_SCOPE(2, "damn::mpi::copy<" + std::string{name(op)} + ">");
+    check_access(access, pairs.size());
     auto& plan = plan_for(region, n, ld, pairs);
 
     auto const as_int = [](std::size_t const bytes) {
@@ -61,7 +65,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
         for (auto& [_, buffer] : plan.sent)
             buffer.clear();
         for (auto const& piece : plan.outgoing)
-            pack_piece(region, piece, ld, plan.sent[piece.dst_rank]);
+            pack_piece(region, piece, access, ld, plan.sent[piece.dst_rank]);
 
         sends.reserve(plan.sent.size());
         for (auto& [peer, buffer] : plan.sent)
@@ -73,11 +77,11 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::local");
         if constexpr (arrival == Arrival::Assign)
-            amr::detail::assign(plan, ld);
+            amr::detail::assign(plan, access, ld);
         else if constexpr (arrival == Arrival::Append)
-            amr::detail::append_items(plan, ld);
+            amr::detail::append_items(plan, access, ld);
         else
-            amr::detail::pack_local(plan, ld);
+            amr::detail::pack_local(plan, access, ld);
     }
 
     // 3. receive: pieces from each peer, in plan order
@@ -113,7 +117,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
                 at += piece->bytes;
             }
             else
-                unpack_piece<arrival>(region, *piece, ld, at);
+                unpack_piece<arrival>(region, *piece, access, ld, at);
         if (at != buffer.data() + buffer.size())
             throw std::runtime_error("damn::mpi::copy: rank " + std::to_string(peer)
                                      + "'s message does not match this rank's plan");
@@ -122,12 +126,20 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     // 4.
     DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
     if constexpr (arrival == Arrival::Sum)
-        amr::detail::fold_sums(plan, ld, sources);
+        amr::detail::fold_sums(plan, access, ld, sources);
     else if constexpr (arrival == Arrival::Max)
-        amr::detail::unpack_local<arrival>(plan, ld);
+        amr::detail::unpack_local<arrival>(plan, access, ld);
     else if constexpr (arrival == Arrival::Append) // local and received items in, each once
-        amr::detail::appended(plan, ld);
+        amr::detail::appended(plan, access, ld);
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
+}
+
+template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename PatchData>
+void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
+          std::vector<amr::ResourcePair> const& pairs, amr::LevelData<dim, PatchData>& ld,
+          MPI_Comm const comm = MPI_COMM_WORLD)
+{
+    copy(op, n, pairs, amr::by_name, ld, comm);
 }
 
 // fields: the same name on both sides

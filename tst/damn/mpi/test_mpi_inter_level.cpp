@@ -40,6 +40,19 @@ namespace
         mpi::refine(op, region, map, pairs, coarse, fine, alpha);
     }
 
+    void do_refine_by(auto const& access, auto const& op, LevelRegion const region,
+                      LevelMap<2>& map, std::vector<LevelPair> const& pairs, auto& coarse,
+                      auto& fine, double const alpha)
+    {
+        mpi::refine(op, region, map, pairs, access, coarse, fine, alpha);
+    }
+
+    void do_coarsen_by(auto const& access, auto const& op, LevelMap<2>& map,
+                       std::vector<LevelPair> const& pairs, auto& fine, auto& coarse)
+    {
+        mpi::coarsen(op, map, pairs, access, fine, coarse);
+    }
+
     void do_coarsen(auto const& op, LevelMap<2>& map, std::vector<LevelPair> const& pairs,
                     auto& fine, auto& coarse)
     {
