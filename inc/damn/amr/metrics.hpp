@@ -31,7 +31,7 @@
 
 namespace damn::amr
 {
-inline constexpr std::size_t n_distances = 5; // Distance's values
+inline constexpr std::size_t n_distances = 6; // Distance's values
 
 struct LevelMetrics
 {

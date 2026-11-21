@@ -78,6 +78,22 @@ TEST(Metrics, weightsPerPatchAndRemoteRanks)
     EXPECT_EQ(m[1].weight, (std::vector<double>{20., 0.})); // no weights given: cells
 }
 
+TEST(Metrics, anotherMemoryDomainOfTheNodeIsASocketAway)
+{
+    // ranks 0 and 1 on one node: in one memory domain Node, in two Socket (a dual socket node)
+    auto t = single_node(2);
+    EXPECT_EQ(distance(t, 0, 1), Distance::Node);
+    t.ranks[1].numa = 1;
+    EXPECT_EQ(distance(t, 0, 1), Distance::Socket);
+    EXPECT_LT(Distance::Node, Distance::Socket);
+    EXPECT_LT(Distance::Socket, Distance::Remote);
+    auto const m = metrics(two_levels(), t, /*reach=*/2);
+    EXPECT_EQ(at(m[0].ghost_cells, Distance::Socket), 8u); // the Node cells of the same layout
+    EXPECT_EQ(at(m[0].ghost_cells, Distance::Node), 0u);
+    t.ranks[1].node = 1;
+    EXPECT_EQ(distance(t, 0, 1), Distance::Remote);
+}
+
 TEST(Metrics, migrationCountsMovedAndRefinedCellsByDistance)
 {
     using Boxes    = std::vector<core::Box<int, 1>>;

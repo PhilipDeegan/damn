@@ -29,7 +29,8 @@ enum class Distance : std::uint8_t {
     Self,   // a periodic image of the same patch
     Local,  // same rank, same memory domain (same NUMA node, same device)
     Numa,   // same rank, another memory domain (another NUMA node, a peer device)
-    Node,   // another rank on the same node (shared memory)
+    Node,   // another rank on the same node and memory domain (shared memory)
+    Socket, // another rank on the same node, another memory domain (shared memory across them)
     Remote, // another node
 };
 
@@ -41,6 +42,7 @@ NO_DISCARD constexpr std::string_view to_string(Distance const d)
         case Distance::Local: return "Local";
         case Distance::Numa: return "Numa";
         case Distance::Node: return "Node";
+        case Distance::Socket: return "Socket";
         case Distance::Remote: return "Remote";
     }
     return "?";
@@ -61,7 +63,9 @@ NO_DISCARD constexpr Distance distance(Location const& a, Location const& b)
 {
     if (a.rank == b.rank)
         return a.numa == b.numa and a.device == b.device ? Distance::Local : Distance::Numa;
-    return a.node == b.node ? Distance::Node : Distance::Remote;
+    if (a.node != b.node)
+        return Distance::Remote;
+    return a.numa == b.numa ? Distance::Node : Distance::Socket;
 }
 
 struct Topology
