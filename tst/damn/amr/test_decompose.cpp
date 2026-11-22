@@ -313,48 +313,24 @@ TEST(Decompose, FinestInPiecesThreeLevelsInWholeCoarseCells)
             }
 }
 
-TEST(Decompose, WaterFillLevelsLoads)
+TEST(Decompose, NearBandGoesToTheFinerOwner)
 {
-    auto const share = detail::water_fill({0., 4., 8.}, 6.);
-    ASSERT_EQ(share.size(), 3u);
-    EXPECT_DOUBLE_EQ(share[0], 5.);
-    EXPECT_DOUBLE_EQ(share[1], 1.);
-    EXPECT_DOUBLE_EQ(share[2], 0.);
-    auto const all = detail::water_fill({1., 1.}, 4.);
-    EXPECT_DOUBLE_EQ(all[0], 2.);
-    EXPECT_DOUBLE_EQ(all[1], 2.);
-}
-
-TEST(Decompose, FarLevel0FillsTheRanksWithLessFinerWork)
-{
-    // level 1 one block (8 x 8 fine cells): on one rank. With far "balance" that rank takes
-    //  less of level 0, every rank's step (2 substeps of level 1 and level 0) within a block of
-    //  the others; the cells near level 1 (2 cells) with its owner
+    // level 1 one block (8 x 8 fine cells, over coarse 8..11) on one rank: the level 0 cells
+    //  within 2 of it (6..13) with that rank, every level 0 rank with work
     auto const h        = hierarchy(box(0, 0, 63, 63));
     auto const topology = single_node(4);
     Decompose<2> in{topology, by_cells(), {128, 128}, "finest"};
     in.near_band      = 2;
-    auto const fine   = box(16, 16, 23, 23); // over coarse 8..11, near 6..13
-    auto const levels = decompose(h, 0, {{h.domain}, {fine}}, in);
+    auto const levels = decompose(h, 0, {{h.domain}, {box(16, 16, 23, 23)}}, in);
     ASSERT_EQ(levels[1].patches.size(), 1u);
     auto const owner = levels[1].patches[0].rank;
-    auto const l0    = loads(levels[0], 4);
-    auto const l1    = loads(levels[1], 4);
-    std::vector<double> step(4);
-    for (std::size_t q = 0; q < 4; ++q)
-        step[q] = 2. * l1[q] + l0[q];
-    auto const [lo, hi] = std::minmax_element(step.begin(), step.end());
-    EXPECT_LE(*hi - *lo, 2. * 64.); // within a block row (8 x 8 cells), twice
-    for (std::size_t q = 0; q < 4; ++q)
-        if (static_cast<int>(q) != owner)
-        {
-            EXPECT_LT(l0[static_cast<std::size_t>(owner)], l0[q]);
-        }
     for (auto const& p : levels[0].patches)
         if (p.box * box(6, 6, 13, 13))
         {
             EXPECT_EQ(p.rank, owner) << p.box;
         }
+    for (auto const l : loads(levels[0], 4))
+        EXPECT_GT(l, 0.);
 }
 
 TEST(Decompose, AlignedPutsFinePatchesOnTheCoarseUnderThem)

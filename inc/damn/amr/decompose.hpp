@@ -63,7 +63,6 @@
 #include <array>
 #include <cstddef>
 #include <iterator>
-#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -84,15 +83,12 @@ struct Decompose
     bool cut              = true;      // levels: cut patches on several ranks; false: whole
     std::vector<std::array<int, dim>> level_size{}; // per level, else patch_size
     std::vector<std::array<int, dim>> under_size{}; // per level, under the finer level; 0: none
-    // finest in pieces: the near region, the cells within near_band (cells of the level) of
-    //  the finer level, to the finer level's owners: what the finer level reads during the
-    //  coarse step (its level ghosts, time interpolation), the stages' ghost exchanges included.
-    //  Level 0's far region (detached: needed only by the end of the coarse step) shared by
-    //  far: "balance" so each rank's whole step (finer levels times their substeps, near and
-    //  far level 0) is about the same, far level 0 filling the ranks with less finer work (MPI
-    //  only); "local" cut along the curve, contiguous (background work on a rank's threads)
-    int near_band   = 0;
-    std::string far = "balance";
+    // finest in pieces: level 0's near region, its cells within near_band of level 1 (what
+    //  level 1's coarse step reads: where its level ghosts split from), to level 1's owners;
+    //  level 0 beyond it (far, detached: needed only by the coarse step's end) cut along the
+    //  curve with the rest of level 0 (with one thread a rank it stays in level 0's phase:
+    //  collectives, dumps; with more it can be background work, placed contiguous)
+    int near_band = 0;
 };
 
 namespace detail
@@ -439,31 +435,6 @@ namespace detail
     //  them, the rest chopped and cut where a rank's share ends (cut_partition: every rank gets
     //  work whatever the patch size); each rank's pieces coalesced, chopped, then spilled. A
     //  coarse patch is never given whole to one rank for the fine cells above part of it
-    // per rank its share of `total` more work, levelling loads (water filling): the ranks below
-    //  the level t where sum(max(0, t - load)) = total get t - load, the others none
-    NO_DISCARD inline std::vector<double> water_fill(std::vector<double> const& loads,
-                                                     double const total)
-    {
-        auto sorted = loads;
-        std::sort(sorted.begin(), sorted.end());
-        double level = sorted.empty() ? 0. : sorted.back() + total / sorted.size();
-        double below = 0.; // the sum of the loads under the level found so far
-        for (std::size_t i = 0; i < sorted.size(); ++i)
-        {
-            below += sorted[i];
-            auto const t = (total + below) / static_cast<double>(i + 1);
-            if (i + 1 == sorted.size() or t <= sorted[i + 1])
-            {
-                level = t;
-                break;
-            }
-        }
-        std::vector<double> out(loads.size());
-        for (std::size_t q = 0; q < loads.size(); ++q)
-            out[q] = std::max(0., level - loads[q]);
-        return out;
-    }
-
     template<std::size_t dim>
     std::vector<Level<dim>>
     finest_in_pieces(Hierarchy<dim> const& h, int const from,
@@ -488,22 +459,10 @@ namespace detail
             };
             auto const b     = ln > 0 ? std::max(r, in.block / r * r) : in.block;
             auto const block = mkn::kul::ConstArray<int, dim>(b);
-            std::vector<double> far_capacity; // level 0, far "balance": each rank's share
             auto const fresh = [&](std::vector<Box_t> const& rest) {
                 auto const patches = chop(rest);
-                auto const weights = in.weigh(ln, blocks(patches, block));
-                if (ln == 0 and in.far == "balance" and !far_capacity.empty())
-                {
-                    double far_total = 0.;
-                    for (auto const w : weights)
-                        far_total += w;
-                    far_capacity = water_fill(far_capacity, far_total);
-                    if (std::accumulate(far_capacity.begin(), far_capacity.end(), 0.) <= 0.)
-                        far_capacity = cap;
-                }
-                auto const cut = cut_partition(
-                    patches, block, weights,
-                    ln == 0 and in.far == "balance" and !far_capacity.empty() ? far_capacity : cap);
+                auto const cut
+                    = cut_partition(patches, block, in.weigh(ln, blocks(patches, block)), cap);
                 std::vector<OwnedBox<dim>> owned;
                 for (std::size_t i = 0; i < cut.boxes.size(); ++i)
                     owned.push_back({cut.boxes[i], cut.ranks[i]});
@@ -543,36 +502,6 @@ namespace detail
             }
             std::vector<Patch<dim>> const fixed
                 = k == 0 and below ? *below : std::vector<Patch<dim>>{};
-            // level 0, far "balance": each rank's load before the far part, the finer levels'
-            //  work times their substeps and its near level 0 pieces
-            if (ln == 0 and in.far == "balance" and k + 1 < n)
-            {
-                far_capacity.assign(static_cast<std::size_t>(n_ranks), 0.);
-                double substeps = 1.;
-                for (std::size_t m = k + 1; m < n; ++m)
-                {
-                    substeps *= r;
-                    std::vector<Box_t> bs;
-                    for (auto const& p : out[m].patches)
-                        bs.push_back(p.box);
-                    auto const w = in.weigh(from + static_cast<int>(m), bs);
-                    for (std::size_t i = 0; i < bs.size(); ++i)
-                        far_capacity[static_cast<std::size_t>(out[m].patches[i].rank)]
-                            += substeps * w[i];
-                }
-                std::vector<Box_t> near;
-                std::vector<int> near_rank;
-                for (auto const& box : boxes[k])
-                    for (auto const& a : above)
-                        if (auto const x = box * a.box)
-                        {
-                            near.push_back(*x);
-                            near_rank.push_back(a.rank);
-                        }
-                auto const w = in.weigh(ln, near);
-                for (std::size_t i = 0; i < near.size(); ++i)
-                    far_capacity[static_cast<std::size_t>(near_rank[i])] += w[i];
-            }
             auto const pieces = keep(boxes[k], above, fixed, h.ratio, fresh);
 
             // each rank's pieces coalesced; with spill, balanced on blocks first (the closest

@@ -25,10 +25,11 @@
 //       from this machine's bootstrap (etc/bootstrap/mpi/exchange_*: Node, Socket where
 //       measured), else defaults; bytes_per_cell: what a model exchanges per ghost cell
 //
-//   Detached{near_band, background}: Estimate::detached, the step with level 0's far patches
-//       (beyond near_band cells of level 1, needed only by the end of the coarse step) filling
-//       the waits: max over ranks of its whole step (MPI only: a lower bound), or of the larger of
-//       its far part and the rest (background: beside the rest, on a rank's spare threads)
+//   Detached{near_band}: Estimate::detached, the step with level 0's far patches (beyond
+//       near_band cells of level 1, needed only by the end of the coarse step) as background
+//       work on a rank's spare threads: max over ranks of the larger of its far part and the
+//       rest. Only with threads (per_rank > 1): with one thread a rank, far level 0 stays in
+//       level 0's phase (collectives, dumps need every rank there), Estimate::step
 //   choose(h, from, boxes, candidates, reach, costs[, threads])
 //       each candidate (a Decompose: partition, spill, sizes, ...) decomposes the levels, each
 //       decomposition estimated, the cheapest kept (ties: the first)
@@ -102,13 +103,12 @@ struct Threads
     double efficiency = 1.; // the threads' parallel efficiency (shared bandwidth), > 1 thread
 };
 
-// level 0's detached (far) part: its patches beyond near_band cells of level 1 needed only by
-//  the end of the coarse step, so they fill the waits (MPI only) or run beside the rest
-//  (background, a rank's spare threads); near_band < 0: not modelled
+// level 0's detached (far) part: its patches beyond near_band cells of level 1, needed only by
+//  the end of the coarse step, run beside the rest on a rank's spare threads; near_band < 0:
+//  not modelled
 struct Detached
 {
-    int near_band   = -1;
-    bool background = false;
+    int near_band = -1;
 };
 
 struct LevelEstimate
@@ -123,7 +123,7 @@ struct Estimate
 {
     std::vector<LevelEstimate> levels{};
     double step     = 0; // sum over levels of ratio^level times its time
-    double detached = 0; // Detached: the step with far level 0 filling (a lower bound), else 0
+    double detached = 0; // Detached and threads: far level 0 in the background, else 0
 };
 
 namespace detail
@@ -273,7 +273,7 @@ NO_DISCARD Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int con
         substeps *= h.ratio;
         out.levels.push_back(std::move(e));
     }
-    if (detached.near_band >= 0 and !out.levels.empty())
+    if (detached.near_band >= 0 and threads.per_rank > 1 and !out.levels.empty())
     {
         // per rank its whole step, and level 0's far part of it
         std::vector<double> total(n_ranks, 0.), far(n_ranks, 0.);
@@ -304,8 +304,7 @@ NO_DISCARD Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int con
             }
         }
         for (std::size_t r = 0; r < n_ranks; ++r)
-            out.detached = std::max(
-                out.detached, detached.background ? std::max(total[r] - far[r], far[r]) : total[r]);
+            out.detached = std::max(out.detached, std::max(total[r] - far[r], far[r]));
     }
     return out;
 }

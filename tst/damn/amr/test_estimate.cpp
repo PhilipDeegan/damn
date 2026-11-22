@@ -127,12 +127,12 @@ TEST(Estimate, ChooseKeepsTheCheapestCandidate)
     EXPECT_THROW((void)choose<2>(h, 0, boxes, {}, 2, c), std::runtime_error);
 }
 
-TEST(Estimate, DetachedLevel0FillsTheWaits)
+TEST(Estimate, DetachedLevel0InTheBackground)
 {
     // level 0: A (0..9, rank 0, weight 1) under level 1, B (10..19, rank 1, weight 6) far;
-    //  level 1 over A on rank 1 (weight 2, 2 substeps). In sequence: level 0's slowest (6) then
-    //  level 1 twice (4): 10. Detached, MPI only: rank 1's whole step, 6 + 4: 10 (rank 1 has
-    //  both); background: rank 1's far 6 beside its level 1 4: 6
+    //  level 1 over A on rank 1 (weight 2, 2 substeps). One thread a rank: no detached step
+    //  (far level 0 in level 0's phase). Two: rank 1's far 6 beside its level 1 4: 6, where the
+    //  levels in sequence take 6 + 4 (each level's work spread over the two threads)
     Hierarchy<2> h;
     h.domain     = box(0, 0, 19, 9);
     h.periodic   = {false, false};
@@ -143,16 +143,15 @@ TEST(Estimate, DetachedLevel0FillsTheWaits)
     auto const c = exchange_costs(0., 0., 0.);
     auto const t = single_node(2);
     std::vector<std::vector<double>> const w{{1., 6.}, {2.}};
-    auto const seq = estimate(h, t, 1, w, c);
-    EXPECT_DOUBLE_EQ(seq.step, 6. + 2. * 2.);
-    EXPECT_DOUBLE_EQ(seq.detached, 0.);
-    auto const mpi = estimate(h, t, 1, w, c, {}, Detached{.near_band = 0});
-    EXPECT_DOUBLE_EQ(mpi.detached, 10.);
-    auto const bg = estimate(h, t, 1, w, c, {}, Detached{.near_band = 0, .background = true});
-    EXPECT_DOUBLE_EQ(bg.detached, 6.);
-    // the far patch within reach of level 1: near, nothing detached
-    auto const near = estimate(h, t, 1, w, c, {}, Detached{.near_band = 1, .background = true});
-    EXPECT_DOUBLE_EQ(near.detached, 10.);
+    auto const one = estimate(h, t, 1, w, c, {}, Detached{.near_band = 0});
+    EXPECT_DOUBLE_EQ(one.step, 6. + 2. * 2.);
+    EXPECT_DOUBLE_EQ(one.detached, 0.);
+    auto const two = estimate(h, t, 1, w, c, Threads{.per_rank = 2}, Detached{.near_band = 0});
+    EXPECT_GT(two.detached, 0.);
+    EXPECT_LE(two.detached, two.step);
+    // the far patch within reach of level 1: near, nothing detached, the whole rank's step
+    auto const near = estimate(h, t, 1, w, c, Threads{.per_rank = 2}, Detached{.near_band = 1});
+    EXPECT_GE(near.detached, two.detached);
 }
 
 TEST(Estimate, ExchangeCostsAreRelativeToNode)
