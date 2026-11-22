@@ -1,7 +1,7 @@
 // damn::amr::estimate: one rank exchanges for free and its step is its compute times each
 // level's substeps; two ranks of a node pay the Node distance's latency and cells for the
 // overlap within reach, the same on two nodes Remote's; threads share a rank's tiles;
-// exchange_costs is relative to Node
+// choose keeps the cheapest candidate; exchange_costs is relative to Node
 
 #include "damn/amr/estimate.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 
 #include <cstddef>
+#include <stdexcept>
 #include <vector>
 
 namespace damn::amr
@@ -94,6 +95,36 @@ TEST(Estimate, ThreadsShareARanksTiles)
         estimate(h, t, 1, {{4., 2.}}, c, Threads{.per_rank = 2, .efficiency = 0.5}).step,
         two / 0.5);
     EXPECT_DOUBLE_EQ(estimate(h, t, 1, {{4., 2.}}, c, Threads{.main_busy = 0.5}).step, 12.);
+}
+
+TEST(Estimate, ChooseKeepsTheCheapestCandidate)
+{
+    // 64 x 64 on 4 ranks of 2 nodes, one fine box: whole patches along the curve against cut
+    //  ones, finest; the chosen one is the smallest step, its levels the candidate's own
+    Hierarchy<2> h;
+    h.domain        = box(0, 0, 63, 63);
+    h.periodic      = {true, true};
+    h.max_levels    = 3;
+    h.ratio         = 2;
+    auto t          = single_node(4);
+    t.ranks[2].node = t.ranks[3].node = 1;
+    auto const cells = [](int, std::vector<Box2> const& bs) { return cell_weights(bs); };
+    Decompose<2> whole{t, cells, {64, 64}};
+    whole.cut = false; // one patch on one rank: the worst
+    Decompose<2> cut{t, cells, {16, 16}};
+    Decompose<2> finest{t, cells, {16, 16}, "finest"};
+    std::vector<std::vector<Box2>> const boxes{{h.domain}, {box(32, 32, 95, 95)}};
+    auto const c   = exchange_costs(1e-6, 1e-9, 10.);
+    auto const got = choose(h, 0, boxes, {whole, cut, finest}, 2, c);
+    ASSERT_EQ(got.steps.size(), 3u);
+    EXPECT_NE(got.candidate, 0u);
+    for (auto const s : got.steps)
+        EXPECT_LE(got.steps[got.candidate], s);
+    auto const again = decompose(h, 0, boxes, std::vector{whole, cut, finest}[got.candidate]);
+    ASSERT_EQ(again.size(), got.levels.size());
+    for (std::size_t ln = 0; ln < again.size(); ++ln)
+        EXPECT_EQ(again[ln].patches.size(), got.levels[ln].patches.size());
+    EXPECT_THROW((void)choose<2>(h, 0, boxes, {}, 2, c), std::runtime_error);
 }
 
 TEST(Estimate, ExchangeCostsAreRelativeToNode)

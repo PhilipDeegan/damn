@@ -25,6 +25,10 @@
 //       from this machine's bootstrap (etc/bootstrap/mpi/exchange_*: Node, Socket where
 //       measured), else defaults; bytes_per_cell: what a model exchanges per ghost cell
 //
+//   choose(h, from, boxes, candidates, reach, costs[, threads])
+//       each candidate (a Decompose: partition, spill, sizes, ...) decomposes the levels, each
+//       decomposition estimated, the cheapest kept (ties: the first)
+//
 // An estimate, not a prediction: no overlap of compute and exchange, every exchange of a step
 // folded into bytes_per_cell; good enough to rank decompositions
 
@@ -252,6 +256,54 @@ NO_DISCARD Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int con
         out.step += substeps * e.time;
         substeps *= h.ratio;
         out.levels.push_back(std::move(e));
+    }
+    return out;
+}
+
+template<std::size_t dim>
+struct Choice
+{
+    std::size_t candidate = 0;        // the cheapest candidate's index (ties: the first)
+    std::vector<Level<dim>> levels{}; // its levels from `from`
+    std::vector<double> steps{};      // every candidate's estimated step
+};
+
+// levels from, from + 1, ... decomposed by each candidate (decompose), each estimated (its own
+// weigh on its patches, h's levels under `from` kept), the cheapest kept
+template<std::size_t dim>
+NO_DISCARD Choice<dim> choose(Hierarchy<dim> const& h, int const from,
+                              std::vector<std::vector<core::Box<int, dim>>> const& boxes,
+                              std::vector<Decompose<dim>> const& candidates, int const reach,
+                              ExchangeCosts const& costs, Threads const& threads = {})
+{
+    if (candidates.empty())
+        throw std::runtime_error("damn::amr::choose: no candidates");
+    Choice<dim> out;
+    double best = 0;
+    for (std::size_t c = 0; c < candidates.size(); ++c)
+    {
+        auto levels = decompose(h, from, boxes, candidates[c]);
+        auto with   = h;
+        with.levels.resize(static_cast<std::size_t>(from));
+        for (auto const& l : levels)
+            with.levels.push_back(l);
+        std::vector<std::vector<double>> weights;
+        for (auto const& l : with.levels)
+        {
+            std::vector<core::Box<int, dim>> bs;
+            for (auto const& p : l.patches)
+                bs.push_back(p.box);
+            weights.push_back(candidates[c].weigh(l.number, bs));
+        }
+        auto const step
+            = estimate(with, candidates[c].topology, reach, weights, costs, threads).step;
+        out.steps.push_back(step);
+        if (c == 0 or step < best)
+        {
+            best          = step;
+            out.candidate = c;
+            out.levels    = std::move(levels);
+        }
     }
     return out;
 }
