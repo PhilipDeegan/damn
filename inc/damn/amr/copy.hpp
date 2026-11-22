@@ -164,7 +164,7 @@ namespace detail
     void assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
     // the copy done on the device (device_copy.hpp: GPU builds, every piece's resources on the
-    //  device, Assign or Sum); false: the host path's to do
+    //  device, Assign, Sum or Append); false: the host path's to do
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
     bool on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld)
     {
@@ -173,6 +173,8 @@ namespace detail
             return assign_on_device(plan, access, ld);
         else if constexpr (arrival == Arrival::Sum)
             return sum_on_device(plan, access, ld);
+        else if constexpr (arrival == Arrival::Append)
+            return append_on_device(plan, access, ld);
 #endif
         return false;
     }
@@ -272,7 +274,8 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
     }
     else if constexpr (arrival == Arrival::Append)
     {
-        detail::append_items(plan, access, ld);
+        if (!detail::on_device<arrival>(plan, access, ld))
+            detail::append_items(plan, access, ld);
         detail::appended(plan, access, ld);
     }
     else if (!detail::on_device<arrival>(plan, access, ld))

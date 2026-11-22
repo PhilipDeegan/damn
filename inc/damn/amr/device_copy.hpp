@@ -16,6 +16,14 @@
 //                                       the destination's own value at its place among the
 //                                       pieces' images): the host path's bits
 //
+//   append_on_device(plan, access, ld)  Append (items): per resource pair, every piece handed at
+//                                       once to the resource type's device hooks (found by ADL):
+//                                         can_append_items_on_device(pieces) -> bool
+//                                         append_items_on_device(pieces)
+//                                       pieces: std::vector<AppendPiece<Dst, Src, dim>>, in plan
+//                                       order (a destination's items in the host path's order).
+//                                       Nothing done unless every pair can
+//
 // The pieces' table is built on the plan's first device copy and kept with it (plans live with
 //  their level's neighbours: a new decomposition makes new plans, new tables)
 
@@ -31,7 +39,10 @@
 #include "damn/core/geometry/point.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 #include <type_traits>
@@ -46,6 +57,18 @@ concept DeviceBoxSpan
           { box_span(r, box).ptr };
           { box_span(r, box).box };
       };
+
+// an Append piece for a resource type's device hook: the resources (copies: handles), the
+//  piece's (destination) box and its source's shift, its destination patch (LevelData index)
+template<typename Dst, typename Src, std::size_t dim>
+struct AppendPiece
+{
+    Dst dst;
+    Src src;
+    core::Box<int, dim> box;
+    core::Point<int, dim> shift;
+    std::size_t dst_patch;
+};
 
 namespace detail
 {
@@ -317,6 +340,74 @@ bool sum_on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchDa
                 acc += snapshot[pc.first + detail::flat_in(pc.box, p)];
         d = acc;
     });
+    return true;
+}
+
+// Append on the device: false (nothing done) when a piece is not local, or a pair's resources
+//  have no device hooks or refuse (can_append_items_on_device)
+template<std::size_t dim, typename Access, typename PatchData>
+bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
+{
+    std::vector<std::uint32_t> pairs;
+    for (auto const& piece : plan.pieces)
+    {
+        if (!detail::is_local(piece))
+            return false;
+        if (std::find(pairs.begin(), pairs.end(), piece.pair) == pairs.end())
+            pairs.push_back(piece.pair);
+    }
+    if (pairs.empty())
+        return false; // nothing to do: the host path is as cheap
+
+    std::vector<std::function<void()>> runs;
+    for (auto const pair : pairs)
+    {
+        auto const& first = *std::find_if(plan.pieces.begin(), plan.pieces.end(),
+                                          [&](auto const& p) { return p.pair == pair; });
+        bool ok = false;
+        detail::src_of<dim, true>(access, ld.data[first.src.local], first, [&](auto const& src0) {
+            detail::dst_of<dim, true>(access, ld.data[first.dst], first, [&](auto& dst0) {
+                using S = std::remove_cvref_t<decltype(src0)>;
+                using D = std::remove_cvref_t<decltype(dst0)>;
+                using Pieces_t = std::vector<AppendPiece<D, S, dim>>;
+                if constexpr (requires(Pieces_t const& v) {
+                                  { can_append_items_on_device(v) } -> std::same_as<bool>;
+                                  append_items_on_device(v);
+                              })
+                {
+                    auto pieces = std::make_shared<Pieces_t>();
+                    bool same   = true;
+                    for (auto const& piece : plan.pieces)
+                        if (piece.pair == pair)
+                            detail::src_of<dim, true>(
+                                access, ld.data[piece.src.local], piece, [&](auto const& src) {
+                                    detail::dst_of<dim, true>(
+                                        access, ld.data[piece.dst], piece, [&](auto& dst) {
+                                            if constexpr (std::is_same_v<std::remove_cvref_t<
+                                                                             decltype(src)>,
+                                                                         S>
+                                                          and std::is_same_v<
+                                                              std::remove_cvref_t<decltype(dst)>,
+                                                              D>)
+                                                pieces->push_back({dst, src, piece.box,
+                                                                   piece.src.shift, piece.dst});
+                                            else
+                                                same = false;
+                                        });
+                                });
+                    if (same and can_append_items_on_device(*pieces))
+                    {
+                        runs.emplace_back([pieces]() { append_items_on_device(*pieces); });
+                        ok = true;
+                    }
+                }
+            });
+        });
+        if (!ok)
+            return false;
+    }
+    for (auto const& run : runs)
+        run();
     return true;
 }
 
