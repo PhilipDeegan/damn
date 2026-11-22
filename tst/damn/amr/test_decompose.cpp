@@ -129,8 +129,10 @@ TEST(Decompose, KeepWithTheReplacedLevelKeepsEveryOwner)
         // every cell keeps its owner
         for (auto const& p : after)
             for (auto const& q : before)
-                if (auto const o = p.box * q.box)
+                if (p.box * q.box)
+                {
                     EXPECT_EQ(p.rank, q.rank) << "level " << ln;
+                }
     }
 }
 
@@ -206,8 +208,10 @@ TEST(Decompose, FinestPutsCoarsePatchesWithTheFineAboveThem)
             if (auto const o = core::refine(c.box, 2) * f.box)
                 cells[static_cast<std::size_t>(f.rank)] += static_cast<double>(o->size());
         if (std::accumulate(cells.begin(), cells.end(), 0.) > 0)
+        {
             EXPECT_EQ(c.rank,
                       std::distance(cells.begin(), std::max_element(cells.begin(), cells.end())));
+        }
     }
     EXPECT_THROW((void)decompose_level(h, 0, {h.domain}, in), std::runtime_error);
 }
