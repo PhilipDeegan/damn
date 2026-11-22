@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -95,6 +96,7 @@ struct Plan
     std::vector<Piece<dim>> outgoing{};
     std::vector<std::byte> buffer{}; // local sums/maxes, kept between copies
     std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept as well
+    std::shared_ptr<void> device{}; // device_copy.hpp's pieces table (GPU builds), kept as well
 };
 
 template<std::size_t dim>
