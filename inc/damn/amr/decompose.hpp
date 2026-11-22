@@ -28,7 +28,12 @@
 //   decompose(h, from, boxes, in)
 //       levels from, from + 1, ... from boxes[0], boxes[1], ...; "levels" and "keep" level by
 //       level, each made on the ones before it; and, knowing every level:
-//       "finest"  the finest level partitioned whole along the curve; each coarser one, finer to
+//       "finest"  cut on several ranks (cut true): each level, finest to coarsest, in pieces,
+//                 the cells under the finer level to the owners of the finer patches above,
+//                 else to the fixed coarser level's owners under them (from > 0), the rest cut
+//                 where a rank's share ends; each rank's pieces coalesced and chopped, spilled.
+//                 Whole patches (cut false, one rank):
+//                 the finest level partitioned whole along the curve; each coarser one, finer to
 //                 coarser, a patch to the owner of most of the fine cells above it, the patches
 //                 with none above along the curve among themselves; then spill (spill >= 0).
 //                 A fine patch and the coarse cells under it on one rank: refining and
@@ -373,7 +378,7 @@ namespace detail
                     if (rk[i] < 0)
                         rest.push_back(i);
                 auto const owners = majority(coarsened(subset(patches[0], rest)), below,
-                                             below_ranks, n_ranks, -1);
+                                                      below_ranks, n_ranks, -1);
                 for (std::size_t j = 0; j < rest.size(); ++j)
                     rk[rest[j]] = owners[j];
             };
@@ -416,6 +421,91 @@ namespace detail
     }
 } // namespace detail
 
+namespace detail
+{
+    // "finest" on several ranks, patches cut (in.cut): each level, finest to coarsest, in
+    //  pieces: the cells under the finer level to the owners of the finer patches above them,
+    //  else (the coarsest new level, from > 0) to the owners of the fixed coarser cells under
+    //  them, the rest chopped and cut where a rank's share ends (cut_partition: every rank gets
+    //  work whatever the patch size); each rank's pieces coalesced, chopped, then spilled. A
+    //  coarse patch is never given whole to one rank for the fine cells above part of it
+    template<std::size_t dim>
+    std::vector<Level<dim>>
+    finest_in_pieces(Hierarchy<dim> const& h, int const from,
+                     std::vector<std::vector<core::Box<int, dim>>> const& boxes,
+                     Decompose<dim> const& in)
+    {
+        using Box_t             = core::Box<int, dim>;
+        auto const n            = boxes.size();
+        auto const n_ranks      = static_cast<int>(in.topology.ranks.size());
+        auto const r            = static_cast<int>(h.ratio);
+        auto const cap          = node_share_capacity(in.topology);
+        auto const* const below = from > 0 and static_cast<std::size_t>(from - 1) < h.levels.size()
+                                      ? &h.levels[static_cast<std::size_t>(from - 1)].patches
+                                      : nullptr;
+
+        std::vector<Level<dim>> out(n);
+        for (std::size_t k = n; k-- > 0;)
+        {
+            auto const ln   = from + static_cast<int>(k);
+            auto const chop = [&](std::vector<Box_t> const& bs) {
+                return chop_level<dim>(in, ln, r, bs, nullptr);
+            };
+            auto const b     = ln > 0 ? std::max(r, in.block / r * r) : in.block;
+            auto const block = mkn::kul::ConstArray<int, dim>(b);
+            auto const fresh = [&](std::vector<Box_t> const& rest) {
+                auto const patches = chop(rest);
+                auto const cut
+                    = cut_partition(patches, block, in.weigh(ln, blocks(patches, block)), cap);
+                std::vector<OwnedBox<dim>> owned;
+                for (std::size_t i = 0; i < cut.boxes.size(); ++i)
+                    owned.push_back({cut.boxes[i], cut.ranks[i]});
+                return owned;
+            };
+            // the finer level's patches in this level's cells: the owners of the cells above;
+            //  on a refined level rounded out to whole coarser cells, so every piece is, the
+            //  rounded boxes made disjoint (a cell to the first: keep takes disjoint owners)
+            std::vector<Patch<dim>> above;
+            if (k + 1 < n)
+                for (auto const& p : out[k + 1].patches)
+                {
+                    auto box = core::coarsen(p.box, r);
+                    if (ln > 0)
+                        box = core::refine(core::coarsen(box, r), r);
+                    std::vector<Box_t> parts{box};
+                    for (auto const& a : above)
+                    {
+                        std::vector<Box_t> left;
+                        for (auto const& part : parts)
+                            for (auto const& piece : core::minus_ordered(part, a.box))
+                                left.push_back(piece);
+                        parts = std::move(left);
+                    }
+                    for (auto const& part : parts)
+                        above.push_back({part, p.rank, p.id});
+                }
+            std::vector<Patch<dim>> const fixed
+                = k == 0 and below ? *below : std::vector<Patch<dim>>{};
+            auto const pieces = keep(boxes[k], above, fixed, h.ratio, fresh);
+
+            std::vector<Box_t> patches;
+            std::vector<int> ranks;
+            auto const per_rank = owned_boxes(pieces, n_ranks);
+            for (std::size_t q = 0; q < per_rank.size(); ++q)
+                for (auto const& p : chop(per_rank[q]))
+                {
+                    patches.push_back(p);
+                    ranks.push_back(static_cast<int>(q));
+                }
+            check_whole_coarse(ln, patches, r);
+            if (in.spill >= 0)
+                ranks = amr::spill(patches, ranks, in.weigh(ln, patches), in.topology, in.spill);
+            out[k] = make_level(ln, patches, ranks);
+        }
+        return out;
+    }
+} // namespace detail
+
 template<std::size_t dim>
 NO_DISCARD Level<dim> decompose_level(Hierarchy<dim> const& h, int const ln,
                                       std::vector<core::Box<int, dim>> const& boxes,
@@ -428,7 +518,9 @@ NO_DISCARD Level<dim> decompose_level(Hierarchy<dim> const& h, int const ln,
     if (in.partition == "finest" or in.partition == "aligned")
     {
         if (ln > 0 and static_cast<std::size_t>(ln - 1) < h.levels.size())
-            return detail::decompose_together(h, ln, {boxes}, in).front();
+            return in.partition == "finest" and in.cut and in.topology.ranks.size() > 1
+                       ? detail::finest_in_pieces(h, ln, {boxes}, in).front()
+                       : detail::decompose_together(h, ln, {boxes}, in).front();
         auto as_levels      = in;
         as_levels.partition = "levels";
         return decompose_level(h, ln, boxes, as_levels, finer);
@@ -499,6 +591,7 @@ NO_DISCARD Level<dim> decompose_level(Hierarchy<dim> const& h, int const ln,
 }
 
 
+
 template<std::size_t dim>
 NO_DISCARD std::vector<Level<dim>>
 decompose(Hierarchy<dim> h, int const from,
@@ -507,6 +600,8 @@ decompose(Hierarchy<dim> h, int const from,
     if (static_cast<std::size_t>(from) > h.levels.size())
         throw std::runtime_error("damn::amr::decompose: level " + std::to_string(from)
                                  + " without its coarser level");
+    if (in.partition == "finest" and in.cut and in.topology.ranks.size() > 1)
+        return detail::finest_in_pieces(h, from, boxes, in);
     if (in.partition == "finest" or in.partition == "aligned")
         return detail::decompose_together(h, from, boxes, in);
     std::vector<Level<dim>> out;

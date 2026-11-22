@@ -247,6 +247,72 @@ TEST(Decompose, FinestPutsCoarsePatchesWithTheFineAboveThem)
               decompose_level(h, 0, {h.domain}, as_levels).patches.size());
 }
 
+TEST(Decompose, FinestInPiecesLeavesNoLevelOnOneRank)
+{
+    // the largest patch the domain (one patch a level, chopped): level 0 cut so every rank
+    //  has work, the cells under level 1 with the owner of the fine cells above them
+    auto const h        = hierarchy(box(0, 0, 63, 63));
+    auto const topology = single_node(4);
+    Decompose<2> in{topology, by_cells(), {128, 128}, "finest"};
+    auto const levels = decompose(h, 0, {{h.domain}, {box(16, 16, 79, 79)}}, in);
+    ASSERT_EQ(levels.size(), 2u);
+    for (auto const& level : levels)
+    {
+        auto const load = loads(level, 4);
+        for (auto const l : load)
+            EXPECT_GT(l, 0.) << "level " << level.number;
+    }
+    for (auto const& c : levels[0].patches)
+        for (auto const& f : levels[1].patches)
+            if (core::coarsen(f.box, 2) * c.box)
+            {
+                EXPECT_EQ(c.rank, f.rank) << c.box << " under " << f.box;
+            }
+    // level 0 within a block row of its share (8 x 64 cells of 4096)
+    auto const load0 = loads(levels[0], 4);
+    EXPECT_LT(*std::max_element(load0.begin(), load0.end()), 4096. / 4 + 8 * 64);
+}
+
+TEST(Decompose, FinestKeepsASmallRefinedLevelOnFewRanks)
+{
+    // a refined level of one block (8 x 8 fine cells) on 4 ranks: one patch, not shredded
+    auto const h        = hierarchy(box(0, 0, 63, 63));
+    auto const topology = single_node(4);
+    Decompose<2> in{topology, by_cells(), {128, 128}, "finest"};
+    auto const levels = decompose(h, 0, {{h.domain}, {box(16, 16, 23, 23)}}, in);
+    ASSERT_EQ(levels[1].patches.size(), 1u);
+    for (std::size_t d = 0; d < 2; ++d)
+        EXPECT_EQ(levels[1].patches[0].box.shape()[d] % 2, 0);
+}
+
+TEST(Decompose, FinestInPiecesThreeLevelsInWholeCoarseCells)
+{
+    // level 2 over odd level 1 cells (coarsened: 13..30 is level 1's 6..15, not whole level 0
+    //  cells): level 1's pieces rounded out, every refined patch in whole coarser cells
+    auto const h        = hierarchy(box(0, 0, 31, 31));
+    auto const topology = single_node(3);
+    Decompose<2> in{topology, by_cells(), {16, 16}, "finest"};
+    auto const levels
+        = decompose(h, 0, {{h.domain}, {box(8, 8, 47, 47)}, {box(26, 26, 61, 61)}}, in);
+    ASSERT_EQ(levels.size(), 3u);
+    // every level's cells once (no overlapping pieces)
+    std::array<std::size_t, 3> const cells{32 * 32, 40 * 40, 36 * 36};
+    for (std::size_t ln = 0; ln < 3; ++ln)
+    {
+        std::size_t total = 0;
+        for (auto const& p : levels[ln].patches)
+            total += p.box.size();
+        EXPECT_EQ(total, cells[ln]) << "level " << ln;
+    }
+    for (std::size_t ln = 1; ln < 3; ++ln)
+        for (auto const& p : levels[ln].patches)
+            for (std::size_t d = 0; d < 2; ++d)
+            {
+                EXPECT_EQ(p.box.lower[d] % 2, 0) << "level " << ln << " " << p.box;
+                EXPECT_EQ(p.box.shape()[d] % 2, 0) << "level " << ln << " " << p.box;
+            }
+}
+
 TEST(Decompose, AlignedPutsFinePatchesOnTheCoarseUnderThem)
 {
     auto const h        = hierarchy(box(0, 0, 63, 63));
