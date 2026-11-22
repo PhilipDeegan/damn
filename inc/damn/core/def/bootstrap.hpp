@@ -17,6 +17,10 @@
 //                                    "0", "<area>_<name>_<key>" its values, "settings"; empty
 //                                    without the generated header. For python, as PHARE's
 //                                    build_config
+//   damn::bootstrap::number(key, fallback)
+//                                    a fact as a number (a probe's measurement), fallback
+//                                    without it; number(table, key, fallback) for another
+//                                    project's entries (plamn's)
 
 #if __has_include("damn/core/def/_gen_bootstrap.hpp")
 #include "damn/core/def/_gen_bootstrap.hpp" // IWYU pragma: export
@@ -45,9 +49,11 @@
 #endif
 
 #include <array>
+#include <charconv>
 #include <map>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <iterator>
 
 namespace damn::bootstrap
@@ -62,6 +68,27 @@ inline std::map<std::string, std::string> config()
     for (auto const& [k, v] : entries)
         out.emplace(k, v);
     return out;
+}
+
+// a fact of `table` (a project's entries: damn's, plamn's, ...) as a number, else fallback (no
+// bootstrap, its probe failed, or not a number)
+template<typename Table>
+double number(Table const& table, std::string_view const key, double const fallback)
+{
+    for (auto const& [k, v] : table)
+        if (k == key)
+        {
+            double x             = 0;
+            auto const [end, ec] = std::from_chars(v.data(), v.data() + v.size(), x);
+            return ec == std::errc{} and end == v.data() + v.size() ? x : fallback;
+        }
+    return fallback;
+}
+
+// damn's fact as a number, e.g. number("mpi_exchange_node_s_per_byte", 1e-10)
+inline double number(std::string_view const key, double const fallback)
+{
+    return number(entries, key, fallback);
 }
 } // namespace damn::bootstrap
 
