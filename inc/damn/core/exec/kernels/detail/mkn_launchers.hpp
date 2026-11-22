@@ -13,6 +13,7 @@
 #include "mkn/gpu.hpp"
 #include "mkn/gpu/stream.hpp"
 
+#include <type_traits>
 #include <vector>
 #include <algorithm>
 
@@ -41,6 +42,18 @@ inline std::size_t sm_count()
     return n;
 }
 
+// what a kernel takes (its functor, its arguments) must be plain data, copied as bytes to the
+//  device: no strings, maps, vectors (no dynamic allocation), named fields (basic:: views instead).
+//  Not trivially copyable is a build error
+template<typename... Args>
+void constexpr check_device_args()
+{
+    static_assert((std::is_trivially_copyable_v<std::decay_t<Args>> and ...),
+                  "device kernel argument (or lambda capture) not trivially copyable: capture "
+                  "plain data only (basic:: views, pointers, std::array), no strings / maps / "
+                  "vectors");
+}
+
 // mkn::gpu launches are asynchronous, _sync waits for the stream (or device) after each launch
 //  Mode: mkn::gpu::Guess (grid/block from a problem size) or mkn::gpu::Fixed (caller provided)
 template<typename Mode, bool _sync>
@@ -60,6 +73,7 @@ struct DeviceLauncher : public mkn::gpu::DLauncher<Mode>
     template<typename... Args>
     auto& operator()(Args&&... args)
     {
+        check_device_args<Args...>();
         if (empty())
             return *this;
         Super::operator()(std::forward<Args>(args)...);
@@ -68,12 +82,13 @@ struct DeviceLauncher : public mkn::gpu::DLauncher<Mode>
         return *this;
     }
 
-    template<typename... Args>
-    auto& stream(Args&&... args)
+    template<typename Stream, typename... Args>
+    auto& stream(Stream& s, Args&&... args)
     {
+        check_device_args<Args...>(); // the stream itself stays on the host
         if (empty())
             return *this;
-        Super::stream(std::forward<Args>(args)...);
+        Super::stream(s, std::forward<Args>(args)...);
         if constexpr (_sync)
             this->sync();
         return *this;
