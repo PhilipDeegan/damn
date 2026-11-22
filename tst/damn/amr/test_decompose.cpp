@@ -144,14 +144,41 @@ TEST(Decompose, UnknownPartitionThrows)
     EXPECT_THROW((void)decompose_level(h, 0, {h.domain}, in), std::runtime_error);
 }
 
+TEST(Decompose, FinestRegridOfAFinerLevelFollowsTheFixedLevelUnderIt)
+{
+    // level 0 fixed (made by "levels" on 4 ranks); level 1 regridded alone, by decompose from 1
+    //  and by decompose_level: every new patch with the owner of most coarse cells under it
+    auto h              = hierarchy(box(0, 0, 63, 63));
+    auto const topology = single_node(4);
+    Decompose<2> levels{topology, by_cells(), {8, 8}};
+    set_level(h, decompose_level(h, 0, {h.domain}, levels));
+    Decompose<2> finest{topology, by_cells(), {8, 8}, "finest"};
+    auto const fine = box(20, 20, 99, 99);
+    for (auto const& level :
+         {decompose(h, 1, {{fine}}, finest).front(), decompose_level(h, 1, {fine}, finest)})
+    {
+        ASSERT_FALSE(level.patches.empty());
+        for (auto const& f : level.patches)
+        {
+            std::vector<double> cells(4, 0.);
+            for (auto const& c : h.levels[0].patches)
+                if (auto const o = core::coarsen(f.box, 2) * c.box)
+                    cells[static_cast<std::size_t>(c.rank)] += static_cast<double>(o->size());
+            EXPECT_EQ(f.rank,
+                      std::distance(cells.begin(), std::max_element(cells.begin(), cells.end())));
+        }
+    }
+}
+
 TEST(Decompose, MinusIsDisjointAndOrdered)
 {
-    auto const pieces = detail::minus(box(0, 0, 9, 9), box(3, 4, 5, 6));
+    auto const pieces = core::minus_ordered(box(0, 0, 9, 9), box(3, 4, 5, 6));
     // x below, x above, then y below, y above narrowed to x 3..5
     std::vector<Box2> const expected{box(0, 0, 2, 9), box(6, 0, 9, 9), box(3, 0, 5, 3),
                                      box(3, 7, 5, 9)};
     EXPECT_EQ(pieces, expected);
-    EXPECT_EQ(detail::minus(box(0, 0, 1, 1), box(5, 5, 6, 6)), std::vector<Box2>{box(0, 0, 1, 1)});
+    EXPECT_EQ(core::minus_ordered(box(0, 0, 1, 1), box(5, 5, 6, 6)),
+              std::vector<Box2>{box(0, 0, 1, 1)});
 }
 
 TEST(Decompose, SplitUnderCoversTheBoxesOnce)
@@ -213,7 +240,11 @@ TEST(Decompose, FinestPutsCoarsePatchesWithTheFineAboveThem)
                       std::distance(cells.begin(), std::max_element(cells.begin(), cells.end())));
         }
     }
-    EXPECT_THROW((void)decompose_level(h, 0, {h.domain}, in), std::runtime_error);
+    // a level alone: level 0 as "levels"
+    auto as_levels      = in;
+    as_levels.partition = "levels";
+    EXPECT_EQ(decompose_level(h, 0, {h.domain}, in).patches.size(),
+              decompose_level(h, 0, {h.domain}, as_levels).patches.size());
 }
 
 TEST(Decompose, AlignedPutsFinePatchesOnTheCoarseUnderThem)
