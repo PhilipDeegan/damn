@@ -348,13 +348,19 @@ void reserve(V& v, std::size_t const s, bool const copy = true)
         v.reserve(s);
 }
 
-// size of v to s, growing as reserve above
+// size of v to s, growing as reserve above. mkn.gpu's vectors grow to exactly s (a managed
+//  allocation, ~1 ms, each time an array grows a little: appends, a sort's scratch): past the
+//  capacity, half as much again is allocated, the size then set within it (not constructed)
 template<typename V>
 void resize(V& v, std::size_t const s, bool const copy = true)
 {
     if constexpr (is_mkn_gpu_vector_v<V>)
     {
-        DAMN_WITH_MKN_GPU(mkn::gpu::resize(v, s, copy));
+        DAMN_WITH_MKN_GPU({
+            if (s > v.capacity())
+                mkn::gpu::resize(v, s + s / 2, copy);
+            mkn::gpu::resize(v, s, copy);
+        });
     }
     else
         v.resize(s);
