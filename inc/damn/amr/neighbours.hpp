@@ -83,11 +83,21 @@ struct Piece
     std::uint32_t pair = 0; // its resources' index in the copy's pairs (and accessors)
 };
 
+// the pieces of one destination patch and resource pair, summed together (copy.hpp's fold_sums)
+template<std::size_t dim>
+struct FoldGroup
+{
+    std::size_t begin = 0, end = 0;             // its pieces' indices: Plan::fold_order[begin, end)
+    std::vector<core::Box<int, dim>> covered{}; // the points they cover, as disjoint boxes
+    std::size_t points = 0;                     // in covered
+};
+
 // what goes where for a region and set of resources, from one rank's point of view
 //   pieces:   into my patches, from mine or another rank's
 //   outgoing: from my patches into another rank's
 // both ranks of a transfer make the same pieces in the same order, from the same global patch
-// list: messages need no description of their content
+// list: messages need no description of their content. What follows from the pieces alone is
+// made with the plan (copy.hpp's plan_for), so a copy only moves values
 template<std::size_t dim>
 struct Plan
 {
@@ -97,6 +107,14 @@ struct Plan
     std::vector<std::byte> buffer{}; // local sums/maxes, kept between copies
     std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept as well
     std::shared_ptr<void> device{}; // device_copy.hpp's pieces table (GPU builds), kept as well
+
+    // per other rank sending me pieces (rank order): their indices in pieces, in plan order
+    std::vector<std::pair<int, std::vector<std::size_t>>> from{};
+    // Borders: pieces by destination and resource pair, then their source's image in the
+    //  destination's space (fold_sums' order), and the groups of one destination and pair
+    std::vector<std::size_t> fold_order{};
+    std::vector<FoldGroup<dim>> fold_groups{};
+    std::vector<std::byte const*> sources{}; // per piece, its values for fold_sums (per copy)
 };
 
 template<std::size_t dim>
