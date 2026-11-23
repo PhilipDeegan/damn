@@ -530,10 +530,13 @@ template<std::size_t dim, bool particles, typename CoarseLD, typename FineLD, ty
 void detail::with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name,
                                Fn&& fn)
 {
+    // a rank without patches of one level still plans the other's sends: that level's
+    //  resources from its prototype (two patch data types: the names differ)
     auto const try_in = [&](auto& ld) {
-        if (ld.data.empty())
+        auto* const any = any_patch_data(ld);
+        if (!any)
             return false;
-        return with_resource(ld.data[0], name, [&](auto const& r) {
+        return with_resource(*any, name, [&](auto const& r) {
             using R = std::decay_t<decltype(r)>;
             if constexpr (particles)
             {
@@ -663,10 +666,10 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
         bool const particles = [&] {
             bool is          = false;
             auto const probe = [&](auto& ld) {
-                return !ld.data.empty()
-                       and with_resource(ld.data[0], pair.fine, [&](auto const& r) {
-                               is = ParticleData<std::decay_t<decltype(r)>, dim>;
-                           });
+                auto* const any = any_patch_data(ld);
+                return any and with_resource(*any, pair.fine, [&](auto const& r) {
+                           is = ParticleData<std::decay_t<decltype(r)>, dim>;
+                       });
             };
             if (!probe(fine_ld) and !probe(coarse_ld))
                 throw std::runtime_error("damn::amr::inter_level: no resource " + pair.fine);

@@ -19,9 +19,9 @@ mkn build test -p test_damn_core -dKO -t "$J" "${W[@]}" -x res/mkn/thrust
 
 tests() { find "bin/$1/test" -type f -perm -u+x -name "*.cpp" | sort; }
 
-step "MPI tests: 1 (mkn's run), 2 and 3 ranks"
+step "MPI tests: 1 (mkn's run), 2, 3 and 8 ranks (as CI: 8 leaves ranks without a patch)"
 mkn build test -p test_damn_mpi -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
-for n in 2 3; do
+for n in 2 3 8; do
   for t in $(tests test_damn_mpi); do $MPI -n $n "$t" --gtest_brief=1; done
 done
 

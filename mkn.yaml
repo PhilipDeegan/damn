@@ -1,6 +1,12 @@
 #! clean build test -p test_damn_core -dKO -t 8 -x res/mkn/thrust
 
 name: damn
+property:
+  # dependency versions: master (HEAD), not the default branch's rolling release (mkn.kul's: latest)
+  mkn.kul.version: master
+  mkn.gpu.version: master
+  clang.tidy.version: master
+  cpp.iwyu.version: master
 
 profile:
 
@@ -16,7 +22,7 @@ profile:
   sub: bto&tpp/bto(https://github.com/bshoshany/thread-pool)
        phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
        cccl#v3.5.0&tpp/cccl(https://github.com/NVIDIA/cccl)
-  dep: mkn.kul mkn.gpu
+  dep: mkn.kul#${mkn.kul.version} mkn.gpu#${mkn.gpu.version}
   # nothing reads errno: sqrt, pow ... stay inline, their loops vectorise (results unchanged)
   arg: -std=c++20 -fno-math-errno
 
@@ -100,6 +106,7 @@ profile:
   parent: test_damn_core
   mod:
   - name: clang.tidy
+    version: ${clang.tidy.version}
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
@@ -107,6 +114,7 @@ profile:
   mode: none
   mod:
   - name: cpp.iwyu
+    version: ${cpp.iwyu.version}
     compile:
       paths: inc
       headers: -x c++-header
@@ -121,6 +129,7 @@ profile:
   mode: none
   mod:
   - name: cpp.iwyu
+    version: ${cpp.iwyu.version}
     compile:
       paths: inc
       # fragments of damn/core/exec/kernels.hpp, not standalone headers
