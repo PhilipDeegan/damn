@@ -3,28 +3,18 @@
 
 #include "damn/core/def/damn_config.hpp" // IWYU pragma: keep
 
+#include "mkn/kul/lang/cpp/compiler/def/inline.hpp" // IWYU pragma: export
+
 #include <cassert>
 #include <type_traits>
 
 #define NO_DISCARD [[nodiscard]]
 
-// inline regardless of the compiler's heuristics, for small hot kernels whose inlining
-//  otherwise flips with unrelated changes elsewhere in the translation unit
-//  DAMN_LAMBDA_ALWAYS_INLINE goes after a lambda's parameter list
-#if defined(__GNUC__) || defined(__clang__)
-#define DAMN_LAMBDA_ALWAYS_INLINE __attribute__((always_inline))
-#define DAMN_ALWAYS_INLINE __attribute__((always_inline)) inline
-// a call always inlined (clang, device code included): an out of line device call taking the
-//  address of a kernel's capture copies the whole closure into each thread's local memory
-#if defined(__clang__)
-#define DAMN_INLINE_CALL [[clang::always_inline]]
-#else
-#define DAMN_INLINE_CALL
-#endif
-#else
-#define DAMN_LAMBDA_ALWAYS_INLINE
-#define DAMN_ALWAYS_INLINE inline
-#endif
+// inline regardless of the compiler's heuristics: mkn.kul's MKN_KUL_ALWAYS_INLINE (a function),
+//  MKN_KUL_LAMBDA_ALWAYS_INLINE (after a lambda's parameter list), MKN_KUL_INLINE_CALL (a call).
+//  The DAMN_ names are aliases until their users move to kul's
+#define DAMN_LAMBDA_ALWAYS_INLINE MKN_KUL_LAMBDA_ALWAYS_INLINE
+#define DAMN_ALWAYS_INLINE MKN_KUL_ALWAYS_INLINE
 
 #if !defined(NDEBUG) || defined(DAMN_FORCE_DEBUG_DO)
 #define DAMN_DEBUG_DO(...) __VA_ARGS__

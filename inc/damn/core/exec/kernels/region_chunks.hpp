@@ -77,7 +77,7 @@ void run_region_chunks([[maybe_unused]] Items& items, [[maybe_unused]] Fn const 
         auto& item       = ip[chunk.item];
         auto const& box  = item.boxes[chunk.comp];
         Launcher::for_each_index(chunk.count, [&](auto const i) {
-            DAMN_INLINE_CALL fn(item, chunk.comp, point_at(box, chunk.start + i));
+            MKN_KUL_INLINE_CALL fn(item, chunk.comp, point_at(box, chunk.start + i));
         });
     });
 #else

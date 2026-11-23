@@ -38,6 +38,7 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <algorithm>
 #include <cstddef>
