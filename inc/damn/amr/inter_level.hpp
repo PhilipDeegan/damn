@@ -30,6 +30,12 @@
 //       domain points under the fine patch's domain (fine ghosts are expected filled)
 //     then they are assigned to the coarse patch
 //
+// access: how the transfers reach a pair's resources on a patch's data, as damn::amr::copy's
+//  (copy.hpp): by_name (the default), or the caller's accessors, one per pair in the pairs'
+//  order, access[i].coarse(data), .coarse_new(data) (pairs interpolated in time) and
+//  .fine(data) returning the typed resources (a reference, or a handle holding a pointer).
+//  Plans are still made from the names
+//
 // an operator handles the resource kinds it has a call for: one asked to move a resource it
 // has none for throws. Sources are never modified. Pieces of other ranks are
 // damn/mpi/inter_level.hpp's: the functions here throw for them. What goes where is planned on
@@ -55,6 +61,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -94,6 +101,16 @@ struct BoxValues
 
 namespace detail
 {
+    // a pair's side: the coarse resource, the coarse one at the step's end, the fine one
+    enum class Side : std::uint8_t { coarse, coarse_new, fine };
+
+    // fn(pair i's resource of side on data), as access reaches it: false if none (by name)
+    template<Side side, typename Data, typename Fn>
+    bool with_side(ByName, Data& data, LevelPair const& pair, std::size_t i, Fn&& fn);
+    template<Side side, typename Access, typename Data, typename Fn>
+        requires(!std::is_same_v<Access, ByName>)
+    bool with_side(Access const& access, Data& data, LevelPair const& pair, std::size_t i, Fn&& fn);
+
     // fn(resource) for the first patch data of either level holding name, of the kind wanted
     template<std::size_t dim, bool particles, typename CoarseLD, typename FineLD, typename Fn>
     void with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name, Fn&& fn);
@@ -159,70 +176,76 @@ LevelPlan<dim>& level_plan_for(LevelRegion const region, int const stencil, Leve
 
 // refine: a piece's coarse data from its (local) coarse patch, appended to out: values in the
 // box's point order, or the number of items then the items
-template<std::size_t dim, typename CoarseLD>
+template<std::size_t dim, typename Access, typename CoarseLD>
 void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
-                       CoarseLD& coarse_ld, double const alpha, std::vector<std::byte>& out)
+                       Access const& access, CoarseLD& coarse_ld, double const alpha,
+                       std::vector<std::byte>& out)
 {
-    auto const& pair  = plan.pairs[plan.targets[piece.target].pair];
+    using detail::Side;
+    auto const pi     = plan.targets[piece.target].pair;
+    auto const& pair  = plan.pairs[pi];
     auto& coarse_data = coarse_ld.data[piece.coarse.local];
     auto const& cbox  = piece.coarse.patch.box;
     auto const shift  = piece.coarse.shift;
 
-    bool found = with_resource(coarse_data, pair.coarse, [&](auto const& src) {
-        using R = std::decay_t<decltype(src)>;
-        if constexpr (ParticleData<R, dim>)
-            particle_items::pack(src, piece.box, shift, out);
-        else if constexpr (BoxData<R, dim>)
-        {
-            using T = box_data_value_t<R, dim>;
-            out.reserve(out.size() + piece.bytes);
-            if (pair.coarse_new.empty() or alpha == 0)
-            {
-                core::for_each_point(piece.box, [&](auto const& p) {
-                    detail::write(out, T{value(src, cbox, p - shift)});
-                });
-                return;
-            }
-            // at alpha 1 coarse_new only: coarse may not be set yet (0 * NaN is NaN)
-            bool const found_new = with_resource(coarse_data, pair.coarse_new, [&](auto& nsrc) {
-                if constexpr (std::is_same_v<std::decay_t<decltype(nsrc)>, R>)
-                {
-                    if (alpha == 1)
-                        core::for_each_point(piece.box, [&](auto const& p) {
-                            detail::write(out, T{value(nsrc, cbox, p - shift)});
-                        });
-                    else
-                        core::for_each_point(piece.box, [&](auto const& p) {
-                            detail::write(out, T((1 - alpha) * value(src, cbox, p - shift)
-                                                 + alpha * value(nsrc, cbox, p - shift)));
-                        });
-                }
-                else
-                    throw std::runtime_error("damn::amr::refine: " + pair.coarse_new + " is not of "
-                                             + pair.coarse + "'s kind");
-            });
-            if (!found_new)
-                throw std::runtime_error("damn::amr::refine: no resource " + pair.coarse_new);
-        }
-        else
-            throw std::runtime_error("damn::amr::refine: " + pair.coarse
-                                     + " is neither BoxData nor ParticleData");
-    });
+    bool found
+        = detail::with_side<Side::coarse>(access, coarse_data, pair, pi, [&](auto const& src) {
+              using R = std::decay_t<decltype(src)>;
+              if constexpr (ParticleData<R, dim>)
+                  particle_items::pack(src, piece.box, shift, out);
+              else if constexpr (BoxData<R, dim>)
+              {
+                  using T = box_data_value_t<R, dim>;
+                  out.reserve(out.size() + piece.bytes);
+                  if (pair.coarse_new.empty() or alpha == 0)
+                  {
+                      core::for_each_point(piece.box, [&](auto const& p) {
+                          detail::write(out, T{value(src, cbox, p - shift)});
+                      });
+                      return;
+                  }
+                  // at alpha 1 coarse_new only: coarse may not be set yet (0 * NaN is NaN)
+                  bool const found_new = detail::with_side<Side::coarse_new>(
+                      access, coarse_data, pair, pi, [&](auto& nsrc) {
+                          if constexpr (std::is_same_v<std::decay_t<decltype(nsrc)>, R>)
+                          {
+                              if (alpha == 1)
+                                  core::for_each_point(piece.box, [&](auto const& p) {
+                                      detail::write(out, T{value(nsrc, cbox, p - shift)});
+                                  });
+                              else
+                                  core::for_each_point(piece.box, [&](auto const& p) {
+                                      detail::write(out, T((1 - alpha) * value(src, cbox, p - shift)
+                                                           + alpha * value(nsrc, cbox, p - shift)));
+                                  });
+                          }
+                          else
+                              throw std::runtime_error("damn::amr::refine: " + pair.coarse_new
+                                                       + " is not of " + pair.coarse + "'s kind");
+                      });
+                  if (!found_new)
+                      throw std::runtime_error("damn::amr::refine: no resource " + pair.coarse_new);
+              }
+              else
+                  throw std::runtime_error("damn::amr::refine: " + pair.coarse
+                                           + " is neither BoxData nor ParticleData");
+          });
     if (!found)
         throw std::runtime_error("damn::amr::refine: no resource " + pair.coarse);
 }
 
 // refine: a piece's coarse data, packed by pack_coarse_piece, into its (local) fine target:
 // field values into the plan's scratch, items to op; at moves past it
-template<std::size_t dim, typename FineLD>
-void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, FineLD& fine_ld,
-                         auto& op, std::byte const*& at)
+template<std::size_t dim, typename Access, typename FineLD>
+void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Access const& access,
+                         FineLD& fine_ld, auto& op, std::byte const*& at)
 {
     auto const& target = plan.targets[piece.target];
     auto const& pair   = plan.pairs[target.pair];
     auto& fine_data    = fine_ld.data[target.fine_local];
 
-    bool found = with_resource(fine_data, pair.fine, [&](auto& dst) {
+    bool found = detail::with_side<
+        detail::Side::fine>(access, fine_data, pair, target.pair, [&](auto& dst) {
         using R = std::decay_t<decltype(dst)>;
         if constexpr (ParticleData<R, dim>)
         {
@@ -254,15 +277,16 @@ void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Fin
 
 // refine: local field targets' coarse values NaN (or value initialized), so fine points
 // without coarse data under them (past a non periodic edge) are never stale
-template<std::size_t dim, typename FineLD>
-void clear_scratch(LevelPlan<dim>& plan, FineLD& fine_ld)
+template<std::size_t dim, typename Access, typename FineLD>
+void clear_scratch(LevelPlan<dim>& plan, Access const& access, FineLD& fine_ld)
 {
     for (auto const& target : plan.targets)
     {
         if (target.fine_local == not_local)
             continue;
-        with_resource(
-            fine_ld.data[target.fine_local], plan.pairs[target.pair].fine, [&](auto& dst) {
+        detail::with_side<detail::Side::fine>(
+            access, fine_ld.data[target.fine_local], plan.pairs[target.pair], target.pair,
+            [&](auto& dst) {
                 using R = std::decay_t<decltype(dst)>;
                 if constexpr (BoxData<R, dim>)
                 {
@@ -279,86 +303,92 @@ void clear_scratch(LevelPlan<dim>& plan, FineLD& fine_ld)
 }
 
 // refine: the fine points of every local field target from its gathered coarse values
-template<std::size_t dim, typename FineLD>
-void refine_fields(LevelPlan<dim>& plan, FineLD& fine_ld, auto& op)
+template<std::size_t dim, typename Access, typename FineLD>
+void refine_fields(LevelPlan<dim>& plan, Access const& access, FineLD& fine_ld, auto& op)
 {
     for (auto const& target : plan.targets)
     {
         if (target.fine_local == not_local)
             continue;
         auto const& pair = plan.pairs[target.pair];
-        with_resource(fine_ld.data[target.fine_local], pair.fine, [&](auto& dst) {
-            using R = std::decay_t<decltype(dst)>;
-            if constexpr (BoxData<R, dim>)
-            {
-                using T = box_data_value_t<R, dim>;
-                BoxValues<T const, dim> coarse{
-                    target.coarse_box,
-                    reinterpret_cast<T const*>(
-                        reinterpret_cast<std::byte const*>(plan.scratch.data()) + target.offset)};
-                if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
-                                             core::Box<int, dim> const&, decltype(coarse) const&>)
-                    op(dst, target.fine.box, target.box, coarse);
-                else
-                    throw std::runtime_error("damn::amr::refine: the operator does not refine "
-                                             + pair.fine);
-            }
-        });
+        detail::with_side<detail::Side::fine>(
+            access, fine_ld.data[target.fine_local], pair, target.pair, [&](auto& dst) {
+                using R = std::decay_t<decltype(dst)>;
+                if constexpr (BoxData<R, dim>)
+                {
+                    using T = box_data_value_t<R, dim>;
+                    BoxValues<T const, dim> coarse{
+                        target.coarse_box,
+                        reinterpret_cast<T const*>(
+                            reinterpret_cast<std::byte const*>(plan.scratch.data())
+                            + target.offset)};
+                    if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
+                                                 core::Box<int, dim> const&,
+                                                 decltype(coarse) const&>)
+                        op(dst, target.fine.box, target.box, coarse);
+                    else
+                        throw std::runtime_error("damn::amr::refine: the operator does not refine "
+                                                 + pair.fine);
+                }
+            });
     }
 }
 
 // coarsen: a target's coarse values computed by op from its (local) fine patch, appended to out
-template<std::size_t dim, typename FineLD>
-void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target, FineLD& fine_ld,
-                    auto& op, std::vector<std::byte>& out)
+template<std::size_t dim, typename Access, typename FineLD>
+void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
+                    Access const& access, FineLD& fine_ld, auto& op, std::vector<std::byte>& out)
 {
     auto const& pair = plan.pairs[target.pair];
-    bool found = with_resource(fine_ld.data[target.fine_local], pair.fine, [&](auto const& src) {
-        using R = std::decay_t<decltype(src)>;
-        if constexpr (BoxData<R, dim>)
-        {
-            using T       = box_data_value_t<R, dim>;
-            auto const at = out.size();
-            out.resize(at + target.coarse_box.size() * sizeof(T));
-            std::vector<T> values(target.coarse_box.size());
-            if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
-                                         BoxValues<T, dim> const&>)
-                op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
+    bool found       = detail::with_side<detail::Side::fine>(
+        access, fine_ld.data[target.fine_local], pair, target.pair, [&](auto const& src) {
+            using R = std::decay_t<decltype(src)>;
+            if constexpr (BoxData<R, dim>)
+            {
+                using T       = box_data_value_t<R, dim>;
+                auto const at = out.size();
+                out.resize(at + target.coarse_box.size() * sizeof(T));
+                std::vector<T> values(target.coarse_box.size());
+                if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
+                                             BoxValues<T, dim> const&>)
+                    op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
+                else
+                    throw std::runtime_error("damn::amr::coarsen: the operator does not coarsen "
+                                             + pair.fine);
+                // in the box's point order
+                BoxValues<T const, dim> const computed{target.coarse_box, values.data()};
+                auto* to = out.data() + at;
+                core::for_each_point(target.coarse_box, [&](auto const& p) {
+                    std::memcpy(to, &computed(p), sizeof(T));
+                    to += sizeof(T);
+                });
+            }
             else
-                throw std::runtime_error("damn::amr::coarsen: the operator does not coarsen "
-                                         + pair.fine);
-            // in the box's point order
-            BoxValues<T const, dim> const computed{target.coarse_box, values.data()};
-            auto* to = out.data() + at;
-            core::for_each_point(target.coarse_box, [&](auto const& p) {
-                std::memcpy(to, &computed(p), sizeof(T));
-                to += sizeof(T);
-            });
-        }
-        else
-            throw std::runtime_error("damn::amr::coarsen: " + pair.fine + " is not BoxData");
-    });
+                throw std::runtime_error("damn::amr::coarsen: " + pair.fine + " is not BoxData");
+        });
     if (!found)
         throw std::runtime_error("damn::amr::coarsen: no resource " + pair.fine);
 }
 
 // coarsen: a piece's coarse values, packed by pack_coarsened, into its (local) coarse patch
-template<std::size_t dim, typename CoarseLD>
-void unpack_coarsened(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece, CoarseLD& coarse_ld,
-                      std::byte const*& at)
+template<std::size_t dim, typename Access, typename CoarseLD>
+void unpack_coarsened(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
+                      Access const& access, CoarseLD& coarse_ld, std::byte const*& at)
 {
-    auto const& pair = plan.pairs[plan.targets[piece.target].pair];
+    auto const pi    = plan.targets[piece.target].pair;
+    auto const& pair = plan.pairs[pi];
     auto const& cbox = piece.coarse.patch.box;
-    bool found = with_resource(coarse_ld.data[piece.coarse.local], pair.coarse, [&](auto& dst) {
-        using R = std::decay_t<decltype(dst)>;
-        if constexpr (BoxData<R, dim>)
-        {
-            using T = box_data_value_t<R, dim>;
-            core::for_each_point(piece.box, [&](auto const& p) {
-                value(dst, cbox, p - piece.coarse.shift) = detail::read<T>(at);
-            });
-        }
-    });
+    bool found       = detail::with_side<detail::Side::coarse>(
+        access, coarse_ld.data[piece.coarse.local], pair, pi, [&](auto& dst) {
+            using R = std::decay_t<decltype(dst)>;
+            if constexpr (BoxData<R, dim>)
+            {
+                using T = box_data_value_t<R, dim>;
+                core::for_each_point(piece.box, [&](auto const& p) {
+                    value(dst, cbox, p - piece.coarse.shift) = detail::read<T>(at);
+                });
+            }
+        });
     if (!found)
         throw std::runtime_error("damn::amr::coarsen: no resource " + pair.coarse);
 }
@@ -366,34 +396,55 @@ void unpack_coarsened(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece, 
 
 // ---------------------------------------------------------------- one rank
 
-template<std::size_t dim, typename CoarseLD, typename FineLD>
+// level data: a LevelData (what an access argument is not)
+template<typename T>
+concept LevelDataLike = requires(T& t) {
+    t.data;
+    t.patches;
+    t.level;
+};
+
+template<std::size_t dim, typename Access, typename CoarseLD, typename FineLD>
+    requires LevelDataLike<FineLD>
 void refine(auto op, LevelRegion const region, LevelMap<dim>& map,
-            std::vector<LevelPair> const& pairs, CoarseLD& coarse_ld, FineLD& fine_ld,
-            double const alpha = 0)
+            std::vector<LevelPair> const& pairs, Access const& access, CoarseLD& coarse_ld,
+            FineLD& fine_ld, double const alpha = 0)
 {
     DAMN_LOG_SCOPE(2, "damn::amr::refine");
     if (region == LevelRegion::Coarsened)
         throw std::runtime_error("damn::amr::refine: not a refine region");
+    check_access(access, pairs.size());
     auto& plan = level_plan_for(region, op.stencil, map, pairs, coarse_ld, fine_ld);
     detail::check_local(plan);
-    clear_scratch(plan, fine_ld);
+    clear_scratch(plan, access, fine_ld);
 
     std::vector<std::byte> bytes;
     for (auto const& piece : plan.pieces)
     {
         bytes.clear();
-        pack_coarse_piece(plan, piece, coarse_ld, alpha, bytes);
+        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, bytes);
         std::byte const* at = bytes.data();
-        unpack_coarse_piece(plan, piece, fine_ld, op, at);
+        unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     }
-    refine_fields(plan, fine_ld, op);
+    refine_fields(plan, access, fine_ld, op);
 }
 
-template<std::size_t dim, typename FineLD, typename CoarseLD>
-void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, FineLD& fine_ld,
-             CoarseLD& coarse_ld)
+template<std::size_t dim, typename CoarseLD, typename FineLD>
+    requires LevelDataLike<FineLD>
+void refine(auto op, LevelRegion const region, LevelMap<dim>& map,
+            std::vector<LevelPair> const& pairs, CoarseLD& coarse_ld, FineLD& fine_ld,
+            double const alpha = 0)
+{
+    refine(op, region, map, pairs, by_name, coarse_ld, fine_ld, alpha);
+}
+
+template<std::size_t dim, typename Access, typename FineLD, typename CoarseLD>
+    requires LevelDataLike<CoarseLD>
+void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, Access const& access,
+             FineLD& fine_ld, CoarseLD& coarse_ld)
 {
     DAMN_LOG_SCOPE(2, "damn::amr::coarsen");
+    check_access(access, pairs.size());
     auto& plan = level_plan_for(LevelRegion::Coarsened, 0, map, pairs, coarse_ld, fine_ld);
     detail::check_local(plan);
 
@@ -401,23 +452,91 @@ void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, F
     for (auto const& piece : plan.pieces) // one per target
     {
         bytes.clear();
-        pack_coarsened(plan, plan.targets[piece.target], fine_ld, op, bytes);
+        pack_coarsened(plan, plan.targets[piece.target], access, fine_ld, op, bytes);
         std::byte const* at = bytes.data();
-        unpack_coarsened(plan, piece, coarse_ld, at);
+        unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
+}
+
+template<std::size_t dim, typename FineLD, typename CoarseLD>
+    requires LevelDataLike<CoarseLD>
+void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, FineLD& fine_ld,
+             CoarseLD& coarse_ld)
+{
+    coarsen(op, map, pairs, by_name, fine_ld, coarse_ld);
 }
 
 
 // ---------------------------------------------------------------- detail
 
+namespace detail
+{
+    template<Side side>
+    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+        requires(side == Side::coarse)
+    {
+        return pair.coarse;
+    }
+    template<Side side>
+    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+        requires(side == Side::coarse_new)
+    {
+        return pair.coarse_new;
+    }
+    template<Side side>
+    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+        requires(side == Side::fine)
+    {
+        return pair.fine;
+    }
+
+    template<Side side>
+    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+        requires(side == Side::coarse)
+    {
+        return accessor.coarse(data);
+    }
+    template<Side side>
+    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+        requires(side == Side::coarse_new)
+    {
+        return accessor.coarse_new(data);
+    }
+    template<Side side>
+    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+        requires(side == Side::fine)
+    {
+        return accessor.fine(data);
+    }
+} // namespace detail
+
+template<detail::Side side, typename Data, typename Fn>
+bool detail::with_side(ByName, Data& data, LevelPair const& pair, std::size_t, Fn&& fn)
+{
+    return with_resource(data, side_name<side>(pair), fn);
+}
+
+template<detail::Side side, typename Access, typename Data, typename Fn>
+    requires(!std::is_same_v<Access, ByName>)
+bool detail::with_side(Access const& access, Data& data, LevelPair const&, std::size_t const i,
+                       Fn&& fn)
+{
+    decltype(auto) resource = side_of<side>(access[i], data); // a reference or a handle
+    fn(resource);
+    return true;
+}
+
 template<std::size_t dim, bool particles, typename CoarseLD, typename FineLD, typename Fn>
 void detail::with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name,
                                Fn&& fn)
 {
+    // a rank without patches of one level still plans the other's sends: that level's
+    //  resources from its prototype (two patch data types: the names differ)
     auto const try_in = [&](auto& ld) {
-        if (ld.data.empty())
+        auto* const any = any_patch_data(ld);
+        if (!any)
             return false;
-        return with_resource(ld.data[0], name, [&](auto const& r) {
+        return with_resource(*any, name, [&](auto const& r) {
             using R = std::decay_t<decltype(r)>;
             if constexpr (particles)
             {
@@ -547,10 +666,10 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
         bool const particles = [&] {
             bool is          = false;
             auto const probe = [&](auto& ld) {
-                return !ld.data.empty()
-                       and with_resource(ld.data[0], pair.fine, [&](auto const& r) {
-                               is = ParticleData<std::decay_t<decltype(r)>, dim>;
-                           });
+                auto* const any = any_patch_data(ld);
+                return any and with_resource(*any, pair.fine, [&](auto const& r) {
+                           is = ParticleData<std::decay_t<decltype(r)>, dim>;
+                       });
             };
             if (!probe(fine_ld) and !probe(coarse_ld))
                 throw std::runtime_error("damn::amr::inter_level: no resource " + pair.fine);

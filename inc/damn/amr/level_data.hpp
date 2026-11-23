@@ -14,6 +14,7 @@
 #include "damn/core/def.hpp"
 #include "damn/amr/hierarchy.hpp"
 
+#include <memory>
 #include <vector>
 #include <string>
 #include <cstddef>
@@ -34,7 +35,38 @@ struct LevelData
     int level = 0;
     std::vector<Patch<dim>> patches{}; // this rank's patches of the level
     std::vector<PatchData> data{};     // data[i] belongs to patches[i]
+
+    // a rank without a patch of the level: a PatchData made on a one cell patch, its resources'
+    //  types and geometry (centring, ghosts), e.g. for inter_level's plans between two patch
+    //  data types. Null while there are patches (data[0] serves)
+    std::shared_ptr<PatchData> prototype{};
 };
+
+
+// ld.prototype made (make(patch)) if ld has no patch, dropped otherwise
+template<std::size_t dim, typename PatchData>
+void set_prototype(LevelData<dim, PatchData>& ld, auto&& make)
+{
+    if (!ld.patches.empty())
+        ld.prototype.reset();
+    else if (!ld.prototype)
+        ld.prototype = std::make_shared<PatchData>(make(Patch<dim>{}));
+}
+
+
+// data[0], else the prototype: one PatchData to read resource types and geometry from, null if
+//  there is neither
+template<std::size_t dim, typename PatchData>
+NO_DISCARD PatchData* any_patch_data(LevelData<dim, PatchData>& ld)
+{
+    return ld.data.empty() ? ld.prototype.get() : &ld.data[0];
+}
+
+template<std::size_t dim, typename PatchData>
+NO_DISCARD PatchData const* any_patch_data(LevelData<dim, PatchData> const& ld)
+{
+    return ld.data.empty() ? ld.prototype.get() : &ld.data[0];
+}
 
 
 // the data of rank's patches of level, data[i] = make(patches[i])
@@ -44,6 +76,7 @@ NO_DISCARD auto allocate(Level<dim> const& level, int const rank, auto&& make)
     using PatchData = std::decay_t<decltype(make(level.patches[0]))>;
 
     LevelData<dim, PatchData> ld{level.number, local_patches(level, rank), {}};
+    set_prototype(ld, make);
     ld.data.reserve(ld.patches.size());
     for (auto const& patch : ld.patches)
         ld.data.emplace_back(make(patch));

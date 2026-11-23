@@ -124,14 +124,15 @@ std::vector<typename R::value_type> read(R const& like, std::byte const*& at)
     }
 }
 
-// src's items whose cell + shift is in box appended to dst (the same rank; src may be dst)
-template<std::size_t dim, typename R>
-void append_from(R& dst, R const& src, core::Box<int, dim> const& box,
+// src's items whose cell + shift is in box appended to dst (the same rank; src may be dst).
+//  src may be another resource type of the same items, e.g. a read only handle of them
+template<std::size_t dim, typename R, typename S>
+void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
                  core::Point<int, dim> const& shift)
 {
     if constexpr (requires { append_items_from(dst, src, box, shift); })
         append_items_from(dst, src, box, shift);
-    else if constexpr (detail::Packs<R, dim>)
+    else if constexpr (detail::Packs<R, dim> and detail::Packs<S, dim>)
     {
         std::vector<std::byte> scratch; // packed first: appending to src itself is safe
         pack_items(src, box, shift, scratch);

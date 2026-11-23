@@ -79,6 +79,7 @@ struct Piece
     std::size_t offset = 0;    // into the plan's buffer, if it goes through one (bytes)
     std::size_t bytes  = 0;    // field values (0 for particles: their number varies)
     int dst_rank       = 0;
+    std::uint32_t pair = 0; // its resources' index in the copy's pairs (and accessors)
 };
 
 // what goes where for a region and set of resources, from one rank's point of view

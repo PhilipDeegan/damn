@@ -49,6 +49,7 @@
 #include <string_view>
 #include <type_traits>
 #include <vector>
+#include <iterator>
 
 namespace damn::amr
 {
@@ -89,6 +90,17 @@ NO_DISCARD constexpr std::string_view name(CopyOp<region, arrival>)
         return "max_borders";
 }
 
+
+// how a copy reaches a piece's resources on a patch's data:
+//   by_name     looked up by their names (for_each_resource), the default
+//   accessors   the caller's, one per pair in the pairs' order (e.g. a std::vector):
+//               access[piece.pair].src(patch_data) and .dst(patch_data) return the typed
+//               resources directly (a reference, or a handle holding a pointer), no lookup;
+//               names still plan (the geometry, the plan's key)
+struct ByName
+{
+};
+inline constexpr ByName by_name{};
 
 namespace detail
 {
@@ -136,22 +148,34 @@ namespace detail
     void write(std::vector<std::byte>& out, T const& v);
 
     // local pieces only, below: pieces from or to other ranks are damn::mpi::copy's
-    template<std::size_t dim, typename PatchData>
-    void assign(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
+    // fn(a piece's source / destination resource on patch_data), as access reaches it
+    template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+    void src_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
+    template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+    void dst_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
+    template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+        requires(!std::is_same_v<Access, ByName>)
+    void src_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
+    template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+        requires(!std::is_same_v<Access, ByName>)
+    void dst_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
 
-    template<std::size_t dim, typename PatchData>
-    void append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
+    template<std::size_t dim, typename Access, typename PatchData>
+    void assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
+
+    template<std::size_t dim, typename Access, typename PatchData>
+    void append_items(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
     // after a copy appended to them: each destination resource once (particle_items::appended)
-    template<std::size_t dim, typename PatchData>
-    void appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld);
+    template<std::size_t dim, typename Access, typename PatchData>
+    void appended(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
     // sums and maxes: every local source read into the buffer, then (unpack) written
-    template<std::size_t dim, typename PatchData>
-    void pack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld);
+    template<std::size_t dim, typename Access, typename PatchData>
+    void pack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    template<Arrival arrival, std::size_t dim, typename PatchData>
-    void unpack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld);
+    template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
+    void unpack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
     // where each piece's packed values are (by its index in plan.pieces): local ones in the
     //  plan's buffer; other ranks' set by damn::mpi::copy
@@ -164,23 +188,23 @@ namespace detail
     //  destination's own included. Every holder of a point has the same contributing patches,
     //  their images one shift apart, and the order is translation invariant: the same values
     //  added in the same order, the same bits ((a + b) + c and (a + c) + b can differ)
-    template<std::size_t dim, typename PatchData>
-    void fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
+    template<std::size_t dim, typename Access, typename PatchData>
+    void fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld,
                    std::vector<std::byte const*> const& sources);
 } // namespace detail
 
 
 // a piece's data from its (local) source, appended to out: field values in the box's point
 // order, or the number of items then the items
-template<std::size_t dim, typename PatchData>
-void pack_piece(Region region, Piece<dim> const& piece, LevelData<dim, PatchData>& ld,
-                std::vector<std::byte>& out);
+template<std::size_t dim, typename Access, typename PatchData>
+void pack_piece(Region region, Piece<dim> const& piece, Access const& access,
+                LevelData<dim, PatchData>& ld, std::vector<std::byte>& out);
 
 // a piece's data, packed by pack_piece on another rank, into its (local) destination; at
 // moves past it
-template<Arrival arrival, std::size_t dim, typename PatchData>
-void unpack_piece(Region region, Piece<dim> const& piece, LevelData<dim, PatchData>& ld,
-                  std::byte const*& at);
+template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
+void unpack_piece(Region region, Piece<dim> const& piece, Access const& access,
+                  LevelData<dim, PatchData>& ld, std::byte const*& at);
 
 
 // the plan of a region for resource pairs, made on first use
@@ -206,30 +230,49 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
     return found->second;
 }
 
-// on one rank: throws if any piece comes from, or must go to, another rank
-template<Region region, Arrival arrival, std::size_t dim, typename PatchData>
+// the number of accessors is the number of pairs (by_name: nothing to check)
+template<typename Access>
+void check_access(Access const& access, std::size_t const pairs)
+{
+    if constexpr (!std::is_same_v<Access, ByName>)
+        if (std::size(access) != pairs)
+            throw std::runtime_error("damn::amr::copy: one accessor per resource pair");
+}
+
+// on one rank: throws if any piece comes from, or must go to, another rank. access: how the
+//  pieces' resources are reached (by_name, or accessors one per pair)
+template<Region region, Arrival arrival, std::size_t dim, typename Access, typename PatchData>
 void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
-          std::vector<ResourcePair> const& pairs, LevelData<dim, PatchData>& ld)
+          std::vector<ResourcePair> const& pairs, Access const& access,
+          LevelData<dim, PatchData>& ld)
 {
     DAMN_LOG_SCOPE(2, "damn::amr::copy<" + std::string{name(op)} + ">");
+    check_access(access, pairs.size());
     auto& plan = plan_for(region, n, ld, pairs);
     detail::check_local(plan);
 
     if constexpr (arrival == Arrival::Assign)
-        detail::assign(plan, ld);
+        detail::assign(plan, access, ld);
     else if constexpr (arrival == Arrival::Append)
     {
-        detail::append_items(plan, ld);
-        detail::appended(plan, ld);
+        detail::append_items(plan, access, ld);
+        detail::appended(plan, access, ld);
     }
     else
     {
-        detail::pack_local(plan, ld);
+        detail::pack_local(plan, access, ld);
         if constexpr (arrival == Arrival::Sum)
-            detail::fold_sums(plan, ld, detail::local_sources(plan));
+            detail::fold_sums(plan, access, ld, detail::local_sources(plan));
         else
-            detail::unpack_local<arrival>(plan, ld);
+            detail::unpack_local<arrival>(plan, access, ld);
     }
+}
+
+template<Region region, Arrival arrival, std::size_t dim, typename PatchData>
+void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
+          std::vector<ResourcePair> const& pairs, LevelData<dim, PatchData>& ld)
+{
+    copy(op, n, pairs, by_name, ld);
 }
 
 // fields: the same name on both sides
@@ -279,6 +322,48 @@ void detail::with_particle_data(PatchData& patch_data, std::string const& name, 
     with_resource_of_kind<dim, true>(patch_data, name, fn);
 }
 
+template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+void detail::src_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
+{
+    with_resource_of_kind<dim, particles>(patch_data, piece.names.src, fn);
+}
+
+template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+void detail::dst_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
+{
+    with_resource_of_kind<dim, particles>(patch_data, piece.names.dst, fn);
+}
+
+template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+    requires(!std::is_same_v<Access, ByName>)
+void detail::src_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
+{
+    decltype(auto) resource = access[piece.pair].src(patch_data); // a reference or a handle
+    using R                 = std::decay_t<decltype(resource)>;
+    // as by name: a resource of the other kind throws (the region is a run time choice in
+    //  pack_piece / unpack_piece, both kinds' code is compiled)
+    if constexpr (particles ? ParticleData<R, dim> : BoxData<R, dim>)
+        fn(resource);
+    else
+        throw std::runtime_error(std::string{"damn::amr::copy: an accessor's resource is not "}
+                                 + (particles ? "ParticleData" : "BoxData"));
+}
+
+template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+    requires(!std::is_same_v<Access, ByName>)
+void detail::dst_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
+{
+    decltype(auto) resource = access[piece.pair].dst(patch_data); // a reference or a handle
+    using R                 = std::decay_t<decltype(resource)>;
+    // as by name: a resource of the other kind throws (the region is a run time choice in
+    //  pack_piece / unpack_piece, both kinds' code is compiled)
+    if constexpr (particles ? ParticleData<R, dim> : BoxData<R, dim>)
+        fn(resource);
+    else
+        throw std::runtime_error(std::string{"damn::amr::copy: an accessor's resource is not "}
+                                 + (particles ? "ParticleData" : "BoxData"));
+}
+
 template<std::size_t dim>
 bool detail::contains(core::Box<int, dim> const& outer, core::Box<int, dim> const& inner)
 {
@@ -305,25 +390,27 @@ Plan<dim> detail::particle_plan(Neighbours<dim> const& n, LevelData<dim, PatchDa
 {
     Plan<dim> plan{Region::Leaving};
     auto const pieces = [&](auto const& res, Patch<dim> const& dst, std::size_t const d,
-                            auto const& links, ResourcePair const& pair, auto& out) {
+                            auto const& links, ResourcePair const& pair, std::uint32_t const k,
+                            auto& out) {
         auto const dst_domain = domain_box(res, dst.box);
         for (auto const& link : links)
             if (auto const overlap
                 = dst_domain * core::shift(ghost_box(res, link.patch.box), link.shift))
-                out.push_back({d, link, pair, *overlap, 0, 0, dst.rank});
+                out.push_back({d, link, pair, *overlap, 0, 0, dst.rank, k});
     };
 
-    for (auto const& pair : pairs)
+    for (std::uint32_t k = 0; k < pairs.size(); ++k)
     {
+        auto const& pair = pairs[k];
         for (std::size_t d = 0; d < n.local.size(); ++d)
             with_particle_data<dim>(ld.data[d], pair.dst, [&](auto const& res) {
                 check_reach(n, pair.dst, n.local[d].box, ghost_box(res, n.local[d].box));
-                pieces(res, n.local[d], d, n.of[d], pair, plan.pieces);
+                pieces(res, n.local[d], d, n.of[d], pair, k, plan.pieces);
             });
         if (!n.remote.empty())
             with_particle_data<dim>(ld.data[0], pair.dst, [&](auto const& res) {
                 for (auto const& [dst, links] : n.remote)
-                    pieces(res, dst, not_local, links, pair, plan.outgoing);
+                    pieces(res, dst, not_local, links, pair, k, plan.outgoing);
             });
     }
     return plan;
@@ -337,7 +424,8 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
     std::size_t buffered = 0; // local borders' buffer
 
     auto const pieces = [&](auto const& res, Patch<dim> const& dst, std::size_t const d,
-                            auto const& links, ResourcePair const& pair, auto& out) {
+                            auto const& links, ResourcePair const& pair, std::uint32_t const k,
+                            auto& out) {
         using T               = box_data_value_t<decltype(res), dim>;
         auto const dst_ghost  = ghost_box(res, dst.box);
         auto const dst_domain = domain_box(res, dst.box);
@@ -352,7 +440,7 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
 
             auto const add = [&](auto const& box) {
                 auto const bytes = static_cast<std::size_t>(box.size()) * sizeof(T);
-                out.push_back({d, link, pair, box, 0, bytes, dst.rank});
+                out.push_back({d, link, pair, box, 0, bytes, dst.rank, k});
                 if (region == Region::Borders and d != not_local and link.local != not_local)
                 {
                     out.back().offset = buffered;
@@ -367,17 +455,18 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
         }
     };
 
-    for (auto const& pair : pairs)
+    for (std::uint32_t k = 0; k < pairs.size(); ++k)
     {
+        auto const& pair = pairs[k];
         for (std::size_t d = 0; d < n.local.size(); ++d)
             with_box_data<dim>(ld.data[d], pair.dst, [&](auto const& res) {
                 check_reach(n, pair.dst, n.local[d].box, ghost_box(res, n.local[d].box));
-                pieces(res, n.local[d], d, n.of[d], pair, plan.pieces);
+                pieces(res, n.local[d], d, n.of[d], pair, k, plan.pieces);
             });
         if (!n.remote.empty())
             with_box_data<dim>(ld.data[0], pair.dst, [&](auto const& res) {
                 for (auto const& [dst, links] : n.remote)
-                    pieces(res, dst, not_local, links, pair, plan.outgoing);
+                    pieces(res, dst, not_local, links, pair, k, plan.outgoing);
             });
     }
 
@@ -424,13 +513,13 @@ void detail::write(std::vector<std::byte>& out, T const& v)
     std::memcpy(out.data() + at, &v, sizeof(T));
 }
 
-template<std::size_t dim, typename PatchData>
-void detail::assign(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
-            with_box_data<dim>(ld.data[piece.src.local], piece.names.src, [&](auto const& src) {
-                with_box_data<dim>(ld.data[piece.dst], piece.names.dst, [&](auto& dst) {
+            src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
+                dst_of<dim, false>(access, ld.data[piece.dst], piece, [&](auto& dst) {
                     auto const& dst_box = ld.patches[piece.dst].box;
                     core::for_each_point(piece.box, [&](auto const& p) {
                         value(dst, dst_box, p)
@@ -440,12 +529,12 @@ void detail::assign(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
             });
 }
 
-template<std::size_t dim, typename PatchData>
-void detail::pack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld)
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::pack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
-            with_box_data<dim>(ld.data[piece.src.local], piece.names.src, [&](auto const& src) {
+            src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
                 using T  = box_data_value_t<decltype(src), dim>;
                 auto* at = plan.buffer.data() + piece.offset;
                 core::for_each_point(piece.box, [&](auto const& p) {
@@ -456,14 +545,14 @@ void detail::pack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld)
             });
 }
 
-template<Arrival arrival, std::size_t dim, typename PatchData>
-void detail::unpack_local(Plan<dim>& plan, LevelData<dim, PatchData>& ld)
+template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
+void detail::unpack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
         {
             std::byte const* at = plan.buffer.data() + piece.offset;
-            unpack_piece<arrival>(plan.region, piece, ld, at);
+            unpack_piece<arrival>(plan.region, piece, access, ld, at);
         }
 }
 
@@ -477,8 +566,8 @@ std::vector<std::byte const*> detail::local_sources(Plan<dim> const& plan)
     return sources;
 }
 
-template<std::size_t dim, typename PatchData>
-void detail::fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld,
                        std::vector<std::byte const*> const& sources)
 {
     auto const& pieces = plan.pieces;
@@ -507,7 +596,7 @@ void detail::fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
             ++end;
 
         auto const& dst_box = ld.patches[first.dst].box;
-        with_box_data<dim>(ld.data[first.dst], first.names.dst, [&](auto& dst) {
+        dst_of<dim, false>(access, ld.data[first.dst], first, [&](auto& dst) {
             using T = box_data_value_t<decltype(dst), dim>;
 
             // the summed points (the pieces' boxes), within their bounding box: the
@@ -568,21 +657,21 @@ void detail::fold_sums(Plan<dim> const& plan, LevelData<dim, PatchData>& ld,
     }
 }
 
-template<std::size_t dim, typename PatchData>
-void detail::append_items(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::append_items(Plan<dim> const& plan, Access const& access,
+                          LevelData<dim, PatchData>& ld)
 {
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
-            with_particle_data<dim>(
-                ld.data[piece.src.local], piece.names.src, [&](auto const& src) {
-                    with_particle_data<dim>(ld.data[piece.dst], piece.names.dst, [&](auto& dst) {
-                        particle_items::append_from(dst, src, piece.box, piece.src.shift);
-                    });
+            src_of<dim, true>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
+                dst_of<dim, true>(access, ld.data[piece.dst], piece, [&](auto& dst) {
+                    particle_items::append_from(dst, src, piece.box, piece.src.shift);
                 });
+            });
 }
 
-template<std::size_t dim, typename PatchData>
-void detail::appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::appended(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
     std::vector<std::pair<std::size_t, std::string const*>> done;
     for (auto const& piece : plan.pieces)
@@ -593,27 +682,27 @@ void detail::appended(Plan<dim> const& plan, LevelData<dim, PatchData>& ld)
             }))
             continue;
         done.push_back(key);
-        with_particle_data<dim>(ld.data[piece.dst], piece.names.dst,
-                                [&](auto& dst) { particle_items::appended(dst); });
+        dst_of<dim, true>(access, ld.data[piece.dst], piece,
+                          [&](auto& dst) { particle_items::appended(dst); });
     }
 }
 
 
 // ---------------------------------------------------------------- pieces as bytes
 
-template<std::size_t dim, typename PatchData>
-void pack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, PatchData>& ld,
-                std::vector<std::byte>& out)
+template<std::size_t dim, typename Access, typename PatchData>
+void pack_piece(Region const region, Piece<dim> const& piece, Access const& access,
+                LevelData<dim, PatchData>& ld, std::vector<std::byte>& out)
 {
     auto& src_data = ld.data[piece.src.local];
     if (region == Region::Leaving)
     {
-        detail::with_particle_data<dim>(src_data, piece.names.src, [&](auto const& src) {
+        detail::src_of<dim, true>(access, src_data, piece, [&](auto const& src) {
             particle_items::pack(src, piece.box, piece.src.shift, out);
         });
         return;
     }
-    detail::with_box_data<dim>(src_data, piece.names.src, [&](auto const& src) {
+    detail::src_of<dim, false>(access, src_data, piece, [&](auto const& src) {
         using T = box_data_value_t<decltype(src), dim>;
         out.reserve(out.size() + piece.bytes);
         core::for_each_point(piece.box, [&](auto const& p) {
@@ -622,19 +711,19 @@ void pack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, Pat
     });
 }
 
-template<Arrival arrival, std::size_t dim, typename PatchData>
-void unpack_piece(Region const region, Piece<dim> const& piece, LevelData<dim, PatchData>& ld,
-                  std::byte const*& at)
+template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
+void unpack_piece(Region const region, Piece<dim> const& piece, Access const& access,
+                  LevelData<dim, PatchData>& ld, std::byte const*& at)
 {
     auto& dst_data = ld.data[piece.dst];
     if (region == Region::Leaving)
     {
-        detail::with_particle_data<dim>(dst_data, piece.names.dst, [&](auto& dst) {
+        detail::dst_of<dim, true>(access, dst_data, piece, [&](auto& dst) {
             particle_items::unpack(dst, at, piece.src.shift);
         });
         return;
     }
-    detail::with_box_data<dim>(dst_data, piece.names.dst, [&](auto& dst) {
+    detail::dst_of<dim, false>(access, dst_data, piece, [&](auto& dst) {
         using T             = box_data_value_t<decltype(dst), dim>;
         auto const& dst_box = ld.patches[piece.dst].box;
         core::for_each_point(piece.box, [&](auto const& p) {

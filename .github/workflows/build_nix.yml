@@ -19,6 +19,7 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     container: ghcr.io/pharchive/phare_dep/ubuntu:24.04
+    timeout-minutes: 60 # a rank throwing while the others wait in a collective hangs to the 6 h limit
 
     steps:
     - uses: actions/checkout@v4

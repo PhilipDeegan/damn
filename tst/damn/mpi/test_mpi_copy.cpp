@@ -14,6 +14,9 @@
 #include <cstddef>
 #include <string>
 #include <tuple>
+#include <array>
+#include <bit>
+#include <cstdint>
 #include <vector>
 
 namespace damn::amr
@@ -209,6 +212,68 @@ TEST_P(MpiLeaving, particlesArriveWhereTheirCellIsOwned)
 
 INSTANTIATE_TEST_SUITE_P(Mpi, MpiLeaving, ::testing::Bool());
 
+
+// the caller's accessors over ranks: the same bits as by names (a fill, an order dependent
+//  border sum, particles leaving), the pieces packed and unpacked through them
+namespace
+{
+    template<auto member>
+    struct Member
+    {
+        auto& src(toy::PatchData& d) const { return d.*member; }
+        auto& dst(toy::PatchData& d) const { return d.*member; }
+    };
+    struct GhostsToDomain
+    {
+        auto& src(toy::PatchData& d) const { return d.patch_ghost; }
+        auto& dst(toy::PatchData& d) const { return d.domain; }
+    };
+} // namespace
+
+TEST(MpiCopy, accessorsGiveWhatNamesGive)
+{
+    for (auto const periodic : {false, true})
+    {
+        World a{periodic}, b{periodic};
+        for (auto* w : {&a, &b})
+            for_each_patch(w->ld, [&](auto const& patch, auto& data) {
+                core::for_each_point(domain_box(data.Bx, patch.box), [&](auto const& p) {
+                    value(data.Bx, patch.box, p) = f_of(w->h, p);
+                });
+                core::for_each_point(ghost_box(data.rho, patch.box), [&](auto const& p) {
+                    value(data.rho, patch.box, p)
+                        = 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(w->h, p) / 7.;
+                });
+                core::for_each_point(ghost_box(data.patch_ghost, patch.box), [&](auto const& c) {
+                    if (!isIn(c, patch.box))
+                        data.patch_ghost.items.push_back({{c[0], c[1]}, {c[0], c[1]}, patch.id});
+                });
+            });
+        mpi::copy(fill_ghosts, a.n, {"Bx"}, a.ld);
+        mpi::copy(sum_borders, a.n, {"rho"}, a.ld);
+        mpi::copy(gather_leaving, a.n, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, a.ld);
+        mpi::copy(fill_ghosts, b.n, same_names({"Bx"}), std::array{Member<&toy::PatchData::Bx>{}},
+                  b.ld);
+        mpi::copy(sum_borders, b.n, same_names({"rho"}), std::array{Member<&toy::PatchData::rho>{}},
+                  b.ld);
+        mpi::copy(gather_leaving, b.n, std::vector<ResourcePair>{{"patch_ghost", "domain"}},
+                  std::array{GhostsToDomain{}}, b.ld);
+
+        for (std::size_t i = 0; i < size(a.ld); ++i)
+        {
+            auto const& box = a.ld.patches[i].box;
+            for (auto const f : {&toy::PatchData::Bx, &toy::PatchData::rho})
+                core::for_each_point(ghost_box(a.ld.data[i].*f, box), [&](auto const& p) {
+                    auto const x = value(a.ld.data[i].*f, box, p);
+                    auto const y = value(b.ld.data[i].*f, box, p);
+                    EXPECT_TRUE(std::bit_cast<std::uint64_t>(x) == std::bit_cast<std::uint64_t>(y)
+                                or (std::isnan(x) and std::isnan(y)))
+                        << i << " " << p;
+                });
+            ASSERT_EQ(a.ld.data[i].domain.items.size(), b.ld.data[i].domain.items.size()) << i;
+        }
+    }
+}
 
 TEST(MpiCopy, repeatedCopiesReuseThePlanAndBuffers)
 {

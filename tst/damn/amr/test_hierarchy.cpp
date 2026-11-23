@@ -124,17 +124,34 @@ TEST(Hierarchy, chopCoversTheBoxWithDisjointBoxes)
 TEST(Hierarchy, chopEvenlySharesTheCellsInUnitsOfTheGranularity)
 {
     auto const level1 = box<1>({100}, {221});         // 122 cells
-    auto const boxes  = chop_evenly(level1, {60}, 2); // chop: 60, 60, 2; SAMRAI: 42, 40, 40
+    auto const boxes  = chop_evenly(level1, {60}, 2); // chop: 60, 60, 2
 
-    ASSERT_EQ(boxes.size(), 3u);
-    EXPECT_EQ(boxes[0], box<1>({100}, {141})); // 42
-    EXPECT_EQ(boxes[1], box<1>({142}, {181})); // 40
-    EXPECT_EQ(boxes[2], box<1>({182}, {221})); // 40
+    ASSERT_EQ(boxes.size(), 2u);
+    EXPECT_EQ(boxes[0], box<1>({100}, {161})); // 62
+    EXPECT_EQ(boxes[1], box<1>({162}, {221})); // 60
     for (auto const& b : boxes)
     {
         EXPECT_EQ((b.lower[0] - level1.lower[0]) % 2, 0); // whole coarser cells
-        EXPECT_LE(b.upper[0] - b.lower[0] + 1, 60);
+        EXPECT_EQ((b.upper[0] - b.lower[0] + 1) % 2, 0);
+        EXPECT_LE(b.upper[0] - b.lower[0] + 1, chop_size_slack * 60);
     }
+}
+
+TEST(Hierarchy, chopEvenlyTakesTheSizeAsAHintUpToItsSlack)
+{
+    auto const widths = [](int const cells, int const size, int const granularity = 1) {
+        std::vector<int> out;
+        for (auto const& b : chop_evenly(box<1>({0}, {cells - 1}), {size}, granularity))
+            out.push_back(b.upper[0] - b.lower[0] + 1);
+        return out;
+    };
+    EXPECT_EQ(widths(100, 20), (std::vector<int>{20, 20, 20, 20, 20}));
+    EXPECT_EQ(widths(45, 20), (std::vector<int>{23, 22}));        // nearest count, under 25
+    EXPECT_EQ(widths(24, 20), (std::vector<int>{24}));            // one box, under 25
+    EXPECT_EQ(widths(26, 20), (std::vector<int>{13, 13}));        // one box would be over 25
+    EXPECT_EQ(widths(10, 20), (std::vector<int>{10}));            // narrower than the size
+    EXPECT_EQ(widths(44, 20, 2), (std::vector<int>{22, 22}));     // whole coarser cells
+    EXPECT_EQ(widths(50, 20, 2), (std::vector<int>{18, 16, 16})); // 2 x 25: odd, over 24
 }
 
 TEST(Hierarchy, chopEvenlyCoversTheBoxWithDisjointBoxes)

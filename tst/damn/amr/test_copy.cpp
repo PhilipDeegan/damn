@@ -292,6 +292,89 @@ TEST(Copy, oneCopyExchangesAllItsResources)
     });
 }
 
+// the caller's accessors (one per pair) reach the same resources as their names: the same bits,
+//  a fill, an order dependent border sum, and particles leaving
+namespace
+{
+    // a member of the toy patch data, as plamn's accessors hand out its resources
+    template<auto member>
+    struct Member
+    {
+        auto& src(toy::PatchData& d) const { return d.*member; }
+        auto& dst(toy::PatchData& d) const { return d.*member; }
+    };
+    struct GhostsToDomain
+    {
+        auto& src(toy::PatchData& d) const { return d.patch_ghost; }
+        auto& dst(toy::PatchData& d) const { return d.domain; }
+    };
+} // namespace
+
+TEST(Copy, accessorsGiveWhatNamesGive)
+{
+    for (auto const periodic : {false, true})
+    {
+        auto const h = make_hierarchy({periodic, periodic});
+        auto by_name = allocate(h.levels[0], 0, make_patch_data);
+        auto by_acc  = allocate(h.levels[0], 0, make_patch_data);
+        for (auto* ld : {&by_name, &by_acc})
+            for_each_patch(*ld, [&](auto const& patch, auto& data) {
+                core::for_each_point(domain_box(data.Bx, patch.box), [&](auto const& p) {
+                    value(data.Bx, patch.box, p) = f_of(h, p);
+                });
+                core::for_each_point(ghost_box(data.rho, patch.box), [&](auto const& p) {
+                    value(data.rho, patch.box, p)
+                        = 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(h, p) / 7.;
+                });
+                core::for_each_point(ghost_box(data.patch_ghost, patch.box), [&](auto const& c) {
+                    if (!isIn(c, patch.box))
+                        data.patch_ghost.items.push_back({{c[0], c[1]}, {c[0], c[1]}, patch.id});
+                });
+            });
+
+        auto n_name = neighbours_of(h);
+        auto n_acc  = neighbours_of(h);
+        copy(fill_ghosts, n_name, {"Bx"}, by_name);
+        copy(sum_borders, n_name, {"rho"}, by_name);
+        copy(gather_leaving, n_name, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, by_name);
+        copy(fill_ghosts, n_acc, same_names({"Bx"}), std::array{Member<&toy::PatchData::Bx>{}},
+             by_acc);
+        copy(sum_borders, n_acc, same_names({"rho"}), std::array{Member<&toy::PatchData::rho>{}},
+             by_acc);
+        copy(gather_leaving, n_acc, std::vector<ResourcePair>{{"patch_ghost", "domain"}},
+             std::array{GhostsToDomain{}}, by_acc);
+
+        auto const same_bits = [](double const a, double const b) {
+            return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b);
+        };
+        for (std::size_t i = 0; i < size(by_name); ++i)
+        {
+            auto const& box = by_name.patches[i].box;
+            auto& a         = by_name.data[i];
+            auto& b         = by_acc.data[i];
+            for (auto const f : {&toy::PatchData::Bx, &toy::PatchData::rho})
+                core::for_each_point(ghost_box(a.*f, box), [&](auto const& p) {
+                    auto const x = value(a.*f, box, p), y = value(b.*f, box, p);
+                    EXPECT_TRUE(same_bits(x, y) or (std::isnan(x) and std::isnan(y)))
+                        << i << " " << p;
+                });
+            ASSERT_EQ(a.domain.items.size(), b.domain.items.size()) << i;
+            for (std::size_t k = 0; k < a.domain.items.size(); ++k)
+                EXPECT_EQ(a.domain.items[k].cell, b.domain.items[k].cell) << i << " " << k;
+        }
+    }
+}
+
+TEST(Copy, accessorsAreOnePerPair)
+{
+    auto const h = make_hierarchy({true, true});
+    auto ld      = allocate(h.levels[0], 0, make_patch_data);
+    auto n       = neighbours_of(h);
+    EXPECT_THROW(copy(fill_ghosts, n, same_names({"Bx", "rho"}),
+                      std::array{Member<&toy::PatchData::Bx>{}}, ld),
+                 std::runtime_error);
+}
+
 TEST(Copy, rejectsUnknownAndNonBoxResources)
 {
     auto const h = make_hierarchy({false, false});

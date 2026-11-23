@@ -8,10 +8,13 @@ aborts or times out: not available)
     python3 etc/bootstrap/bootstrap.py --only mpi hdf5    # some areas
 
 Probes: etc/bootstrap/<area>/<name>.cpp, a first line comment
-"// bootstrap probe ...: ranks=<n> profile=<mkn profile>", stdout "key=value" lines. Each is
-built with mkn (-p <profile> -M <probe>: the build's compilers, flags and find paths, copied to
-.damn/bootstrap/bin), run with mpirun -n <ranks> (--mpirun) in its own directory under
-.damn/bootstrap/run, its output kept in .damn/bootstrap/<area>_<name>.log. Writes
+"// bootstrap probe ...: ranks=<n> profile=<mkn profile> [mpirun=<args,comma,separated>]",
+stdout "key=value" lines. Each is built with mkn (-p <profile> -M <probe>: the build's
+compilers, flags and find paths, copied to .damn/bootstrap/bin), run with
+mpirun [<mpirun args>] -n <ranks> (--mpirun) in its own directory under .damn/bootstrap/run, its
+output kept in .damn/bootstrap/<area>_<name>.log. mpirun's args place the ranks, e.g.
+mpirun=--map-by,numa,--bind-to,numa: a machine that cannot (one memory domain) fails the probe.
+Writes
 
     inc/damn/core/def/_gen_bootstrap.hpp   DAMN_HAVE_<AREA>_<NAME> 1 / 0 per probe,
                                            damn::bootstrap::<area>_<name>_<key> strings, and
@@ -23,6 +26,10 @@ built with mkn (-p <profile> -M <probe>: the build's compilers, flags and find p
 The header is this machine's: not committed (.gitignore); damn/core/def/bootstrap.hpp includes it
 if there, every DAMN_HAVE_* 0 otherwise. Run from the damn root. What it says the build can do,
 a run still checks for itself (another node, another thread level)
+
+A project built on damn has probes of its own (plamn: its kernels' costs) and runs them with this
+code: its etc/bootstrap/bootstrap.py calls main(Project(root, name, header)), writing its own
+header (<NAME>_HAVE_*, <name>::bootstrap) and .<name>/bootstrap
 """
 
 import argparse
@@ -34,13 +41,27 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PROBES = ROOT / "etc" / "bootstrap"
-OUT = ROOT / ".damn" / "bootstrap"
-HEADER = ROOT / "inc" / "damn" / "core" / "def" / "_gen_bootstrap.hpp"
 
 
-def probes(only):
-    for cpp in sorted(PROBES.glob("*/*.cpp")):
+class Project:
+    """whose probes: its root, its probes (etc/bootstrap/<area>/<name>.cpp, built with its
+    mkn.yaml's profiles), its generated header (relative to root), its name: the macro prefix
+    (<NAME>_HAVE_*), namespace (<name>::bootstrap) and output (.<name>/bootstrap)"""
+
+    def __init__(self, root, name, header):
+        self.root = Path(root)
+        self.name = name
+        self.probes = self.root / "etc" / "bootstrap"
+        self.out = self.root / f".{name}" / "bootstrap"
+        self.header = self.root / header
+        self.guard = f"{name.upper()}_CORE_DEF_GEN_BOOTSTRAP_HPP"
+
+
+DAMN = Project(ROOT, "damn", "inc/damn/core/def/_gen_bootstrap.hpp")
+
+
+def probes(project, only):
+    for cpp in sorted(project.probes.glob("*/*.cpp")):
         area = cpp.parent.name
         if only and area not in only:
             continue
@@ -51,32 +72,33 @@ def probes(only):
             path=cpp,
             ranks=int(meta.get("ranks", 1)),
             profile=meta.get("profile", "bootstrap"),
+            mpirun=[x for x in meta.get("mpirun", "").split(",") if x],
         )
 
 
-def build(p, args, log):
+def build(project, p, args, log):
     """the probe as the profile's binary (bin/<profile>), copied out before the next one builds
     over it: no mkn -N needed"""
-    out = ROOT / "bin" / p["profile"]
+    out = project.root / "bin" / p["profile"]
     shutil.rmtree(out, ignore_errors=True)  # no stale binary of another probe
-    cmd = ["mkn", "build", "-p", p["profile"], "-M", str(p["path"].relative_to(ROOT))]
+    cmd = ["mkn", "build", "-p", p["profile"], "-M", str(p["path"].relative_to(project.root))]
     cmd += ["-O", "2", "-x", args.settings]
-    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=project.root, capture_output=True, text=True)
     log.write(f"$ {' '.join(cmd)}\n{r.stdout}{r.stderr}\n")
     exes = [f for f in out.glob("*") if f.is_file() and f.stat().st_mode & 0o111]
     if r.returncode or not exes:
         return None
-    exe = OUT / "bin" / f"{p['area']}_{p['name']}"
+    exe = project.out / "bin" / f"{p['area']}_{p['name']}"
     exe.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(exes[0], exe)
     return exe
 
 
-def run(p, exe, args, log):
-    work = OUT / "run" / f"{p['area']}_{p['name']}"
+def run(project, p, exe, args, log):
+    work = project.out / "run" / f"{p['area']}_{p['name']}"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
-    cmd = [args.mpirun, "-n", str(p["ranks"]), str(exe)]
+    cmd = [args.mpirun, *p["mpirun"], "-n", str(p["ranks"]), str(exe)]
     try:
         r = subprocess.run(
             cmd, cwd=work, capture_output=True, text=True, timeout=args.timeout
@@ -106,30 +128,32 @@ def entries(results, settings):
     return out
 
 
-def header(results, settings):
+def header(project, results, settings):
     quote = (
         lambda v: '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
     )  # noqa: E731
     table = entries(results, settings)
+    prefix, ns = project.name.upper(), f"{project.name}::bootstrap"
     out = [
         "// generated by etc/bootstrap/bootstrap.py ("
         + settings
         + "): this machine's and build's",
-        "// capabilities, see damn/core/def/bootstrap.hpp. Not committed: rerun to update",
-        "#ifndef DAMN_CORE_DEF_GEN_BOOTSTRAP_HPP",
-        "#define DAMN_CORE_DEF_GEN_BOOTSTRAP_HPP",
+        f"// capabilities, see {project.name}/core/def/bootstrap.hpp. Not committed: rerun to "
+        "update",
+        f"#ifndef {project.guard}",
+        f"#define {project.guard}",
         "",
         "#include <array>",
         "#include <string_view>",
         "#include <utility>",
         "",
-        "#define DAMN_HAVE_BOOTSTRAP 1",
+        f"#define {prefix}_HAVE_BOOTSTRAP 1",
     ]
     for r in results:
         out.append(
-            f"#define DAMN_HAVE_{r['area'].upper()}_{r['name'].upper()} {int(r['ok'])}"
+            f"#define {prefix}_HAVE_{r['area'].upper()}_{r['name'].upper()} {int(r['ok'])}"
         )
-    out += ["", "namespace damn::bootstrap", "{"]
+    out += ["", f"namespace {ns}", "{"]
     for r in results:
         for k, v in r["values"].items():
             out.append(
@@ -137,21 +161,21 @@ def header(results, settings):
             )
     out += [
         "",
-        "// every fact, as bootstrap.json: damn::bootstrap::config() makes a map of it",
+        f"// every fact, as bootstrap.json: {ns}::config() makes a map of it",
         f"inline constexpr std::array<std::pair<std::string_view, std::string_view>, {len(table)}> entries{{{{",
     ]
     out += [f"    {{{quote(k)}, {quote(v)}}}," for k, v in table]
     out += [
         "}};",
-        "} // namespace damn::bootstrap",
+        f"}} // namespace {ns}",
         "",
-        "#endif // DAMN_CORE_DEF_GEN_BOOTSTRAP_HPP",
+        f"#endif // {project.guard}",
         "",
     ]
     return "\n".join(out)
 
 
-def main():
+def main(project=DAMN, argv=None):
     a = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -161,16 +185,16 @@ def main():
     a.add_argument("--mpirun", default="mpirun", help="the settings' MPI's launcher")
     a.add_argument("--timeout", type=float, default=60)
     a.add_argument("--only", nargs="*", help="areas (mpi, hdf5, cuda, ...)")
-    args = a.parse_args()
+    args = a.parse_args(argv)
 
-    OUT.mkdir(parents=True, exist_ok=True)
+    project.out.mkdir(parents=True, exist_ok=True)
     results = []
-    for p in probes(args.only):
+    for p in probes(project, args.only):
         key = f"{p['area']}_{p['name']}"
-        with open(OUT / f"{key}.log", "w") as log:
-            exe = build(p, args, log)
+        with open(project.out / f"{key}.log", "w") as log:
+            exe = build(project, p, args, log)
             ok, values, why = (
-                run(p, exe, args, log) if exe else (False, {}, "build failed")
+                run(project, p, exe, args, log) if exe else (False, {}, "build failed")
             )
         results.append(
             dict(area=p["area"], name=p["name"], ok=ok, values=values, why=why)
@@ -181,12 +205,13 @@ def main():
         )
         sys.stdout.flush()
 
-    HEADER.write_text(header(results, args.settings))
-    (OUT / "bootstrap.json").write_text(
+    project.header.write_text(header(project, results, args.settings))
+    (project.out / "bootstrap.json").write_text(
         json.dumps(dict(entries(results, args.settings)), indent=1)
     )
     print(
-        f"wrote {HEADER.relative_to(ROOT)}, {(OUT / 'bootstrap.json').relative_to(ROOT)}"
+        f"wrote {project.header.relative_to(project.root)}, "
+        f"{(project.out / 'bootstrap.json').relative_to(project.root)}"
     )
 
 

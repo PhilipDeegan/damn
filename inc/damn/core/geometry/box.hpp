@@ -541,6 +541,35 @@ NO_DISCARD Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN
     return Box<int, dim>{floor_div(box.lower, ratio), floor_div(box.upper, ratio)};
 }
 
+// b less cut, as disjoint boxes in a fixed order: per direction the slab below the cut, then the
+//  slab above it, the rest narrowed to the cut along that direction (Box::remove's pieces, in
+//  an order every rank and run agrees on)
+template<std::size_t dim>
+NO_DISCARD std::vector<Box<int, dim>> minus_ordered(Box<int, dim> b, Box<int, dim> const& cut)
+{
+    if (!(b * cut))
+        return {b};
+    std::vector<Box<int, dim>> out;
+    for (std::size_t d = 0; d < dim; ++d)
+    {
+        if (b.lower[d] < cut.lower[d])
+        {
+            auto below     = b;
+            below.upper[d] = cut.lower[d] - 1;
+            out.push_back(below);
+            b.lower[d] = cut.lower[d];
+        }
+        if (b.upper[d] > cut.upper[d])
+        {
+            auto above     = b;
+            above.lower[d] = cut.upper[d] + 1;
+            out.push_back(above);
+            b.upper[d] = cut.upper[d];
+        }
+    }
+    return out;
+}
+
 
 
 } // namespace damn::core
