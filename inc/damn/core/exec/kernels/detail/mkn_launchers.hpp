@@ -232,7 +232,7 @@ public:
     static void for_each_index(std::size_t const n, Fn&& fn) DAMN_DEV
     {
         for (std::size_t i = threadIdx.x; i < n; i += blockDim.x)
-            fn(i);
+            DAMN_INLINE_CALL fn(i);
     }
 };
 

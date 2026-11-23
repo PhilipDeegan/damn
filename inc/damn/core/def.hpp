@@ -14,6 +14,13 @@
 #if defined(__GNUC__) || defined(__clang__)
 #define DAMN_LAMBDA_ALWAYS_INLINE __attribute__((always_inline))
 #define DAMN_ALWAYS_INLINE __attribute__((always_inline)) inline
+// a call always inlined (clang, device code included): an out of line device call taking the
+//  address of a kernel's capture copies the whole closure into each thread's local memory
+#if defined(__clang__)
+#define DAMN_INLINE_CALL [[clang::always_inline]]
+#else
+#define DAMN_INLINE_CALL
+#endif
 #else
 #define DAMN_LAMBDA_ALWAYS_INLINE
 #define DAMN_ALWAYS_INLINE inline
