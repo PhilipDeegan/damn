@@ -288,6 +288,27 @@ TEST(TimeRefinementSubsteps, aLevelAddedBetweenAdvancesIsNew)
     EXPECT_EQ(times(s.steps[2]), (std::vector{1., 1.25, 2.}));
 }
 
+TEST(TimeRefinementSubsteps, aRestoredStateContinuesAsTheOriginal)
+{
+    auto const bound
+        = [](int ln, Step const& step) { return ln == 0 ? step.dt : 10 * step.coarse_dt; };
+    TimeRefinement<1> original{{.time_ratio = 4}};
+    Steps first{bound};
+    original.advance(levels(2), first, 0., 1.); // level 1 new: 2 substeps
+    auto const saved = original.state();
+
+    Steps continued{bound}, restored{bound}, fresh{bound};
+    original.advance(levels(2), continued, 1., 1.);
+    TimeRefinement<1> from_restart{{.time_ratio = 4}};
+    from_restart.restore(saved);
+    from_restart.advance(levels(2), restored, 1., 1.);
+    TimeRefinement<1>{{.time_ratio = 4}}.advance(levels(2), fresh, 1., 1.);
+
+    EXPECT_EQ(times(restored.steps[1]), times(continued.steps[1])); // one substep, not new
+    EXPECT_EQ(times(continued.steps[1]), (std::vector{1., 2.}));
+    EXPECT_EQ(times(fresh.steps[1]), (std::vector{1., 1.25, 2.})); // a fresh state: new again
+}
+
 } // namespace damn::amr
 
 

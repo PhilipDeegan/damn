@@ -18,6 +18,8 @@
 //   TimeRefinement<dim> stepping{{.time_ratio = 4, .regrid_interval = 2}};
 //   stepping.advance(h, hooks, t, dt);     one step dt of level 0 from t, finer levels with it
 //   advance(h, hooks, t, dt, time_ratio)   the same with a fresh state (every level new)
+//   stepping.state() / restore(state)      what carries across steps (each level's dt_max, the
+//                                          finest level before the last regrid), for restarts
 //
 // the user's hooks, per level ln (all but advance optional, see below):
 //   hooks.advance(ln, step)                one step of level ln, step: a Step (t, dt, coarse_t,
@@ -46,6 +48,7 @@
 // (last substep), then the finer level's substeps and its synchronize, then after_step
 
 #include "damn/amr/hierarchy.hpp"
+#include "damn/core/def.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -69,6 +72,13 @@ struct Step
     bool first       = false; // the first substep in the coarser level's step (level 0: true)
     bool last        = false; // the last one (level 0: true)
     int substep      = 0;     // its index in the coarser level's step
+};
+
+// what a TimeRefinement carries from one step to the next (the rest is reset per coarser step)
+struct TimeRefinementState
+{
+    std::vector<double> dt_max{}; // per level
+    int last_finest = 0;
 };
 
 struct TimeRefinementOptions
@@ -115,6 +125,21 @@ public:
     explicit TimeRefinement(TimeRefinementOptions const& options = {})
         : options_{options}
     {
+    }
+
+    NO_DISCARD TimeRefinementState state() const
+    {
+        TimeRefinementState s{.dt_max = {}, .last_finest = last_finest_};
+        for (auto const& l : levels_)
+            s.dt_max.push_back(l.dt_max);
+        return s;
+    }
+    void restore(TimeRefinementState const& s)
+    {
+        levels_.resize(std::max(levels_.size(), s.dt_max.size()));
+        for (std::size_t ln = 0; ln < s.dt_max.size(); ++ln)
+            levels_[ln].dt_max = s.dt_max[ln];
+        last_finest_ = s.last_finest;
     }
 
     // one step dt of level 0 from t, its finer levels with it
