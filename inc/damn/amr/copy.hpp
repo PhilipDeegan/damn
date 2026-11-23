@@ -577,25 +577,36 @@ void detail::assign(Plan<dim> const& plan, Access const& access, LevelData<dim, 
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
             src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
-                dst_of<dim, false>(access, ld.data[piece.dst], piece, [&](auto& dst) {
-                    auto const& dst_box = ld.patches[piece.dst].box;
-                    using T             = box_data_value_t<std::remove_cvref_t<decltype(dst)>, dim>;
-                    if constexpr (SpanBoxData<decltype(src), dim>
-                                  and SpanBoxData<decltype(dst), dim>)
-                    {
-                        auto const s = box_span(src, piece.src.patch.box);
-                        auto const d = box_span(dst, dst_box);
-                        core::for_each_span(piece.box, [&](auto const& p, std::uint32_t const n) {
-                            std::memcpy(row<dim>(d, p), row<dim>(s, p - piece.src.shift),
-                                        n * sizeof(T));
-                        });
-                    }
-                    else
-                        core::for_each_point(piece.box, [&](auto const& p) {
-                            value(dst, dst_box, p)
-                                = value(src, piece.src.patch.box, p - piece.src.shift);
-                        });
-                });
+                auto const& dst_box = ld.patches[piece.dst].box;
+                auto const points   = [&](auto& dst) {
+                    core::for_each_point(piece.box, [&](auto const& p) {
+                        value(dst, dst_box, p)
+                            = value(src, piece.src.patch.box, p - piece.src.shift);
+                    });
+                };
+                // each side's kind tested where its type is known: an expression of src alone
+                //  under a test of dst is not dependent once src's lambda is instantiated, and
+                //  clang looks it up then
+                if constexpr (SpanBoxData<decltype(src), dim>)
+                {
+                    auto const s = box_span(src, piece.src.patch.box);
+                    dst_of<dim, false>(access, ld.data[piece.dst], piece, [&](auto& dst) {
+                        if constexpr (SpanBoxData<decltype(dst), dim>)
+                        {
+                            using T = box_data_value_t<std::remove_cvref_t<decltype(dst)>, dim>;
+                            auto const d = box_span(dst, dst_box);
+                            core::for_each_span(
+                                piece.box, [&](auto const& p, std::uint32_t const n) {
+                                    std::memcpy(row<dim>(d, p), row<dim>(s, p - piece.src.shift),
+                                                n * sizeof(T));
+                                });
+                        }
+                        else
+                            points(dst);
+                    });
+                }
+                else
+                    dst_of<dim, false>(access, ld.data[piece.dst], piece, points);
             });
 }
 
