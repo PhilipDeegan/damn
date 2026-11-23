@@ -134,6 +134,42 @@ namespace detail
         return p;
     }
 
+    // the assign / sum kernels' resources: a source read through a pointer to (const) double, a
+    //  destination written through a pointer to double
+    template<typename R, std::size_t dim>
+    concept DeviceSource
+        = DeviceBoxSpan<R const, dim> and requires(R const& r, core::Box<int, dim> const& box) {
+              requires std::same_as<
+                  std::remove_cv_t<std::remove_pointer_t<decltype(box_span(r, box).ptr)>>, double>;
+          };
+
+    template<typename R, std::size_t dim>
+    concept DeviceDestination
+        = DeviceBoxSpan<R, dim> and requires(R& r, core::Box<int, dim> const& box) {
+              requires std::same_as<decltype(box_span(r, box).ptr), double*>;
+          };
+
+    // a piece the kernels copy: into the table
+    template<std::size_t dim, typename S, typename D>
+        requires DeviceSource<S, dim> and DeviceDestination<D, dim>
+    bool table_piece(DeviceTable<dim>& table, S const& src, D& dst, auto const& piece,
+                     core::Box<int, dim> const& dst_patch_box)
+    {
+        auto const s = box_span(src, piece.src.patch.box);
+        auto const d = box_span(dst, dst_patch_box);
+        table.pieces.push_back(
+            DevicePiece<dim>{s.ptr, s.box, d.ptr, d.box, piece.box, piece.src.shift, table.total});
+        table.total += piece.box.size();
+        return true;
+    }
+
+    // other resources: not the device's, the copy's host path
+    template<std::size_t dim, typename S, typename D>
+    bool table_piece(DeviceTable<dim>&, S const&, D&, auto const&, core::Box<int, dim> const&)
+    {
+        return false;
+    }
+
     // the plan's table, built on first use: unusable if a local piece's resources do not qualify
     template<std::size_t dim, typename Access, typename PatchData>
     DeviceTable<dim>& device_table(Plan<dim>& plan, Access const& access,
@@ -153,25 +189,7 @@ namespace detail
             bool qualified = false;
             src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
                 dst_of<dim, false>(access, ld.data[piece.dst], piece, [&](auto& dst) {
-                    using S = std::remove_cvref_t<decltype(src)>;
-                    using D = std::remove_cvref_t<decltype(dst)>;
-                    if constexpr (DeviceBoxSpan<S const, dim> and DeviceBoxSpan<D, dim>)
-                    {
-                        auto const s = box_span(src, piece.src.patch.box);
-                        auto const d = box_span(dst, ld.patches[piece.dst].box);
-                        if constexpr (std::is_same_v<
-                                          std::remove_cv_t<std::remove_pointer_t<decltype(s.ptr)>>,
-                                          double>
-                                      and std::is_same_v<std::remove_pointer_t<decltype(d.ptr)>,
-                                                         double>)
-                        {
-                            table->pieces.push_back(DevicePiece<dim>{s.ptr, s.box, d.ptr, d.box,
-                                                                     piece.box, piece.src.shift,
-                                                                     table->total});
-                            table->total += piece.box.size();
-                            qualified = true;
-                        }
-                    }
+                    qualified = table_piece(*table, src, dst, piece, ld.patches[piece.dst].box);
                 });
             });
             if (!qualified)
@@ -248,6 +266,54 @@ namespace detail
         }
         table.sums_built = true;
     }
+
+    // a resource pair whose type gives the device append hooks (found by ADL)
+    template<typename Pieces>
+    concept DeviceAppendable = requires(Pieces const& v) {
+        { can_append_items_on_device(v) } -> std::same_as<bool>;
+        append_items_on_device(v);
+    };
+
+    // a piece of the pair's resource types: into the pair's pieces
+    template<typename D, typename S, std::size_t dim>
+    bool append_piece(std::vector<AppendPiece<D, S, dim>>& pieces, S const& src, D& dst,
+                      auto const& piece)
+    {
+        pieces.push_back({dst, src, piece.box, piece.src.shift, piece.dst});
+        return true;
+    }
+
+    // a piece of other types: the pair is not one resource pair, the host path
+    template<typename D, typename S, std::size_t dim>
+    bool append_piece(std::vector<AppendPiece<D, S, dim>>&, auto const&, auto&, auto const&)
+    {
+        return false;
+    }
+
+    // the pair's pieces (for_each_piece(add): add(src, dst, piece) for each) handed at once to its
+    //  resource type's device hooks: a run, if every piece is of the pair's types and they can
+    template<std::size_t dim, typename S, typename D>
+        requires DeviceAppendable<std::vector<AppendPiece<D, S, dim>>>
+    bool append_run(S const&, D&, std::vector<std::function<void()>>& runs, auto&& for_each_piece)
+    {
+        auto pieces = std::make_shared<std::vector<AppendPiece<D, S, dim>>>();
+        bool same   = true;
+        for_each_piece([&](auto const& src, auto& dst, auto const& piece) {
+            same = append_piece(*pieces, src, dst, piece) and same;
+        });
+        if (!same or !can_append_items_on_device(*pieces))
+            return false;
+        runs.emplace_back([pieces]() { append_items_on_device(*pieces); });
+        return true;
+    }
+
+    // a resource type without device append hooks: the host path
+    template<std::size_t dim, typename S, typename D>
+    bool append_run(S const&, D&, std::vector<std::function<void()>>&, auto&&)
+    {
+        return false;
+    }
+
 } // namespace detail
 
 // Assign on the device: false (nothing done) when the plan's pieces do not all qualify
@@ -367,39 +433,16 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
         bool ok           = false;
         detail::src_of<dim, true>(access, ld.data[first.src.local], first, [&](auto const& src0) {
             detail::dst_of<dim, true>(access, ld.data[first.dst], first, [&](auto& dst0) {
-                using S        = std::remove_cvref_t<decltype(src0)>;
-                using D        = std::remove_cvref_t<decltype(dst0)>;
-                using Pieces_t = std::vector<AppendPiece<D, S, dim>>;
-                if constexpr (requires(Pieces_t const& v) {
-                                  { can_append_items_on_device(v) } -> std::same_as<bool>;
-                                  append_items_on_device(v);
-                              })
-                {
-                    auto pieces = std::make_shared<Pieces_t>();
-                    bool same   = true;
+                ok = detail::append_run<dim>(src0, dst0, runs, [&](auto&& add) {
                     for (auto const& piece : plan.pieces)
                         if (piece.pair == pair)
                             detail::src_of<dim, true>(
                                 access, ld.data[piece.src.local], piece, [&](auto const& src) {
                                     detail::dst_of<dim, true>(
-                                        access, ld.data[piece.dst], piece, [&](auto& dst) {
-                                            if constexpr (std::is_same_v<
-                                                              std::remove_cvref_t<decltype(src)>, S>
-                                                          and std::is_same_v<
-                                                              std::remove_cvref_t<decltype(dst)>,
-                                                              D>)
-                                                pieces->push_back({dst, src, piece.box,
-                                                                   piece.src.shift, piece.dst});
-                                            else
-                                                same = false;
-                                        });
+                                        access, ld.data[piece.dst], piece,
+                                        [&](auto& dst) { add(src, dst, piece); });
                                 });
-                    if (same and can_append_items_on_device(*pieces))
-                    {
-                        runs.emplace_back([pieces]() { append_items_on_device(*pieces); });
-                        ok = true;
-                    }
-                }
+                });
             });
         });
         if (!ok)
