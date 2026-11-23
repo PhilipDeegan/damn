@@ -21,10 +21,11 @@
 #include "damn/amr/copy.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/mpi/damn_mpi.hpp"
+#include "damn/core/memory/scratch.hpp"
 
 #include <cstddef>
 #include <limits>
-#include <map>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -38,6 +39,8 @@ struct LevelData;
 namespace damn::mpi
 {
 inline constexpr int copy_tag = 0xda;
+
+struct CopySends; // core::scratch tag: a copy's send requests
 
 // access: how the pieces' resources are reached (amr::by_name, or accessors one per pair, as
 //  damn::amr::copy)
@@ -59,18 +62,22 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     };
 
     // 1. send
-    std::vector<MPI_Request> sends;
+    std::span<MPI_Request> sends;
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::pack_send");
         for (auto& [_, buffer] : plan.sent)
             buffer.clear();
         for (auto const& piece : plan.outgoing)
+        {
+            DAMN_LOG_SCOPE(3, "damn::mpi::copy::pack_send::piece"); // one patch overlap
             pack_piece(region, piece, access, ld, plan.sent[piece.dst_rank]);
+        }
 
-        sends.reserve(plan.sent.size());
+        sends          = core::scratch<MPI_Request, CopySends>(plan.sent.size());
+        std::size_t at = 0;
         for (auto& [peer, buffer] : plan.sent)
             MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, copy_tag, comm,
-                      &sends.emplace_back());
+                      &sends[at++]);
     }
 
     // 2. local
@@ -85,15 +92,9 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     }
 
     // 3. receive: pieces from each peer, in plan order
-    std::vector<std::byte const*> sources; // sums: each piece's values, local or received
     if constexpr (arrival == Arrival::Sum)
-        sources = amr::detail::local_sources(plan);
-    std::map<int, std::vector<Piece<dim> const*>> from;
-    for (auto const& piece : plan.pieces)
-        if (piece.src.local == not_local)
-            from[piece.src.patch.rank].push_back(&piece);
-
-    for (auto const& [peer, pieces] : from)
+        amr::detail::local_sources(plan); // and the received ones below: plan.sources
+    for (auto const& [peer, indices] : plan.from)
     {
         MPI_Status status;
         {
@@ -104,33 +105,43 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
         MPI_Get_count(&status, MPI_BYTE, &bytes);
         auto& buffer = plan.received[peer];
         buffer.resize(static_cast<std::size_t>(bytes));
-        MPI_Recv(buffer.data(), bytes, MPI_BYTE, peer, copy_tag, comm, MPI_STATUS_IGNORE);
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::recv"); // the probed message out of MPI
+            MPI_Recv(buffer.data(), bytes, MPI_BYTE, peer, copy_tag, comm, MPI_STATUS_IGNORE);
+        }
 
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::unpack");
         std::byte const* at = buffer.data();
-        for (auto const* piece : pieces)
+        for (auto const i : indices)
+        {
+            DAMN_LOG_SCOPE(3, "damn::mpi::copy::unpack::piece"); // one patch overlap
+            auto const& piece = plan.pieces[i];
             if constexpr (arrival == Arrival::Sum)
             {
-                if (at + piece->bytes > buffer.data() + buffer.size())
+                if (at + piece.bytes > buffer.data() + buffer.size())
                     break; // checked below
-                sources[static_cast<std::size_t>(piece - plan.pieces.data())] = at;
-                at += piece->bytes;
+                plan.sources[i] = at;
+                at += piece.bytes;
             }
             else
-                unpack_piece<arrival>(region, *piece, access, ld, at);
+                unpack_piece<arrival>(region, piece, access, ld, at);
+        }
         if (at != buffer.data() + buffer.size())
             throw std::runtime_error("damn::mpi::copy: rank " + std::to_string(peer)
                                      + "'s message does not match this rank's plan");
     }
 
     // 4.
-    DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
-    if constexpr (arrival == Arrival::Sum)
-        amr::detail::fold_sums(plan, access, ld, sources);
-    else if constexpr (arrival == Arrival::Max)
-        amr::detail::unpack_local<arrival>(plan, access, ld);
-    else if constexpr (arrival == Arrival::Append) // local and received items in, each once
-        amr::detail::appended(plan, access, ld);
+    {
+        DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
+        if constexpr (arrival == Arrival::Sum)
+            amr::detail::fold_sums(plan, access, ld);
+        else if constexpr (arrival == Arrival::Max)
+            amr::detail::unpack_local<arrival>(plan, access, ld);
+        else if constexpr (arrival == Arrival::Append) // local and received items in, each once
+            amr::detail::appended(plan, access, ld);
+    }
+    DAMN_LOG_SCOPE(2, "damn::mpi::copy::sends"); // until the peers have received them
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 

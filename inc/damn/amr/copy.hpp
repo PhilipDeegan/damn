@@ -32,6 +32,7 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+#include "damn/core/memory/scratch.hpp"
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/particle_data.hpp"
 #include "damn/amr/particle_items.hpp"
@@ -51,6 +52,8 @@
 #include <type_traits>
 #include <vector>
 #include <iterator>
+#include <map>
+#include <concepts>
 
 namespace damn::amr
 {
@@ -148,6 +151,31 @@ namespace detail
     template<typename T>
     void write(std::vector<std::byte>& out, T const& v);
 
+    // a BoxData resource whose values are a C ordered array over a box: box_span(resource,
+    //  patch box) its data and the box of its points. Its pieces are copied span by span
+    //  (core::for_each_span: a run along the last direction, contiguous in memory) instead of
+    //  point by point, in the same point order: the same bytes, the same sums
+    template<typename R, std::size_t dim>
+    concept SpanBoxData
+        = BoxData<std::remove_cvref_t<R>, dim> and requires(R& r, core::Box<int, dim> const& box) {
+              { box_span(r, box).box } -> std::convertible_to<core::Box<int, dim>>;
+              requires std::same_as<
+                  std::remove_cv_t<std::remove_pointer_t<decltype(box_span(r, box).ptr)>>,
+                  box_data_value_t<std::remove_cvref_t<R>, dim>>;
+          };
+
+    // the first value of the span starting at p (amr index space) of a resource's box_span
+    template<std::size_t dim>
+    NO_DISCARD auto* row(auto const& span, core::Point<int, dim> const& p)
+    {
+        auto const shape = span.box.shape();
+        std::size_t flat = 0;
+        for (std::size_t d = 0; d < dim; ++d)
+            flat = flat * static_cast<std::size_t>(shape[d])
+                   + static_cast<std::size_t>(p[d] - span.box.lower[d]);
+        return span.ptr + flat;
+    }
+
     // local pieces only, below: pieces from or to other ranks are damn::mpi::copy's
     // fn(a piece's source / destination resource on patch_data), as access reaches it
     template<std::size_t dim, bool particles, typename PatchData, typename Fn>
@@ -194,10 +222,16 @@ namespace detail
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
     void unpack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    // where each piece's packed values are (by its index in plan.pieces): local ones in the
-    //  plan's buffer; other ranks' set by damn::mpi::copy
+    // what follows from a new plan's pieces alone (Plan's from, fold_order, fold_groups)
     template<std::size_t dim>
-    NO_DISCARD std::vector<std::byte const*> local_sources(Plan<dim> const& plan);
+    void finish_plan(Plan<dim>& plan);
+
+    // plan.sources: where each piece's packed values are (by its index in plan.pieces): local
+    //  ones in the plan's buffer, other ranks' null (set by damn::mpi::copy)
+    template<std::size_t dim>
+    void local_sources(Plan<dim>& plan);
+
+    struct FoldOwn; // fold_sums' scratch (core::scratch tag)
 
     // the sums, in the same order on every patch holding a point (PHAREHUB/PHARE#1581): per
     //  destination and resource, the summed points are zeroed, then the contributions added in
@@ -206,8 +240,7 @@ namespace detail
     //  their images one shift apart, and the order is translation invariant: the same values
     //  added in the same order, the same bits ((a + b) + c and (a + c) + b can differ)
     template<std::size_t dim, typename Access, typename PatchData>
-    void fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld,
-                   std::vector<std::byte const*> const& sources);
+    void fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 } // namespace detail
 
 
@@ -243,6 +276,7 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
                                                  ? detail::particle_plan(n, ld, pairs)
                                                  : detail::box_plan(region, n, ld, pairs))
                     .first;
+        detail::finish_plan(found->second);
     }
     return found->second;
 }
@@ -283,7 +317,10 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
     {
         detail::pack_local(plan, access, ld);
         if constexpr (arrival == Arrival::Sum)
-            detail::fold_sums(plan, access, ld, detail::local_sources(plan));
+        {
+            detail::local_sources(plan);
+            detail::fold_sums(plan, access, ld);
+        }
         else
             detail::unpack_local<arrival>(plan, access, ld);
     }
@@ -542,10 +579,22 @@ void detail::assign(Plan<dim> const& plan, Access const& access, LevelData<dim, 
             src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
                 dst_of<dim, false>(access, ld.data[piece.dst], piece, [&](auto& dst) {
                     auto const& dst_box = ld.patches[piece.dst].box;
-                    core::for_each_point(piece.box, [&](auto const& p) {
-                        value(dst, dst_box, p)
-                            = value(src, piece.src.patch.box, p - piece.src.shift);
-                    });
+                    using T             = box_data_value_t<std::remove_cvref_t<decltype(dst)>, dim>;
+                    if constexpr (SpanBoxData<decltype(src), dim>
+                                  and SpanBoxData<decltype(dst), dim>)
+                    {
+                        auto const s = box_span(src, piece.src.patch.box);
+                        auto const d = box_span(dst, dst_box);
+                        core::for_each_span(piece.box, [&](auto const& p, std::uint32_t const n) {
+                            std::memcpy(row<dim>(d, p), row<dim>(s, p - piece.src.shift),
+                                        n * sizeof(T));
+                        });
+                    }
+                    else
+                        core::for_each_point(piece.box, [&](auto const& p) {
+                            value(dst, dst_box, p)
+                                = value(src, piece.src.patch.box, p - piece.src.shift);
+                        });
                 });
             });
 }
@@ -556,13 +605,22 @@ void detail::pack_local(Plan<dim>& plan, Access const& access, LevelData<dim, Pa
     for (auto const& piece : plan.pieces)
         if (is_local(piece))
             src_of<dim, false>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
-                using T  = box_data_value_t<decltype(src), dim>;
+                using T  = box_data_value_t<std::remove_cvref_t<decltype(src)>, dim>;
                 auto* at = plan.buffer.data() + piece.offset;
-                core::for_each_point(piece.box, [&](auto const& p) {
-                    T const v{value(src, piece.src.patch.box, p - piece.src.shift)};
-                    std::memcpy(at, &v, sizeof(T));
-                    at += sizeof(T);
-                });
+                if constexpr (SpanBoxData<decltype(src), dim>)
+                {
+                    auto const s = box_span(src, piece.src.patch.box);
+                    core::for_each_span(piece.box, [&](auto const& p, std::uint32_t const n) {
+                        std::memcpy(at, row<dim>(s, p - piece.src.shift), n * sizeof(T));
+                        at += n * sizeof(T);
+                    });
+                }
+                else
+                    core::for_each_point(piece.box, [&](auto const& p) {
+                        T const v{value(src, piece.src.patch.box, p - piece.src.shift)};
+                        std::memcpy(at, &v, sizeof(T));
+                        at += sizeof(T);
+                    });
             });
 }
 
@@ -578,26 +636,23 @@ void detail::unpack_local(Plan<dim>& plan, Access const& access, LevelData<dim, 
 }
 
 template<std::size_t dim>
-std::vector<std::byte const*> detail::local_sources(Plan<dim> const& plan)
-{
-    std::vector<std::byte const*> sources(plan.pieces.size(), nullptr);
-    for (std::size_t i = 0; i < plan.pieces.size(); ++i)
-        if (is_local(plan.pieces[i]))
-            sources[i] = plan.buffer.data() + plan.pieces[i].offset;
-    return sources;
-}
-
-template<std::size_t dim, typename Access, typename PatchData>
-void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld,
-                       std::vector<std::byte const*> const& sources)
+void detail::finish_plan(Plan<dim>& plan)
 {
     auto const& pieces = plan.pieces;
-    auto const image   = [&](std::size_t const i) {
+
+    std::map<int, std::vector<std::size_t>> from;
+    for (std::size_t i = 0; i < pieces.size(); ++i)
+        if (pieces[i].src.local == not_local)
+            from[pieces[i].src.patch.rank].push_back(i);
+    plan.from.assign(from.begin(), from.end());
+
+    if (plan.region != Region::Borders)
+        return;
+    auto const image = [&](std::size_t const i) {
         return core::shift(pieces[i].src.patch.box, pieces[i].src.shift);
     };
-
-    // the pieces by destination and resource, then image
-    std::vector<std::size_t> order(pieces.size());
+    auto& order = plan.fold_order;
+    order.resize(pieces.size());
     for (std::size_t i = 0; i < order.size(); ++i)
         order[i] = i;
     std::sort(order.begin(), order.end(), [&](auto const i, auto const j) {
@@ -607,57 +662,95 @@ void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<di
             return pieces[i].names < pieces[j].names;
         return core::lexicographic_less(image(i), image(j));
     });
-
     for (std::size_t begin = 0; begin < order.size();)
     {
-        auto const& first = pieces[order[begin]];
-        auto end          = begin + 1;
-        while (end < order.size() and pieces[order[end]].dst == first.dst
-               and pieces[order[end]].names == first.names)
-            ++end;
+        auto& group = plan.fold_groups.emplace_back();
+        group.begin = begin;
+        group.end   = begin + 1;
+        while (group.end < order.size() and pieces[order[group.end]].dst == pieces[order[begin]].dst
+               and pieces[order[group.end]].names == pieces[order[begin]].names)
+            ++group.end;
+        for (auto k = group.begin; k < group.end; ++k) // each point once: what earlier pieces miss
+        {
+            std::vector<core::Box<int, dim>> parts{pieces[order[k]].box};
+            for (auto const& covered : group.covered)
+            {
+                std::vector<core::Box<int, dim>> rest;
+                for (auto const& part : parts)
+                    for (auto const& r : core::minus_ordered(part, covered))
+                        rest.push_back(r);
+                parts = std::move(rest);
+            }
+            for (auto const& part : parts)
+            {
+                group.covered.push_back(part);
+                group.points += static_cast<std::size_t>(part.size());
+            }
+        }
+        begin = group.end;
+    }
+}
 
+template<std::size_t dim>
+void detail::local_sources(Plan<dim>& plan)
+{
+    plan.sources.assign(plan.pieces.size(), nullptr);
+    for (std::size_t i = 0; i < plan.pieces.size(); ++i)
+        if (is_local(plan.pieces[i]))
+            plan.sources[i] = plan.buffer.data() + plan.pieces[i].offset;
+}
+
+template<std::size_t dim, typename Access, typename PatchData>
+void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
+{
+    auto const& pieces = plan.pieces;
+    auto const& order  = plan.fold_order;
+    auto const image   = [&](std::size_t const i) {
+        return core::shift(pieces[i].src.patch.box, pieces[i].src.shift);
+    };
+
+    for (auto const& group : plan.fold_groups)
+    {
+        auto const& first   = pieces[order[group.begin]];
         auto const& dst_box = ld.patches[first.dst].box;
         dst_of<dim, false>(access, ld.data[first.dst], first, [&](auto& dst) {
-            using T = box_data_value_t<decltype(dst), dim>;
+            using T = box_data_value_t<std::remove_cvref_t<decltype(dst)>, dim>;
 
-            // the summed points (the pieces' boxes), within their bounding box: the
-            //  destination's own values kept, then zeroed
-            auto bounds = pieces[order[begin]].box;
-            for (auto k = begin + 1; k < end; ++k)
-                for (std::size_t d = 0; d < dim; ++d)
+            // fn(values, n) span by span, or point by point: the same operations, same order
+            auto const each = [&](auto const& box, auto&& fn) {
+                if constexpr (SpanBoxData<decltype(dst), dim>)
                 {
-                    bounds.lower[d] = std::min(bounds.lower[d], pieces[order[k]].box.lower[d]);
-                    bounds.upper[d] = std::max(bounds.upper[d], pieces[order[k]].box.upper[d]);
+                    auto const d = box_span(dst, dst_box);
+                    core::for_each_span(
+                        box, [&](auto const& p, std::uint32_t const n) { fn(row<dim>(d, p), n); });
                 }
-            auto const shape = bounds.shape();
-            auto const index = [&](auto const& p) {
-                std::size_t at = 0;
-                for (std::size_t d = 0; d < dim; ++d)
-                    at = at * static_cast<std::size_t>(shape[d])
-                         + static_cast<std::size_t>(p[d] - bounds.lower[d]);
-                return at;
+                else
+                    core::for_each_point(
+                        box, [&](auto const& p) { fn(&value(dst, dst_box, p), std::uint32_t{1}); });
             };
-            std::vector<T> own(static_cast<std::size_t>(bounds.size()));
-            std::vector<char> summed(own.size(), 0);
-            for (auto k = begin; k < end; ++k)
-                core::for_each_point(pieces[order[k]].box, [&](auto const& p) {
-                    auto const at = index(p);
-                    if (summed[at])
-                        return;
-                    summed[at] = 1;
-                    auto& d    = value(dst, dst_box, p);
-                    own[at]    = d;
-                    d          = T{0};
-                });
 
-            auto const add_own = [&]() {
-                core::for_each_point(bounds, [&](auto const& p) {
-                    if (auto const at = index(p); summed[at])
-                        value(dst, dst_box, p) += own[at];
+            // the summed points: the destination's own values kept, then zeroed
+            auto const own = core::scratch<T, FoldOwn>(group.points);
+            std::size_t o  = 0;
+            for (auto const& box : group.covered)
+                each(box, [&](T* const v, std::uint32_t const n) {
+                    std::copy_n(v, n, own.data() + o);
+                    std::fill_n(v, n, T{0});
+                    o += n;
                 });
+            auto const add_own = [&]() {
+                std::size_t at = 0;
+                for (auto const& box : group.covered)
+                    each(box, [&](T* const v, std::uint32_t const n) {
+                        for (std::uint32_t j = 0; j < n; ++j)
+                            v[j] += own[at + j];
+                        at += n;
+                    });
             };
+
+            // the contributions in image order, the destination's own at its place
             bool own_added = false;
-            for (auto k = begin; k < end; ++k)
+            for (auto k = group.begin; k < group.end; ++k)
             {
                 auto const i = order[k];
                 if (!own_added and core::lexicographic_less(dst_box, image(i)))
@@ -665,16 +758,17 @@ void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<di
                     add_own();
                     own_added = true;
                 }
-                if (!sources[i])
+                if (!plan.sources[i])
                     throw std::runtime_error("damn::amr::copy: a border sum piece not received");
-                std::byte const* at = sources[i];
-                core::for_each_point(pieces[i].box,
-                                     [&](auto const& p) { value(dst, dst_box, p) += read<T>(at); });
+                std::byte const* at = plan.sources[i];
+                each(pieces[i].box, [&](T* const v, std::uint32_t const n) {
+                    for (std::uint32_t j = 0; j < n; ++j)
+                        v[j] += read<T>(at);
+                });
             }
             if (!own_added)
                 add_own();
         });
-        begin = end;
     }
 }
 
@@ -724,11 +818,25 @@ void pack_piece(Region const region, Piece<dim> const& piece, Access const& acce
         return;
     }
     detail::src_of<dim, false>(access, src_data, piece, [&](auto const& src) {
-        using T = box_data_value_t<decltype(src), dim>;
-        out.reserve(out.size() + piece.bytes);
-        core::for_each_point(piece.box, [&](auto const& p) {
-            detail::write(out, T{value(src, piece.src.patch.box, p - piece.src.shift)});
-        });
+        using T = box_data_value_t<std::remove_cvref_t<decltype(src)>, dim>;
+        if constexpr (detail::SpanBoxData<decltype(src), dim>)
+        {
+            auto const s = box_span(src, piece.src.patch.box);
+            auto at      = out.size();
+            out.resize(at + static_cast<std::size_t>(piece.box.size()) * sizeof(T));
+            core::for_each_span(piece.box, [&](auto const& p, std::uint32_t const n) {
+                std::memcpy(out.data() + at, detail::row<dim>(s, p - piece.src.shift),
+                            n * sizeof(T));
+                at += n * sizeof(T);
+            });
+        }
+        else
+        {
+            out.reserve(out.size() + piece.bytes);
+            core::for_each_point(piece.box, [&](auto const& p) {
+                detail::write(out, T{value(src, piece.src.patch.box, p - piece.src.shift)});
+            });
+        }
     });
 }
 
@@ -745,8 +853,29 @@ void unpack_piece(Region const region, Piece<dim> const& piece, Access const& ac
         return;
     }
     detail::dst_of<dim, false>(access, dst_data, piece, [&](auto& dst) {
-        using T             = box_data_value_t<decltype(dst), dim>;
+        using T             = box_data_value_t<std::remove_cvref_t<decltype(dst)>, dim>;
         auto const& dst_box = ld.patches[piece.dst].box;
+        if constexpr (detail::SpanBoxData<decltype(dst), dim>)
+        {
+            auto const d = box_span(dst, dst_box);
+            core::for_each_span(piece.box, [&](auto const& p, std::uint32_t const n) {
+                T* const out = detail::row<dim>(d, p);
+                if constexpr (arrival == Arrival::Assign)
+                    std::memcpy(out, at, n * sizeof(T));
+                else
+                    for (std::uint32_t i = 0; i < n; ++i)
+                    {
+                        T v;
+                        std::memcpy(&v, at + i * sizeof(T), sizeof(T));
+                        if constexpr (arrival == Arrival::Sum)
+                            out[i] += v;
+                        else
+                            out[i] = std::max(out[i], v);
+                    }
+                at += n * sizeof(T);
+            });
+            return;
+        }
         core::for_each_point(piece.box, [&](auto const& p) {
             auto const v = detail::read<T>(at);
             auto& d      = value(dst, dst_box, p);
