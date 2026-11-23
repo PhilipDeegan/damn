@@ -10,11 +10,13 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <string_view>
 #include <cstddef>
 #include <iostream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -24,17 +26,58 @@ namespace
 {
     struct Regrid
     {
-        Hierarchy<2> h = make_hierarchy({true, false});
-        LevelData_t ld = allocate(h.levels[0], 0, make_patch_data);
+        Hierarchy<2> h;
+        LevelData_t ld;
 
-        Regrid() { fill(h, ld); }
+        explicit Regrid(std::array<bool, 2> const periodic = {true, false})
+            : h{make_hierarchy(periodic)}
+            , ld{allocate(h.levels[0], 0, make_patch_data)}
+        {
+            fill(h, ld);
+        }
 
-        auto onto(Level<2> const& level)
+        auto onto(Level<2> const& level, RegridGhosts ghosts = {})
         {
             toy::Tracker::reset_peak();
-            auto const map = make_regrid_map(h.levels[0], level, 0);
-            ld             = regrid(map, std::move(ld), make_patch_data);
+            auto const map
+                = make_regrid_map(h.levels[0], level, 0, periodic_shifts(h, 0), std::move(ghosts));
+            ld = regrid(map, std::move(ld), make_patch_data);
             return map;
+        }
+
+        // every field node of every patch, ghosts included, at its known value
+        void fill_ghosts()
+        {
+            for_each_patch(ld, [&](Patch<2> const& patch, toy::PatchData& data) {
+                for_each_field(data, [&](std::string_view const name, toy::Field& f) {
+                    core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+                        value(f, patch.box, p) = g_of(h, name, p);
+                    });
+                });
+            });
+        }
+
+        // the field nodes, ghosts included, not at their known value (NaN included); the
+        //  periodic direction's ghost nodes wrapped into the domain
+        std::size_t ghost_mismatches()
+        {
+            std::size_t bad = 0;
+            for_each_patch(ld, [&](Patch<2> const& patch, toy::PatchData& data) {
+                for_each_field(data, [&](std::string_view const name, toy::Field& f) {
+                    core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+                        bad += !(value(f, patch.box, p) == g_of(h, name, p));
+                    });
+                });
+            });
+            return bad;
+        }
+
+        std::vector<std::string> field_names()
+        {
+            std::vector<std::string> names;
+            for_each_field(ld.data.front(),
+                           [&](std::string_view const n, auto&) { names.emplace_back(n); });
+            return names;
         }
     };
 } // namespace
@@ -199,6 +242,61 @@ TEST(Regrid, moveOnlyPatchData)
         return std::make_unique<toy::PatchData>(make_patch_data(p));
     });
     expect_borders_from_the_old_patch(g.h, level.patches[0], *ld.data[0]);
+}
+
+TEST(Regrid, validGhostsMoveWithTheData)
+{
+    // every node known, ghosts included, the y direction not periodic: re-chopped with the
+    //  fields' ghosts valid, every new node, ghosts included, keeps its value (no NaN left)
+    Regrid r{{false, false}};
+    r.fill_ghosts();
+    auto const level = make_level(0, chop(r.h.domain, {2, 2}));
+    r.onto(level, RegridGhosts{.reach = reach, .fields = r.field_names()});
+    EXPECT_EQ(check(r.h, r.ld), 0u);
+    EXPECT_EQ(r.ghost_mismatches(), 0u);
+}
+
+TEST(Regrid, ghostsLeftAsMadeByDefault)
+{
+    Regrid r{{false, false}};
+    r.fill_ghosts();
+    r.onto(make_level(0, chop(r.h.domain, {2, 2})));
+    EXPECT_EQ(check(r.h, r.ld), 0u);
+    EXPECT_GT(r.ghost_mismatches(), 0u); // NaN ghosts, for the caller to fill
+}
+
+TEST(Regrid, validParticleGhostsMoveByCell)
+{
+    // the patch ghost items (one per old patch, at its lower corner - 1): with their ghosts
+    //  valid, each new patch has every old item whose cell is in its ghost cells; a kept patch
+    //  (the same box and owner) its own, as is
+    Regrid r;
+    std::vector<Point2> cells;
+    for (auto const& data : r.ld.data)
+        for (auto const& item : data.patch_ghost.items)
+            cells.push_back(Point2{item.cell});
+    auto const level = make_level(0, chop(r.h.domain, {2, 2}));
+    auto const map   = r.onto(level, RegridGhosts{.reach = 1, .particles = {"patch_ghost"}});
+    auto shifts      = periodic_shifts(r.h, 0);
+    shifts.insert(shifts.begin(), Point2{});
+    std::size_t kept = 0;
+    for (std::size_t i = 0; i < r.ld.data.size(); ++i)
+    {
+        auto const& patch = r.ld.patches[i];
+        auto const& data  = r.ld.data[i];
+        if (map.kept[i] != not_local)
+        {
+            ++kept;
+            EXPECT_EQ(data.patch_ghost.items.size(), 1u) << patch.box;
+            continue;
+        }
+        std::size_t expected = 0;
+        for (auto const& c : cells)
+            for (auto const& sh : shifts)
+                expected += core::isIn(c + sh, ghost_box(data.patch_ghost, patch.box));
+        EXPECT_EQ(data.patch_ghost.items.size(), expected) << patch.box;
+    }
+    EXPECT_EQ(kept, 1u);
 }
 
 TEST(Regrid, otherRanksPatchesThrow)

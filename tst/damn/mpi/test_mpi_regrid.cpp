@@ -15,6 +15,8 @@
 
 #include <array>
 #include <cstddef>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -50,11 +52,49 @@ namespace
 
         World() { fill(h, ld); }
 
-        void onto(Level<2> const& level, mpi::RegridLimits const limits = {})
+        void onto(Level<2> const& level, mpi::RegridLimits const limits = {},
+                  RegridGhosts ghosts = {})
         {
-            auto const map = make_regrid_map(h.levels[0], level, mpi_rank());
+            auto const map = make_regrid_map(h.levels[0], level, mpi_rank(), periodic_shifts(h, 0),
+                                             std::move(ghosts));
             ld             = mpi::regrid(map, std::move(ld), make_patch_data, limits);
             set_level(h, level);
+        }
+
+        // every field node, ghosts included, at its known value
+        void fill_ghosts()
+        {
+            for_each_patch(ld, [&](Patch<2> const& patch, toy::PatchData& data) {
+                for_each_field(data, [&](std::string_view const name, toy::Field& f) {
+                    core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+                        value(f, patch.box, p) = g_of(h, name, p);
+                    });
+                });
+            });
+        }
+
+        // the field nodes, ghosts included, not at their known value (NaN included), every
+        //  rank's
+        std::size_t ghost_mismatches()
+        {
+            std::size_t bad = 0;
+            for_each_patch(ld, [&](Patch<2> const& patch, toy::PatchData& data) {
+                for_each_field(data, [&](std::string_view const name, toy::Field& f) {
+                    core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+                        bad += !(value(f, patch.box, p) == g_of(h, name, p));
+                    });
+                });
+            });
+            return sum_over_ranks(bad);
+        }
+
+        RegridGhosts all_fields() const
+        {
+            RegridGhosts g{.reach = reach};
+            toy::PatchData probe = make_patch_data(h.levels[0].patches.front());
+            for_each_field(probe,
+                           [&](std::string_view const n, auto&) { g.fields.emplace_back(n); });
+            return g;
         }
 
         void expect_correct()
@@ -81,6 +121,21 @@ namespace
     }
 } // namespace
 
+
+TEST(MpiRegrid, validGhostsMoveWithNewOwners)
+{
+    // every node known, ghosts included: new owners, then re-chopped onto new owners, with the
+    //  fields' ghosts valid: every node, ghosts included, keeps its value across ranks
+    for (bool const rechop : {false, true})
+    {
+        World w;
+        w.fill_ghosts();
+        auto const ghosts = w.all_fields();
+        w.onto(rechop ? rechopped(w.h, {2, 2}, true) : reversed(w.h.levels[0]), {}, ghosts);
+        w.expect_correct();
+        EXPECT_EQ(w.ghost_mismatches(), 0u) << (rechop ? "rechopped" : "new owners");
+    }
+}
 
 TEST(MpiRegrid, newOwners)
 {
