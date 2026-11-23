@@ -255,12 +255,16 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
     return boxes;
 }
 
-// box cut into as many boxes per direction as chop, the cells shared evenly between them in
-// units of `granularity` cells from the box's lower corner (e.g. the refinement ratio: refined
-// boxes of whole coarser cells), the leftover units one each to the first boxes (SAMRAI's chop on
-// one rank), so no box is left with a few cells: 122 cells by 60, granularity 2: 42, 40, 40
-// (chop: 60, 60, 2); 165 by 60: 55, 55, 55. With `size` a multiple of the granularity no box is
-// wider than `size`; once the box is wider than `size`, none is narrower than about size / 2
+// how far past chop_evenly's size a box may go: size is a hint, not a bound
+double constexpr chop_size_slack = 1.25;
+
+// box cut per direction into the count of boxes nearest width / size, more only if a box would be
+// wider than chop_size_slack * size, the cells shared evenly between them in units of
+// `granularity` cells from the box's lower corner (e.g. the refinement ratio: refined boxes of
+// whole coarser cells; size and its slack are rounded to whole units), the leftover units one
+// each to the first boxes (SAMRAI's chop on one rank), so no box is left with a few cells.
+// Size 20: 100 cells: 20 x 5; 45: 23, 22 (chop: 20, 20, 5); 24: 24; 26: 13, 13. Size 60,
+// granularity 2: 122 cells: 62, 60 (chop: 60, 60, 2)
 template<std::size_t dim>
 NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
                                                         std::array<int, dim> const& size,
@@ -274,8 +278,11 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> cons
         if (size[i] < 1)
             throw std::runtime_error("damn::amr::chop_evenly: size < 1");
         auto const width = box.upper[i] - box.lower[i] + 1;
-        auto const n     = (width + size[i] - 1) / size[i];
         auto const units = (width + granularity - 1) / granularity;
+        auto const hint  = std::max(1, (2 * size[i] + granularity) / (2 * granularity)); // round
+        auto const most = std::max(hint, static_cast<int>(chop_size_slack * size[i] / granularity));
+        auto const nearest = (2 * units + hint) / (2 * hint); // round(units / hint)
+        auto const n       = std::max({1, nearest, (units + most - 1) / most});
         for (int k = 0; k < n; ++k)
             cuts[i].push_back(box.lower[i] // ceil(k units / n)
                               + granularity
