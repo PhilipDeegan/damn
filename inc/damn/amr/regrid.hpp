@@ -294,7 +294,8 @@ namespace detail
 
         finish(make_new);
 
-        LevelData<dim, PatchData> out{map.level, map.new_local, {}};
+        LevelData<dim, PatchData> out{map.level, map.new_local, {}, old.prototype};
+        set_prototype(out, make);
         out.data.reserve(news.size());
         for (std::size_t d = 0; d < news.size(); ++d)
         {
