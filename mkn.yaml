@@ -5,6 +5,8 @@ property:
   # dependency versions: master (HEAD), not the default branch's rolling release (mkn.kul's: latest)
   mkn.kul.version: master
   mkn.gpu.version: master
+  clang.tidy.version: master
+  cpp.iwyu.version: master
 
 profile:
 
@@ -102,6 +104,7 @@ profile:
   parent: test_damn_core
   mod:
   - name: clang.tidy
+    version: ${clang.tidy.version}
 
 # include-what-you-use report for inc/, needs iwyu on PATH
 - name: iwyu
@@ -109,6 +112,7 @@ profile:
   mode: none
   mod:
   - name: cpp.iwyu
+    version: ${cpp.iwyu.version}
     compile:
       paths: inc
       headers: -x c++-header
@@ -123,6 +127,7 @@ profile:
   mode: none
   mod:
   - name: cpp.iwyu
+    version: ${cpp.iwyu.version}
     compile:
       paths: inc
       # fragments of damn/core/exec/kernels.hpp, not standalone headers
