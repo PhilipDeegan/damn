@@ -5,6 +5,7 @@
 
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/copy.hpp"
+#include "damn/core/memory/box_span.hpp"
 #include "tst/damn/amr/toy.hpp"
 
 #include "gtest/gtest.h"
@@ -373,6 +374,141 @@ TEST(Copy, accessorsAreOnePerPair)
     EXPECT_THROW(copy(fill_ghosts, n, same_names({"Bx", "rho"}),
                       std::array{Member<&toy::PatchData::Bx>{}}, ld),
                  std::runtime_error);
+}
+
+namespace
+{
+    // a C ordered field (the last direction fastest) over its ghost box, given as a box_span:
+    //  damn copies it span by span (detail::SpanBoxData)
+    struct CField
+    {
+        std::array<bool, 2> primal{};
+        int gw = 2;
+        std::vector<double> v{};
+    };
+    Box2 domain_box(CField const& f, Box2 cells)
+    {
+        for (std::size_t i = 0; i < 2; ++i)
+            cells.upper[i] += f.primal[i];
+        return cells;
+    }
+    Box2 ghost_box(CField const& f, Box2 const& cells)
+    {
+        return core::grow(domain_box(f, cells), f.gw);
+    }
+    core::BoxSpan<double, 2> box_span(CField& f, Box2 const& cells)
+    {
+        return {f.v.data(), ghost_box(f, cells)};
+    }
+    core::BoxSpan<double const, 2> box_span(CField const& f, Box2 const& cells)
+    {
+        return {f.v.data(), ghost_box(f, cells)};
+    }
+    double& value(CField& f, Box2 const& cells, Point2 const& p)
+    {
+        return box_span(f, cells)(p);
+    }
+    double const& value(CField const& f, Box2 const& cells, Point2 const& p)
+    {
+        return box_span(f, cells)(p);
+    }
+
+    // the same values reached point by point only (no box_span)
+    struct PointField
+    {
+        CField f;
+    };
+    Box2 domain_box(PointField const& f, Box2 const& cells)
+    {
+        return domain_box(f.f, cells);
+    }
+    Box2 ghost_box(PointField const& f, Box2 const& cells)
+    {
+        return ghost_box(f.f, cells);
+    }
+    double& value(PointField& f, Box2 const& cells, Point2 const& p)
+    {
+        return value(f.f, cells, p);
+    }
+    double const& value(PointField const& f, Box2 const& cells, Point2 const& p)
+    {
+        return value(f.f, cells, p);
+    }
+
+    struct SpanPatchData // a field each way, per centering
+    {
+        std::array<CField, 2> spans;
+        std::array<PointField, 2> points;
+    };
+    // the plans' geometry (by name): either kind, the same boxes
+    void for_each_resource(SpanPatchData& d, auto&& fn)
+    {
+        fn("Bx", d.spans[0]);
+        fn("rho", d.spans[1]);
+    }
+    template<bool spans, std::size_t i>
+    struct SpanOrPoint
+    {
+        auto& src(SpanPatchData& d) const
+        {
+            if constexpr (spans)
+                return d.spans[i];
+            else
+                return d.points[i];
+        }
+        auto& dst(SpanPatchData& d) const { return src(d); }
+    };
+} // namespace
+
+TEST(Copy, spansGiveWhatPointsGive)
+{
+    static_assert(detail::SpanBoxData<CField&, 2> and !detail::SpanBoxData<PointField&, 2>);
+    for (auto const periodic : {false, true})
+    {
+        auto const h    = make_hierarchy({periodic, periodic});
+        auto const make = [](Patch<2> const& patch) {
+            SpanPatchData d;
+            for (std::size_t i = 0; i < 2; ++i)
+            {
+                d.spans[i].primal = {i == 0, true}; // Bx like, rho like
+                d.spans[i].v.assign(ghost_box(d.spans[i], patch.box).size(), 0.);
+                d.points[i].f = d.spans[i];
+            }
+            return d;
+        };
+        auto ld = allocate(h.levels[0], 0, make);
+        // values whose sums depend on the order they are added in
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            for (std::size_t i = 0; i < 2; ++i)
+                core::for_each_point(ghost_box(d.spans[i], patch.box), [&](auto const& p) {
+                    auto const v = 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(h, p) / 7.;
+                    value(d.spans[i], patch.box, p)  = v;
+                    value(d.points[i], patch.box, p) = v;
+                });
+        });
+
+        auto run = [&]<bool spans>() {
+            auto n = neighbours_of(h);
+            copy(fill_ghosts, n, same_names({"Bx"}), std::array{SpanOrPoint<spans, 0>{}}, ld);
+            copy(sum_borders, n, same_names({"rho"}), std::array{SpanOrPoint<spans, 1>{}}, ld);
+            copy(max_borders, n, same_names({"Bx"}), std::array{SpanOrPoint<spans, 0>{}}, ld);
+        };
+        run.template operator()<true>();
+        run.template operator()<false>();
+
+        std::size_t compared = 0;
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            for (std::size_t i = 0; i < 2; ++i)
+                core::for_each_point(ghost_box(d.spans[i], patch.box), [&](auto const& p) {
+                    auto const x = value(d.spans[i], patch.box, p);
+                    auto const y = value(d.points[i], patch.box, p);
+                    EXPECT_EQ(std::bit_cast<std::uint64_t>(x), std::bit_cast<std::uint64_t>(y))
+                        << periodic << " " << i << " patch " << patch.id << " " << p;
+                    ++compared;
+                });
+        });
+        EXPECT_GT(compared, 0u);
+    }
 }
 
 TEST(Copy, rejectsUnknownAndNonBoxResources)
