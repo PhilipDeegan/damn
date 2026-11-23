@@ -97,7 +97,7 @@ namespace detail
     template<std::size_t dim>
     struct DeviceTable
     {
-        bool usable = false;
+        bool usable       = false;
         std::size_t total = 0;
         core::gpu::Vec_t<DevicePiece<dim>> pieces;
 
@@ -141,7 +141,7 @@ namespace detail
     {
         if (plan.device)
             return *static_cast<DeviceTable<dim>*>(plan.device.get());
-        auto table   = std::make_shared<DeviceTable<dim>>();
+        auto table    = std::make_shared<DeviceTable<dim>>();
         table->usable = true;
         for (auto const& piece : plan.pieces)
         {
@@ -159,15 +159,15 @@ namespace detail
                     {
                         auto const s = box_span(src, piece.src.patch.box);
                         auto const d = box_span(dst, ld.patches[piece.dst].box);
-                        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<
-                                                         decltype(s.ptr)>>,
-                                                     double>
+                        if constexpr (std::is_same_v<
+                                          std::remove_cv_t<std::remove_pointer_t<decltype(s.ptr)>>,
+                                          double>
                                       and std::is_same_v<std::remove_pointer_t<decltype(d.ptr)>,
                                                          double>)
                         {
-                            table->pieces.push_back(DevicePiece<dim>{
-                                s.ptr, s.box, d.ptr, d.box, piece.box, piece.src.shift,
-                                table->total});
+                            table->pieces.push_back(DevicePiece<dim>{s.ptr, s.box, d.ptr, d.box,
+                                                                     piece.box, piece.src.shift,
+                                                                     table->total});
                             table->total += piece.box.size();
                             qualified = true;
                         }
@@ -222,7 +222,7 @@ namespace detail
             auto const& dst_box = table.pieces[order[begin]].dst_box;
             auto const& cells   = ld.patches[first.dst].box;
             SumGroup<dim> g{table.pieces[order[begin]].dst, dst_box, first.box, table.sum_points,
-                            table.contributors.size(), 0};
+                            table.contributors.size(),      0};
             for (auto k = begin + 1; k < end; ++k)
                 for (std::size_t d = 0; d < dim; ++d)
                 {
@@ -330,7 +330,7 @@ bool sum_on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchDa
                 summed = true;
         if (!summed)
             return;
-        auto& d         = g.dst[detail::flat_in(g.dst_box, p)];
+        auto& d          = g.dst[detail::flat_in(g.dst_box, p)];
         double const own = d;
         double acc       = 0;
         for (auto c = g.begin; c < g.end; ++c)
@@ -364,11 +364,11 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
     {
         auto const& first = *std::find_if(plan.pieces.begin(), plan.pieces.end(),
                                           [&](auto const& p) { return p.pair == pair; });
-        bool ok = false;
+        bool ok           = false;
         detail::src_of<dim, true>(access, ld.data[first.src.local], first, [&](auto const& src0) {
             detail::dst_of<dim, true>(access, ld.data[first.dst], first, [&](auto& dst0) {
-                using S = std::remove_cvref_t<decltype(src0)>;
-                using D = std::remove_cvref_t<decltype(dst0)>;
+                using S        = std::remove_cvref_t<decltype(src0)>;
+                using D        = std::remove_cvref_t<decltype(dst0)>;
                 using Pieces_t = std::vector<AppendPiece<D, S, dim>>;
                 if constexpr (requires(Pieces_t const& v) {
                                   { can_append_items_on_device(v) } -> std::same_as<bool>;
@@ -383,9 +383,8 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
                                 access, ld.data[piece.src.local], piece, [&](auto const& src) {
                                     detail::dst_of<dim, true>(
                                         access, ld.data[piece.dst], piece, [&](auto& dst) {
-                                            if constexpr (std::is_same_v<std::remove_cvref_t<
-                                                                             decltype(src)>,
-                                                                         S>
+                                            if constexpr (std::is_same_v<
+                                                              std::remove_cvref_t<decltype(src)>, S>
                                                           and std::is_same_v<
                                                               std::remove_cvref_t<decltype(dst)>,
                                                               D>)
