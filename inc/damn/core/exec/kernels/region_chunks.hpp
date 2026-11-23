@@ -72,12 +72,12 @@ void run_region_chunks([[maybe_unused]] Items& items, [[maybe_unused]] Fn const 
     using Launcher = gpu::TileLauncher</*sync=*/true>;
     auto* const ip = items.data();
     auto* const cp = chunks.data();
-    Launcher{chunks.size()}([=] DAMN_ALL() mutable {
+    Launcher{chunks.size()}([=] DAMN_ALL() {
         auto const chunk = cp[Launcher::tile_idx()];
         auto& item       = ip[chunk.item];
         auto const& box  = item.boxes[chunk.comp];
         Launcher::for_each_index(chunk.count, [&](auto const i) {
-            fn(item, chunk.comp, point_at(box, chunk.start + i));
+            MKN_KUL_INLINE_CALL fn(item, chunk.comp, point_at(box, chunk.start + i));
         });
     });
 #else
