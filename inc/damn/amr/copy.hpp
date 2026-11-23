@@ -38,6 +38,7 @@
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -163,6 +164,22 @@ namespace detail
     template<std::size_t dim, typename Access, typename PatchData>
     void assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
+    // the copy done on the device (device_copy.hpp: GPU builds, every piece's resources on the
+    //  device, Assign, Sum or Append); false: the host path's to do
+    template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
+    bool on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld)
+    {
+#if DAMN_HAVE_GPU
+        if constexpr (arrival == Arrival::Assign)
+            return assign_on_device(plan, access, ld);
+        else if constexpr (arrival == Arrival::Sum)
+            return sum_on_device(plan, access, ld);
+        else if constexpr (arrival == Arrival::Append)
+            return append_on_device(plan, access, ld);
+#endif
+        return false;
+    }
+
     template<std::size_t dim, typename Access, typename PatchData>
     void append_items(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
@@ -252,13 +269,17 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
     detail::check_local(plan);
 
     if constexpr (arrival == Arrival::Assign)
-        detail::assign(plan, access, ld);
+    {
+        if (!detail::on_device<arrival>(plan, access, ld))
+            detail::assign(plan, access, ld);
+    }
     else if constexpr (arrival == Arrival::Append)
     {
-        detail::append_items(plan, access, ld);
+        if (!detail::on_device<arrival>(plan, access, ld))
+            detail::append_items(plan, access, ld);
         detail::appended(plan, access, ld);
     }
-    else
+    else if (!detail::on_device<arrival>(plan, access, ld))
     {
         detail::pack_local(plan, access, ld);
         if constexpr (arrival == Arrival::Sum)
@@ -740,5 +761,8 @@ void unpack_piece(Region const region, Piece<dim> const& piece, Access const& ac
 }
 
 } // namespace damn::amr
+
+// after the detail functions it uses (src_of, dst_of, is_local)
+#include "damn/amr/device_copy.hpp" // IWYU pragma: export
 
 #endif // DAMN_AMR_COPY_HPP
