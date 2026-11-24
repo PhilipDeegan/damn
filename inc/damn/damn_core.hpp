@@ -8,6 +8,7 @@
 #include "damn/amr/lattice.hpp"                        // IWYU pragma: export
 #include "damn/amr/kelvin/sites.hpp"                   // IWYU pragma: export
 #include "damn/amr/kelvin/site_data.hpp"               // IWYU pragma: export
+#include "damn/amr/kelvin/inter_level.hpp"             // IWYU pragma: export
 #include "damn/amr/box_data.hpp"                       // IWYU pragma: export
 #include "damn/amr/level_data.hpp"                     // IWYU pragma: export
 #include "damn/amr/level_map.hpp"                      // IWYU pragma: export

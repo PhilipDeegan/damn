@@ -59,6 +59,7 @@
 #include "damn/amr/particle_items.hpp"
 
 #include <algorithm>
+#include <array>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -104,6 +105,13 @@ struct BoxValues
 
 namespace detail
 {
+    // (1 - alpha) a + alpha b: arithmetic values, or arrays of them element by element
+    template<typename T>
+    MKN_KUL_FN_SIG_RET T interpolate(T const& a, T const& b, double alpha);
+    template<typename T, std::size_t N>
+    MKN_KUL_FN_SIG_RET std::array<T, N> interpolate(std::array<T, N> const& a,
+                                                    std::array<T, N> const& b, double alpha);
+
     // a pair's side: the coarse resource, the coarse one at the step's end, the fine one
     enum class Side : std::uint8_t { coarse, coarse_new, fine };
 
@@ -218,8 +226,10 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
                                   });
                               else
                                   core::for_each_point(piece.box, [&](auto const& p) {
-                                      detail::write(out, T((1 - alpha) * value(src, cbox, p - shift)
-                                                           + alpha * value(nsrc, cbox, p - shift)));
+                                      detail::write(
+                                          out, detail::interpolate(T{value(src, cbox, p - shift)},
+                                                                   T{value(nsrc, cbox, p - shift)},
+                                                                   alpha));
                                   });
                           }
                           else
@@ -781,6 +791,22 @@ void detail::check_local(LevelPlan<dim> const& plan)
         if (!coarse_is_local(piece) or !fine_is_local(plan, piece))
             throw std::runtime_error(
                 "damn::amr::inter_level: patches of other ranks, damn::mpi's refine/coarsen");
+}
+
+template<typename T>
+T detail::interpolate(T const& a, T const& b, double const alpha)
+{
+    return T((1 - alpha) * a + alpha * b);
+}
+
+template<typename T, std::size_t N>
+std::array<T, N> detail::interpolate(std::array<T, N> const& a, std::array<T, N> const& b,
+                                     double const alpha)
+{
+    std::array<T, N> out;
+    for (std::size_t i = 0; i < N; ++i)
+        out[i] = interpolate(a[i], b[i], alpha);
+    return out;
 }
 
 } // namespace damn::amr
