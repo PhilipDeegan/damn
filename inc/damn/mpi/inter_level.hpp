@@ -35,7 +35,7 @@ inline constexpr int inter_level_tag = 0xdc; // copy_tag, regrid_tag: each trans
 
 namespace detail
 {
-    NO_DISCARD inline int as_int(std::size_t const bytes)
+    MKN_KUL_FN_SIG_RET inline int as_int(std::size_t const bytes)
     {
         if (bytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
             throw std::runtime_error("damn::mpi::inter_level: a message over 2GB");
@@ -43,8 +43,8 @@ namespace detail
     }
 
     // the plan's per peer buffers sent, the requests returned
-    NO_DISCARD inline std::vector<MPI_Request> send_all(std::map<int, std::vector<std::byte>>& sent,
-                                                        MPI_Comm const comm)
+    MKN_KUL_FN_SIG_RET inline std::vector<MPI_Request>
+    send_all(std::map<int, std::vector<std::byte>>& sent, MPI_Comm const comm)
     {
         std::vector<MPI_Request> sends;
         sends.reserve(sent.size());

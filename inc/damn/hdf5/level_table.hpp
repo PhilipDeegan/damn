@@ -55,16 +55,19 @@ struct LevelTable
 {
     std::vector<std::uint64_t> offsets{0}; // patches + 1, in level order
 
-    NO_DISCARD std::size_t patches() const { return offsets.size() - 1; }
-    NO_DISCARD std::uint64_t total() const { return offsets.back(); }
-    NO_DISCARD std::uint64_t offset(std::size_t const k) const { return offsets[k]; }
-    NO_DISCARD std::uint64_t rows(std::size_t const k) const { return offsets[k + 1] - offsets[k]; }
+    MKN_KUL_FN_SIG_RET std::size_t patches() const { return offsets.size() - 1; }
+    MKN_KUL_FN_SIG_RET std::uint64_t total() const { return offsets.back(); }
+    MKN_KUL_FN_SIG_RET std::uint64_t offset(std::size_t const k) const { return offsets[k]; }
+    MKN_KUL_FN_SIG_RET std::uint64_t rows(std::size_t const k) const
+    {
+        return offsets[k + 1] - offsets[k];
+    }
 };
 
 namespace detail
 {
     template<typename T>
-    NO_DISCARD hid_t native_type()
+    MKN_KUL_FN_SIG_RET hid_t native_type()
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::is_same_v<U, double>)
@@ -132,22 +135,22 @@ namespace detail
     };
 
     template<typename T>
-    NO_DISCARD MemorySpace memory_space(mkn::kul::StridedSpan<T> const& span)
+    MKN_KUL_FN_SIG_RET MemorySpace memory_space(mkn::kul::StridedSpan<T> const& span)
     {
         return {span.size(), span.stride_values()};
     }
     template<typename T, std::size_t dim>
-    NO_DISCARD MemorySpace memory_space(core::BoxRegion<T, dim> const& region)
+    MKN_KUL_FN_SIG_RET MemorySpace memory_space(core::BoxRegion<T, dim> const& region)
     {
         return {region.span.box, region.select};
     }
     template<typename T>
-    NO_DISCARD T* memory_data(mkn::kul::StridedSpan<T> const& span)
+    MKN_KUL_FN_SIG_RET T* memory_data(mkn::kul::StridedSpan<T> const& span)
     {
         return span.data();
     }
     template<typename T, std::size_t dim>
-    NO_DISCARD T* memory_data(core::BoxRegion<T, dim> const& region)
+    MKN_KUL_FN_SIG_RET T* memory_data(core::BoxRegion<T, dim> const& region)
     {
         return region.span.data();
     }
@@ -193,7 +196,7 @@ namespace detail
     }
 
     template<typename T>
-    NO_DISCARD std::vector<T> read_all(h5::HighFiveFile& file, std::string const& path)
+    MKN_KUL_FN_SIG_RET std::vector<T> read_all(h5::HighFiveFile& file, std::string const& path)
     {
         auto const ds = file.getDataSet(path);
         std::vector<T> values(ds.getElementCount());
@@ -214,8 +217,8 @@ struct LevelRows
 
 // collective: every patch's offsets from the row counts of this rank's patches, in level order
 template<std::size_t dim>
-NO_DISCARD LevelRows<dim> level_rows(amr::Level<dim> const& level, int const rank,
-                                     std::vector<std::uint64_t> const& local_rows)
+MKN_KUL_FN_SIG_RET LevelRows<dim> level_rows(amr::Level<dim> const& level, int const rank,
+                                             std::vector<std::uint64_t> const& local_rows)
 {
     auto const all = mpi::collect(local_rows); // per rank, in its level order
     std::vector<std::size_t> next(all.size(), 0);
@@ -238,7 +241,7 @@ NO_DISCARD LevelRows<dim> level_rows(amr::Level<dim> const& level, int const ran
 namespace detail
 {
     template<std::size_t dim>
-    NO_DISCARD std::vector<int> flat_boxes(std::vector<core::Box<int, dim>> const& boxes)
+    MKN_KUL_FN_SIG_RET std::vector<int> flat_boxes(std::vector<core::Box<int, dim>> const& boxes)
     {
         std::vector<int> flat;
         flat.reserve(2 * dim * boxes.size());
@@ -253,7 +256,7 @@ namespace detail
     }
 
     template<std::size_t dim>
-    NO_DISCARD std::vector<core::Box<int, dim>> boxes_of(std::vector<int> const& flat)
+    MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> boxes_of(std::vector<int> const& flat)
     {
         if (flat.size() % (2 * dim) != 0)
             throw std::runtime_error("damn::hdf5: not a list of boxes");
@@ -277,8 +280,8 @@ void write_boxes(h5::HighFiveFile& file, std::string const& path,
 }
 
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> read_boxes(h5::HighFiveFile& file,
-                                                       std::string const& path)
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> read_boxes(h5::HighFiveFile& file,
+                                                               std::string const& path)
 {
     return detail::boxes_of<dim>(detail::read_all<int>(file, path));
 }
@@ -313,8 +316,8 @@ struct StoredLevel
 };
 
 template<std::size_t dim>
-NO_DISCARD StoredLevel<dim> read_level(h5::HighFiveFile& file, std::string const& group,
-                                       int const number)
+MKN_KUL_FN_SIG_RET StoredLevel<dim> read_level(h5::HighFiveFile& file, std::string const& group,
+                                               int const number)
 {
     auto const boxes = detail::read_all<int>(file, group + "/boxes");
     auto const ids   = detail::read_all<std::uint32_t>(file, group + "/ids");

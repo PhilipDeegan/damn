@@ -12,7 +12,9 @@
 // both are collective (they synchronise the ranks' clocks, so phlop can compare when scopes
 // start across ranks). Without phlop they do nothing
 
+#include "damn/core/def.hpp"
 #include "damn/core/def/phlop.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 
 #include <cstdlib>
@@ -21,13 +23,13 @@
 namespace damn::mpi
 {
 // true if the env variable is 1 or true
-NO_DISCARD inline bool env_flag(char const* const name)
+MKN_KUL_FN_SIG_RET inline bool env_flag(char const* const name)
 {
     auto const* const v = std::getenv(name);
     return v and (std::string{v} == "1" or std::string{v} == "true");
 }
 
-NO_DISCARD inline bool scope_timing_active()
+MKN_KUL_FN_SIG_RET inline bool scope_timing_active()
 {
 #if DAMN_HAVE_PHLOP
     return phlop::mpi::scope_timer().active;

@@ -75,17 +75,17 @@ struct Span
     Span& operator=(Span&&)      = default;
     Span& operator=(Span const&) = default;
 
-    NO_DISCARD auto& operator[](SIZE i) DAMN_ALL { return ptr[i]; }
-    NO_DISCARD auto& operator[](SIZE i) const DAMN_ALL { return ptr[i]; }
-    NO_DISCARD T const* cdata() const DAMN_ALL { return ptr; }
-    NO_DISCARD auto data() const DAMN_ALL { return ptr; }
-    NO_DISCARD auto data() DAMN_ALL { return ptr; }
-    NO_DISCARD auto begin() DAMN_ALL { return ptr; }
-    NO_DISCARD auto begin() const DAMN_ALL { return ptr; }
-    NO_DISCARD auto end() DAMN_ALL { return ptr + s; }
-    NO_DISCARD auto end() const DAMN_ALL { return ptr + s; }
-    NO_DISCARD SIZE const& size() const DAMN_ALL { return s; }
-    NO_DISCARD auto size_address() { return &s; }
+    MKN_KUL_FN_SIG_RET auto& operator[](SIZE i) DAMN_ALL { return ptr[i]; }
+    MKN_KUL_FN_SIG_RET auto& operator[](SIZE i) const DAMN_ALL { return ptr[i]; }
+    MKN_KUL_FN_SIG_RET T const* cdata() const DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto data() const DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto data() DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto begin() DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto begin() const DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto end() DAMN_ALL { return ptr + s; }
+    MKN_KUL_FN_SIG_RET auto end() const DAMN_ALL { return ptr + s; }
+    MKN_KUL_FN_SIG_RET SIZE const& size() const DAMN_ALL { return s; }
+    MKN_KUL_FN_SIG_RET auto size_address() { return &s; }
 
     T* ptr = nullptr;
     SIZE s = 0;
@@ -194,17 +194,17 @@ struct SpanSet
     }
 
 
-    NO_DISCARD Span<T, SIZE> operator[](SIZE i)
+    MKN_KUL_FN_SIG_RET Span<T, SIZE> operator[](SIZE i)
     {
         return {this->vec.data() + displs[i], this->sizes[i]};
     }
-    NO_DISCARD Span<T const, SIZE> operator[](SIZE i) const
+    MKN_KUL_FN_SIG_RET Span<T const, SIZE> operator[](SIZE i) const
     {
         return {this->vec.data() + displs[i], this->sizes[i]};
     }
 
-    NO_DISCARD auto data() const { return vec.data(); }
-    NO_DISCARD auto data() { return const_cast<T*>(vec.data()); }
+    MKN_KUL_FN_SIG_RET auto data() const { return vec.data(); }
+    MKN_KUL_FN_SIG_RET auto data() { return const_cast<T*>(vec.data()); }
 
     struct iterator
     {
@@ -224,11 +224,11 @@ struct SpanSet
         SIZE curr_pos = 0, curr_ptr = 0;
     };
 
-    NO_DISCARD auto begin() { return iterator(this); }
-    NO_DISCARD auto cbegin() const { return iterator(this); }
+    MKN_KUL_FN_SIG_RET auto begin() { return iterator(this); }
+    MKN_KUL_FN_SIG_RET auto cbegin() const { return iterator(this); }
 
-    NO_DISCARD auto end() { return iterator(this); }
-    NO_DISCARD auto cend() const { return iterator(this); }
+    MKN_KUL_FN_SIG_RET auto end() { return iterator(this); }
+    MKN_KUL_FN_SIG_RET auto cend() const { return iterator(this); }
 
     SIZE size;
     std::vector<SIZE> sizes;
@@ -295,29 +295,29 @@ struct ViewSpan // represent vector of T as Span of V
         = std::is_pointer_v<V> and std::is_pointer_v<T>
           and std::is_base_of_v<std::remove_pointer_t<V>, std::remove_pointer_t<T>>;
 
-    NO_DISCARD decltype(auto) operator[](SIZE const i) DAMN_ALL
+    MKN_KUL_FN_SIG_RET decltype(auto) operator[](SIZE const i) DAMN_ALL
     {
         if constexpr (upcast_ptr)
             return static_cast<V>(as<T*>(ptr)[i]);
         else
             return *hax(i);
     }
-    NO_DISCARD decltype(auto) operator[](SIZE const i) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET decltype(auto) operator[](SIZE const i) const DAMN_ALL
     {
         if constexpr (upcast_ptr)
             return static_cast<V>(as<T const*>(ptr)[i]);
         else
             return *hax(i);
     }
-    NO_DISCARD auto data() const DAMN_ALL { return ptr; }
-    NO_DISCARD auto data() DAMN_ALL { return ptr; }
-    NO_DISCARD SIZE const& size() const DAMN_ALL { return s; }
+    MKN_KUL_FN_SIG_RET auto data() const DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET auto data() DAMN_ALL { return ptr; }
+    MKN_KUL_FN_SIG_RET SIZE const& size() const DAMN_ALL { return s; }
 
     // DO NOT USE ON GPU! // USE operator[]!!!!
-    NO_DISCARD auto begin() DAMN_HST { return as<T*>(ptr); }
-    NO_DISCARD auto begin() const DAMN_HST { return as<T const*>(ptr); }
-    NO_DISCARD auto end() DAMN_HST { return as<T*>(ptr) + s; }
-    NO_DISCARD auto end() const DAMN_HST { return as<T const*>(ptr) + s; }
+    MKN_KUL_FN_SIG_RET auto begin() DAMN_HST { return as<T*>(ptr); }
+    MKN_KUL_FN_SIG_RET auto begin() const DAMN_HST { return as<T const*>(ptr); }
+    MKN_KUL_FN_SIG_RET auto end() DAMN_HST { return as<T*>(ptr) + s; }
+    MKN_KUL_FN_SIG_RET auto end() const DAMN_HST { return as<T const*>(ptr) + s; }
 
     V* ptr = nullptr;
     SIZE s = 0;

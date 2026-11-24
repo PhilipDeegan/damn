@@ -67,7 +67,7 @@ struct ExchangeCosts
 };
 
 // the Node distance's costs measured, the others relative to them
-NO_DISCARD inline ExchangeCosts
+MKN_KUL_FN_SIG_RET inline ExchangeCosts
 exchange_costs(double const node_latency, double const node_s_per_byte, double const bytes_per_cell)
 {
     // Self, Local, Numa, Node, Socket, Remote
@@ -83,7 +83,7 @@ exchange_costs(double const node_latency, double const node_s_per_byte, double c
 
 // this machine's, from its bootstrap (Node, and Socket where measured), else defaults (a
 // shared memory exchange of ~1 us latency, 1e-10 s a byte)
-NO_DISCARD inline ExchangeCosts bootstrapped_exchange_costs(double const bytes_per_cell)
+MKN_KUL_FN_SIG_RET inline ExchangeCosts bootstrapped_exchange_costs(double const bytes_per_cell)
 {
     auto c
         = exchange_costs(bootstrap::number("mpi_exchange_node_latency_s", 1e-6),
@@ -220,10 +220,10 @@ namespace detail
 // weights[ln]: one per patch of level ln, seconds (empty or missing: its cells, seconds a cell
 // of 1); reach in each level's cells
 template<std::size_t dim>
-NO_DISCARD Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int const reach,
-                             std::vector<std::vector<double>> const& weights,
-                             ExchangeCosts const& costs, Threads const& threads = {},
-                             Detached const& detached = {})
+MKN_KUL_FN_SIG_RET Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int const reach,
+                                     std::vector<std::vector<double>> const& weights,
+                                     ExchangeCosts const& costs, Threads const& threads = {},
+                                     Detached const& detached = {})
 {
     if (reach < 0)
         throw std::runtime_error("damn::amr::estimate: negative reach");
@@ -320,10 +320,11 @@ struct Choice
 // levels from, from + 1, ... decomposed by each candidate (decompose), each estimated (its own
 // weigh on its patches, h's levels under `from` kept), the cheapest kept
 template<std::size_t dim>
-NO_DISCARD Choice<dim> choose(Hierarchy<dim> const& h, int const from,
-                              std::vector<std::vector<core::Box<int, dim>>> const& boxes,
-                              std::vector<Decompose<dim>> const& candidates, int const reach,
-                              ExchangeCosts const& costs, Threads const& threads = {})
+MKN_KUL_FN_SIG_RET Choice<dim> choose(Hierarchy<dim> const& h, int const from,
+                                      std::vector<std::vector<core::Box<int, dim>>> const& boxes,
+                                      std::vector<Decompose<dim>> const& candidates,
+                                      int const reach, ExchangeCosts const& costs,
+                                      Threads const& threads = {})
 {
     if (candidates.empty())
         throw std::runtime_error("damn::amr::choose: no candidates");

@@ -70,7 +70,7 @@ concept HasCheckpointBox = requires(R const& r, core::Box<int, dim> const& box) 
 
 // the points of a BoxData resource a checkpoint holds
 template<std::size_t dim>
-NO_DISCARD auto stored_box(auto const& resource, core::Box<int, dim> const& cells)
+MKN_KUL_FN_SIG_RET auto stored_box(auto const& resource, core::Box<int, dim> const& cells)
 {
     if constexpr (HasCheckpointBox<std::decay_t<decltype(resource)>, dim>)
         return core::Box<int, dim>{checkpoint_box(resource, cells)};
@@ -98,7 +98,7 @@ namespace detail
 {
     // a column's type, to tell a rank without patches what to create
     template<typename T>
-    NO_DISCARD char type_code()
+    MKN_KUL_FN_SIG_RET char type_code()
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::is_same_v<U, double>)
@@ -137,7 +137,7 @@ namespace detail
     // what a resource is written as: "b<type>" (BoxData values), or "c" then "<type><name>;"
     //  per column
     template<std::size_t dim>
-    NO_DISCARD std::string schema_of(auto& resource)
+    MKN_KUL_FN_SIG_RET std::string schema_of(auto& resource)
     {
         using R = std::decay_t<decltype(resource)>;
         if constexpr (HasColumns<R>)
@@ -161,7 +161,7 @@ namespace detail
         std::string name;
     };
 
-    NO_DISCARD inline std::vector<Column> columns_of(std::string const& schema)
+    MKN_KUL_FN_SIG_RET inline std::vector<Column> columns_of(std::string const& schema)
     {
         std::vector<Column> out;
         for (std::size_t i = 1; i < schema.size();)
@@ -174,7 +174,7 @@ namespace detail
     }
 
     // the same schema on every rank that has the resource, for every rank
-    NO_DISCARD inline std::string agreed(std::string const& local, std::string const& name)
+    MKN_KUL_FN_SIG_RET inline std::string agreed(std::string const& local, std::string const& name)
     {
         std::string out;
         for (auto const& s : mpi::collect(local))
@@ -192,7 +192,7 @@ namespace detail
     }
 
     template<std::size_t dim>
-    NO_DISCARD std::uint64_t rows_of(auto& resource, core::Box<int, dim> const& cells)
+    MKN_KUL_FN_SIG_RET std::uint64_t rows_of(auto& resource, core::Box<int, dim> const& cells)
     {
         using R = std::decay_t<decltype(resource)>;
         if constexpr (HasColumns<R>)
@@ -213,7 +213,7 @@ namespace detail
 
     // a resource's values on its domain, in C order, for one without a box_span
     template<std::size_t dim>
-    NO_DISCARD auto staged(auto const& resource, core::Box<int, dim> const& cells)
+    MKN_KUL_FN_SIG_RET auto staged(auto const& resource, core::Box<int, dim> const& cells)
     {
         using T = amr::box_data_value_t<std::decay_t<decltype(resource)>, dim>;
         std::vector<T> out;
