@@ -15,15 +15,11 @@
 namespace damn::kernel
 {
 
-// the device's: wave64 AMD GPUs (CDNA) are 64 wide, so launch shapes sized from it match the
-//  kernels' warpSize
-std::size_t inline warp_size() DAMN_ALL
+// the warpSize kernels run at on the current device (mkn.gpu: a kernel's, e.g. 64 on wave64 AMD
+//  GPUs), for launch shapes; device code reads warpSize
+std::size_t inline warp_size()
 {
-#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
-    return static_cast<std::size_t>(warpSize);
-#else
-    return mkn::gpu::warp_size;
-#endif
+    return mkn::gpu::warp_size();
 }
 
 auto inline thread_idx() DAMN_DEV
