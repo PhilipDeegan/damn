@@ -51,6 +51,7 @@ profile:
   test: tst/damn/mpi/test_mpi_utils.cpp
         tst/damn/mpi/test_mpi_copy.cpp
         tst/damn/mpi/test_mpi_kelvin.cpp
+        tst/damn/mpi/test_mpi_kelvin_inter_level.cpp
         tst/damn/mpi/test_mpi_regrid.cpp
         tst/damn/mpi/test_mpi_inter_level.cpp
         tst/damn/mpi/test_mpi_clustering.cpp
@@ -93,6 +94,7 @@ profile:
         tst/damn/amr/test_inter_level.cpp
         tst/damn/amr/test_inter_level_ratio3.cpp
         tst/damn/amr/test_kelvin.cpp
+        tst/damn/amr/test_kelvin_inter_level.cpp
         tst/damn/amr/test_clustering.cpp
         tst/damn/amr/test_metrics.cpp
         tst/damn/amr/test_physical_boundary.cpp
