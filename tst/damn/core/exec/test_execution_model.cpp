@@ -1,10 +1,14 @@
 // damn::core::ExecutionModel: defaults, leases under the cap, given back, from many threads at once
 
 #include "damn/core/exec/execution_model.hpp"
+#include "damn/core/exec/leased_pool.hpp"
 
 #include "gtest/gtest.h"
 
 #include <atomic>
+#include <chrono>
+#include <mutex>
+#include <set>
 #include <cstddef>
 #include <stdexcept>
 #include <thread>
@@ -93,6 +97,44 @@ TEST(ExecutionModel, concurrentLeasesNeverPassTheCap)
         t.join();
     EXPECT_LE(most, m.schedulable());
     EXPECT_EQ(m.threads_used, 1u);
+}
+
+TEST(LeasedPool, runsSideBySideOnItsLease)
+{
+    ExecutionModel m{.usable_threads = 4}; // 4 schedulable: the main thread, a pool of 3
+    LeasedPool pool{m};
+    EXPECT_EQ(pool.threads(), 3u);
+    std::mutex lock;
+    std::set<std::thread::id> ids;
+    std::vector<int> ran(8, 0);
+    std::size_t most = 0;
+    pool.run(ran.size(), [&](std::size_t const i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        std::lock_guard const g{lock};
+        ++ran[i];
+        ids.insert(std::this_thread::get_id());
+        most = std::max<std::size_t>(most, m.threads_used);
+    });
+    EXPECT_EQ(ran, std::vector<int>(8, 1));
+    EXPECT_EQ(most, 4u);
+    EXPECT_EQ(ids.size(), 3u);
+    EXPECT_FALSE(ids.contains(std::this_thread::get_id()));
+    EXPECT_EQ(m.threads_used, 1u);
+
+    auto const taken = m.use_threads(3); // nothing left: on the calling thread
+    ids.clear();
+    pool.run(4, [&](std::size_t) { ids.insert(std::this_thread::get_id()); });
+    EXPECT_EQ(ids, std::set{std::this_thread::get_id()});
+}
+
+TEST(LeasedPool, theMainThreadOnly)
+{
+    ExecutionModel m;
+    LeasedPool pool{m};
+    EXPECT_EQ(pool.threads(), 0u);
+    int n = 0;
+    pool.run(5, [&](std::size_t) { ++n; });
+    EXPECT_EQ(n, 5);
 }
 
 TEST(ExecutionModel, nothingToRunOnThrows)
