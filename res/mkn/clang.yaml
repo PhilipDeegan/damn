@@ -7,8 +7,8 @@ local:
 remote:
   repo: git@github.com:mkn/
   mod-repo: git@github.com:mkn-mod/
-env: |
-  OMPI_CXX=clang++-17
+env: | # a versioned clang, e.g. OMPI_CXX=clang++-22
+  OMPI_CXX=clang++
   PATH=/opt/mpi/cuda/bin:${PATH}
 compiler:
   mask:
@@ -16,6 +16,6 @@ compiler:
       mpicxx
 file:
   - type: cpp:cxx:cc
-    archiver: ar -cr
+    archiver: llvm-ar -cr # clang's (GNU ar cannot index its LTO bitcode), e.g. llvm-ar-22 with clang++-22
     compiler:  mpicxx -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX ${cxx.flags} 
     linker:  mpicxx ${lnk.both}
