@@ -137,8 +137,8 @@ struct Neighbours
 
 
 // level ln's neighbours of rank's patches
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET Neighbours<dim> make_neighbours(Hierarchy<dim> const& h, int const ln,
+template<std::size_t dim, typename Lattice>
+MKN_KUL_FN_SIG_RET Neighbours<dim> make_neighbours(Hierarchy<dim, Lattice> const& h, int const ln,
                                                    int const rank, Topology const& topology,
                                                    int const reach)
 {

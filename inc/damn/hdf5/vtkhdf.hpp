@@ -2,21 +2,27 @@
 #define DAMN_HDF5_VTKHDF_HPP
 
 // VTK's OverlappingAMR in HDF5 (VTKHDF 2.2), as a time series: one file, a step per dump, each
-// level's boxes and the point data on their primal nodes (as PHARE's pharevtkhdf diagnostics)
+// level's boxes, the point data on their primal nodes (as PHARE's pharevtkhdf diagnostics) and,
+// optionally, cell data on their cells (centres): a Kelvin lattice's corner sites are the points,
+// its body sites the cells
 //
-//   init(file, VtkInit{n_components, max_levels, spacing})   the groups, datasets, attributes
-//                                     of every level up to max_levels (if not there yet)
+//   init(file, VtkInit{n_components, max_levels, spacing, chunk_bytes, ratio,
+//                      n_cell_components})   the groups, datasets, attributes of every level up
+//                                     to max_levels (if not there yet); CellData/data only with
+//                                     n_cell_components
 //   append_step(file, time)           a step: its time, NSteps + 1
 //   append_level(file, VtkLevel{ln, level, rank, n_components, data})   collective: level ln
 //                                     at the last step: its boxes (rank major: every rank's
 //                                     patches one after another, by rank), their offsets, and
 //                                     each rank's rows at its place, one write per rank; a level
-//                                     without patches (not there yet) appends an empty entry
+//                                     without patches (not there yet) appends an empty entry;
+//                                     its cell rows (cell_data) too if the file has cell data
 //
 //   points_of(box)                    a box's primal nodes, cells + 1 per direction
 //   rows_of(box)                      its rows: its points, x_times<dim> times (1D, 2D: a 3D
 //                                     view, the block repeated for each dummy direction's two
 //                                     nodes)
+//   cell_rows_of(box)                 its cell rows: its cells (a dummy direction has one)
 //
 // rows: points in Fortran order (x fastest), one column per component (vectors x y z, tensors
 // xx xy xz yy yz zz), the caller's data in its patches' order (level order). AMRBox rows: the
@@ -77,15 +83,26 @@ MKN_KUL_FN_SIG_RET std::size_t rows_of(core::Box<int, dim> const& cells)
     return points_of(cells) * x_times<dim>;
 }
 
+template<std::size_t dim>
+MKN_KUL_FN_SIG_RET std::size_t cell_rows_of(core::Box<int, dim> const& cells)
+{
+    std::size_t n = 1;
+    for (std::size_t i = 0; i < dim; ++i)
+        n *= static_cast<std::size_t>(cells.upper[i] - cells.lower[i] + 1);
+    return n;
+}
+
 // what init needs: columns per point, levels the file holds, level 0's cell widths (a level's
-// is level 0's / 2^level)
+// is level 0's / ratio^level), columns per cell (0: no cell data)
 template<std::size_t dim>
 struct VtkInit
 {
     std::size_t n_components = 1;
     int max_levels           = 1;
     std::array<double, dim> spacing{};
-    std::size_t chunk_bytes = 1 << 20; // PointData chunks
+    std::size_t chunk_bytes       = 1 << 20; // PointData and CellData chunks
+    int ratio                     = 2;
+    std::size_t n_cell_components = 0;
 };
 
 namespace detail
@@ -114,6 +131,13 @@ namespace detail
         return file.create_chunked_data_set<T>(
             path, std::vector<hsize_t>{chunk_rows, cols},
             HighFive::DataSpace({0, cols}, {HighFive::DataSpace::UNLIMITED, cols}));
+    }
+
+    MKN_KUL_FN_SIG_RET inline std::size_t chunk_rows(std::size_t const chunk_bytes,
+                                                     std::size_t const n_components,
+                                                     std::size_t const value_bytes)
+    {
+        return std::max<std::size_t>(1, chunk_bytes / (n_components * value_bytes));
     }
 
     inline void group(h5::HighFiveFile& file, std::string const& path)
@@ -159,27 +183,34 @@ void init(h5::HighFiveFile& file, VtkInit<dim> const& in)
         detail::resizable_1d<Float>(file, std::string{base} + "/Steps/Values");
     attribute(file.file().getGroup(std::string{base} + "/Steps"), "NSteps", 0);
 
-    auto const chunk_rows
-        = std::max<std::size_t>(1, in.chunk_bytes / (in.n_components * sizeof(Float)));
+    if (in.ratio < 1)
+        throw std::runtime_error("damn::hdf5::vtkhdf::init: ratio " + std::to_string(in.ratio));
     for (int ln = 0; ln < in.max_levels; ++ln)
     {
         auto const level = detail::level_path(ln), steps = detail::step_level_path(ln);
         detail::group(file, level);
         std::vector<float> spacing(dim);
         for (std::size_t i = 0; i < dim; ++i)
-            spacing[i] = static_cast<float>(in.spacing[i] / std::pow(2., ln));
+            spacing[i] = static_cast<float>(in.spacing[i] / std::pow(in.ratio, ln));
         attribute(file.file().getGroup(level), "Spacing", spacing);
         if (!file.exist(level + "/AMRBox"))
             detail::resizable_2d<int>(file, level + "/AMRBox", 6, boxes_chunk);
         if (!file.exist(level + "/PointData/data"))
-            detail::resizable_2d<Float>(file, level + "/PointData/data", in.n_components,
-                                        chunk_rows);
+            detail::resizable_2d<Float>(
+                file, level + "/PointData/data", in.n_components,
+                detail::chunk_rows(in.chunk_bytes, in.n_components, sizeof(Float)));
         detail::group(file, level + "/CellData");
+        if (in.n_cell_components > 0 and !file.exist(level + "/CellData/data"))
+            detail::resizable_2d<Float>(
+                file, level + "/CellData/data", in.n_cell_components,
+                detail::chunk_rows(in.chunk_bytes, in.n_cell_components, sizeof(Float)));
         detail::group(file, level + "/FieldData");
         for (auto const* offsets : {"/AMRBoxOffset", "/NumberOfAMRBox", "/PointDataOffset/data"})
             if (!file.exist(steps + offsets))
                 detail::resizable_1d<std::int64_t>(file, steps + offsets);
         detail::group(file, steps + "/CellDataOffset");
+        if (in.n_cell_components > 0 and !file.exist(steps + "/CellDataOffset/data"))
+            detail::resizable_1d<std::int64_t>(file, steps + "/CellDataOffset/data");
         detail::group(file, steps + "/FieldDataOffset");
     }
 }
@@ -203,7 +234,8 @@ void append_step(h5::HighFiveFile& file, double const time)
 }
 
 // level ln at the last step: level's patches (every rank's), this rank's rows in data (its
-// patches in level order, rows_of(box) each, n_components columns)
+// patches in level order, rows_of(box) each, n_components columns), and in cell_data if the
+// file has cell data (cell_rows_of(box) each, n_cell_components columns)
 template<typename Float, std::size_t dim>
 struct VtkLevel
 {
@@ -212,12 +244,51 @@ struct VtkLevel
     int rank                 = 0;
     std::size_t n_components = 1;
     std::span<Float const> data;
+    std::size_t n_cell_components = 0;
+    std::span<Float const> cell_data{};
 };
+
+namespace detail
+{
+    // this rank's rows of level's patches (rows(box) each, in order: rank major) appended to the
+    //  2D dataset at path, the step's first row to the 1D one at offset_path (collective)
+    template<typename Float, std::size_t dim>
+    void append_rows(h5::HighFiveFile& file, std::string const& path,
+                     std::string const& offset_path, amr::Level<dim> const& level,
+                     std::vector<std::size_t> const& order, int const rank,
+                     std::size_t const n_components, std::span<Float const> const data,
+                     auto&& rows_of_box)
+    {
+        std::uint64_t rows_before = 0, my_rows = 0, total_rows = 0;
+        for (auto const k : order)
+        {
+            auto const rows = rows_of_box(level.patches[k].box);
+            if (level.patches[k].rank < rank)
+                rows_before += rows;
+            if (level.patches[k].rank == rank)
+                my_rows += rows;
+            total_rows += rows;
+        }
+        if (data.size() != my_rows * n_components)
+            throw std::runtime_error("damn::hdf5::vtkhdf::append_level: "
+                                     + std::to_string(data.size()) + " values for "
+                                     + std::to_string(my_rows) + " rows of "
+                                     + std::to_string(n_components) + " at " + path);
+
+        auto points         = file.getDataSet(path);
+        auto const old_rows = points.getDimensions()[0];
+        append_1d(file, offset_path, static_cast<std::int64_t>(old_rows));
+        points.resize({old_rows + total_rows, n_components});
+        if (my_rows > 0)
+            points.select({old_rows + rows_before, 0}, {my_rows, n_components})
+                .write_raw(data.data());
+    }
+} // namespace detail
 
 template<typename Float, std::size_t dim>
 void append_level(h5::HighFiveFile& file, VtkLevel<Float, dim> const& in)
 {
-    auto const& [ln, level, rank, n_components, data] = in;
+    auto const& [ln, level, rank, n_components, data, n_cell_components, cell_data] = in;
     auto const level_path = detail::level_path(ln), steps = detail::step_level_path(ln);
 
     // rank major: by owner, each owner's patches in level order
@@ -226,20 +297,6 @@ void append_level(h5::HighFiveFile& file, VtkLevel<Float, dim> const& in)
     std::stable_sort(order.begin(), order.end(), [&](auto const a, auto const b) {
         return level.patches[a].rank < level.patches[b].rank;
     });
-    std::uint64_t rows_before = 0, my_rows = 0, total_rows = 0;
-    for (auto const k : order)
-    {
-        auto const rows = rows_of(level.patches[k].box);
-        if (level.patches[k].rank < rank)
-            rows_before += rows;
-        if (level.patches[k].rank == rank)
-            my_rows += rows;
-        total_rows += rows;
-    }
-    if (data.size() != my_rows * n_components)
-        throw std::runtime_error("damn::hdf5::vtkhdf::append_level: " + std::to_string(data.size())
-                                 + " values for " + std::to_string(my_rows) + " rows of "
-                                 + std::to_string(n_components));
 
     // boxes
     auto boxes           = file.getDataSet(level_path + "/AMRBox");
@@ -259,13 +316,13 @@ void append_level(h5::HighFiveFile& file, VtkLevel<Float, dim> const& in)
         boxes.select({old_boxes, 0}, {order.size(), 6}).write(rows);
     }
 
-    // points
-    auto points         = file.getDataSet(level_path + "/PointData/data");
-    auto const old_rows = points.getDimensions()[0];
-    detail::append_1d(file, steps + "/PointDataOffset/data", static_cast<std::int64_t>(old_rows));
-    points.resize({old_rows + total_rows, n_components});
-    if (my_rows > 0)
-        points.select({old_rows + rows_before, 0}, {my_rows, n_components}).write_raw(data.data());
+    detail::append_rows(file, level_path + "/PointData/data", steps + "/PointDataOffset/data",
+                        level, order, rank, n_components, data,
+                        [](auto const& box) { return rows_of(box); });
+    if (file.exist(level_path + "/CellData/data"))
+        detail::append_rows(file, level_path + "/CellData/data", steps + "/CellDataOffset/data",
+                            level, order, rank, n_cell_components, cell_data,
+                            [](auto const& box) { return cell_rows_of(box); });
 }
 
 // the same from VtkLevel's members as arguments

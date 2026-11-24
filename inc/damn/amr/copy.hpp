@@ -197,7 +197,8 @@ namespace detail
     // the copy done on the device (device_copy.hpp: GPU builds, every piece's resources on the
     //  device, Assign, Sum or Append); false: the host path's to do
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
-    bool on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld)
+    bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
+                   [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
     {
 #if DAMN_HAVE_GPU
         if constexpr (arrival == Arrival::Assign)

@@ -84,9 +84,9 @@ namespace detail
 
 // per level of h: weight per rank, ghost and coarse cells exchanged by distance; weights[ln]: one
 // per patch of level ln (empty or missing: the patch's cells); reach in each level's cells
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET std::vector<LevelMetrics>
-metrics(Hierarchy<dim> const& h, Topology const& t, int const reach,
+metrics(Hierarchy<dim, Lattice> const& h, Topology const& t, int const reach,
         std::vector<std::vector<double>> const& weights = {})
 {
     if (reach < 0)
@@ -156,9 +156,9 @@ struct LevelMigration
     std::array<std::size_t, n_distances> refined{};
 };
 
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET std::vector<LevelMigration>
-migration(Hierarchy<dim> const& from, Hierarchy<dim> const& to, Topology const& t)
+migration(Hierarchy<dim, Lattice> const& from, Hierarchy<dim, Lattice> const& to, Topology const& t)
 {
     if (from.ratio != to.ratio)
         throw std::runtime_error("damn::amr::migration: different refinement ratios");

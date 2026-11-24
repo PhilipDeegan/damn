@@ -300,9 +300,9 @@ namespace detail
 namespace detail
 {
     // "finest" and "aligned": every level from boxes known
-    template<std::size_t dim>
+    template<std::size_t dim, typename Lattice>
     std::vector<Level<dim>>
-    decompose_together(Hierarchy<dim> const& h, int const from,
+    decompose_together(Hierarchy<dim, Lattice> const& h, int const from,
                        std::vector<std::vector<core::Box<int, dim>>> const& boxes,
                        Decompose<dim> const& in)
     {
@@ -435,9 +435,9 @@ namespace detail
     //  them, the rest chopped and cut where a rank's share ends (cut_partition: every rank gets
     //  work whatever the patch size); each rank's pieces coalesced, chopped, then spilled. A
     //  coarse patch is never given whole to one rank for the fine cells above part of it
-    template<std::size_t dim>
+    template<std::size_t dim, typename Lattice>
     std::vector<Level<dim>>
-    finest_in_pieces(Hierarchy<dim> const& h, int const from,
+    finest_in_pieces(Hierarchy<dim, Lattice> const& h, int const from,
                      std::vector<std::vector<core::Box<int, dim>>> const& boxes,
                      Decompose<dim> const& in)
     {
@@ -539,9 +539,9 @@ namespace detail
     }
 } // namespace detail
 
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET Level<dim>
-decompose_level(Hierarchy<dim> const& h, int const ln,
+decompose_level(Hierarchy<dim, Lattice> const& h, int const ln,
                 std::vector<core::Box<int, dim>> const& boxes, Decompose<dim> const& in,
                 std::vector<core::Box<int, dim>> const* finer = nullptr)
 {
@@ -625,9 +625,9 @@ decompose_level(Hierarchy<dim> const& h, int const ln,
 
 
 
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET std::vector<Level<dim>>
-decompose(Hierarchy<dim> h, int const from,
+decompose(Hierarchy<dim, Lattice> h, int const from,
           std::vector<std::vector<core::Box<int, dim>>> const& boxes, Decompose<dim> const& in)
 {
     if (static_cast<std::size_t>(from) > h.levels.size())

@@ -218,8 +218,9 @@ namespace detail
 
 // weights[ln]: one per patch of level ln, seconds (empty or missing: its cells, seconds a cell
 // of 1); reach in each level's cells
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET Estimate estimate(Hierarchy<dim> const& h, Topology const& t, int const reach,
+template<std::size_t dim, typename Lattice>
+MKN_KUL_FN_SIG_RET Estimate estimate(Hierarchy<dim, Lattice> const& h, Topology const& t,
+                                     int const reach,
                                      std::vector<std::vector<double>> const& weights,
                                      ExchangeCosts const& costs, Threads const& threads = {},
                                      Detached const& detached = {})
@@ -318,8 +319,8 @@ struct Choice
 
 // levels from, from + 1, ... decomposed by each candidate (decompose), each estimated (its own
 // weigh on its patches, h's levels under `from` kept), the cheapest kept
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET Choice<dim> choose(Hierarchy<dim> const& h, int const from,
+template<std::size_t dim, typename Lattice>
+MKN_KUL_FN_SIG_RET Choice<dim> choose(Hierarchy<dim, Lattice> const& h, int const from,
                                       std::vector<std::vector<core::Box<int, dim>>> const& boxes,
                                       std::vector<Decompose<dim>> const& candidates,
                                       int const reach, ExchangeCosts const& costs,

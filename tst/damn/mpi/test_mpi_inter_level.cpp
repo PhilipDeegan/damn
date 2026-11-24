@@ -28,6 +28,10 @@ namespace
         MPI_Comm_size(MPI_COMM_WORLD, &s);
         return s;
     }
+    int test_ratio()
+    {
+        return 2;
+    }
     Topology test_topology()
     {
         return mpi::topology();

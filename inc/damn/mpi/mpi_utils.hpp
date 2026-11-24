@@ -152,7 +152,7 @@ void _collect(Data const* const sendbuf, std::vector<Data>& rcvBuff,
 
 template<typename Data, typename SendBuff, typename RcvBuff>
 void _collect_vector(SendBuff const& sendBuff, RcvBuff& rcvBuff, std::vector<int> const& recvcounts,
-                     std::vector<int> const& displs, int const mpi_size)
+                     std::vector<int> const& displs, [[maybe_unused]] int const mpi_size)
 {
     auto mpi_type = mpi_type_for<Data>();
 

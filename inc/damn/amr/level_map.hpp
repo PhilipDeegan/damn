@@ -168,8 +168,8 @@ std::vector<core::Point<int, dim>> detail::with_no_shift(std::vector<core::Point
 
 
 // the map between level coarse and level coarse + 1, for rank's patches of both
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int const coarse,
+template<std::size_t dim, typename Lattice>
+MKN_KUL_FN_SIG_RET LevelMap<dim> make_level_map(Hierarchy<dim, Lattice> const& h, int const coarse,
                                                 int const rank, Topology const& topology,
                                                 int const reach)
 {
@@ -249,8 +249,8 @@ MKN_KUL_FN_SIG_RET LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int con
 }
 
 // true if both levels still have the patches the map was built on
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET bool is_current(LevelMap<dim> const& map, Hierarchy<dim> const& h)
+template<std::size_t dim, typename Lattice>
+MKN_KUL_FN_SIG_RET bool is_current(LevelMap<dim> const& map, Hierarchy<dim, Lattice> const& h)
 {
     return level_exists(h, map.fine) and h.levels[map.coarse].patches == map.coarse_built_on
            and h.levels[map.fine].patches == map.fine_built_on;
