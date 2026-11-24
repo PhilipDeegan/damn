@@ -1,73 +1,105 @@
-// damn::core::ExecutionModel: defaults, the scheduled threads' cap, split, ThreadPool::configure
+// damn::core::ExecutionModel: defaults, leases under the cap, given back, from many threads at once
 
 #include "damn/core/exec/execution_model.hpp"
-#include "damn/core/exec/thread_pool.hpp"
 
 #include "gtest/gtest.h"
 
+#include <atomic>
 #include <cstddef>
 #include <stdexcept>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace damn::core
 {
 
 TEST(ExecutionModel, theDefaultIsTheMainThreadWithoutMPI)
 {
-    ExecutionModel const m;
+    ExecutionModel m;
     EXPECT_EQ(m.mpi_ranks, 0);
     EXPECT_EQ(m.usable_threads, 1u);
-    EXPECT_EQ(m.scheduled(), 1u);
+    EXPECT_EQ(m.threads_used, 1u);
+    EXPECT_EQ(m.available(), 0u); // floor(1.2) = 1: the main thread
+    EXPECT_EQ(m.use_threads(4).size(), 0u);
     EXPECT_NO_THROW(m.check());
 }
 
-TEST(ExecutionModel, atMostMaxScheduledTimesTheUsableThreads)
+TEST(ExecutionModel, modes)
 {
-    ExecutionModel m{.usable_threads = 8};
-    EXPECT_EQ(m.schedulable(), 9u); // floor(1.2 * 8)
-    m.n_pools = 3, m.threads_per_pool = 3;
-    EXPECT_NO_THROW(m.check());
-    m.threads_per_pool = 4; // 12
-    EXPECT_THROW(m.check(), std::runtime_error);
-    m.max_scheduled = 1.5;
-    EXPECT_NO_THROW(m.check());
+    ExecutionModel const serial, threads{.usable_threads = 4}, ranks{.mpi_ranks = 4},
+        both{.mpi_ranks = 4, .usable_threads = 4};
+    EXPECT_FALSE(serial.mpi() or serial.threaded() or serial.mpi_only());
+    EXPECT_TRUE(threads.threaded() and !threads.mpi() and !threads.mpi_only());
+    EXPECT_TRUE(ranks.mpi() and ranks.mpi_only() and !ranks.threaded());
+    EXPECT_TRUE(both.mpi() and both.threaded() and !both.mpi_only());
+}
 
-    ExecutionModel one{.n_pools = 2}; // floor(1.2) = 1
-    EXPECT_THROW(one.check(), std::runtime_error);
-    one.max_scheduled = 0.5; // never below 1
-    one.n_pools       = 1;
-    EXPECT_NO_THROW(one.check());
+TEST(ExecutionModel, leasesWhatIsFreeUnderTheCap)
+{
+    ExecutionModel m{.usable_threads = 8}; // 9 schedulable, 8 free
+    auto a = m.use_threads(4);
+    EXPECT_EQ(a.size(), 4u);
+    auto b = m.use_threads(6); // 4 left
+    EXPECT_EQ(b.size(), 4u);
+    EXPECT_EQ(m.threads_used, 9u);
+    EXPECT_EQ(m.use_threads(1).size(), 0u);
+
+    a.release();
+    EXPECT_EQ(m.threads_used, 5u);
+    {
+        auto c = m.use_threads(10);
+        EXPECT_EQ(c.size(), 4u);
+    }
+    EXPECT_EQ(m.threads_used, 5u); // c given back
+
+    m.max_scheduled = 1.5; // 12
+    EXPECT_EQ(m.use_threads(10).size(), 7u);
+}
+
+TEST(ExecutionModel, aMovedLeaseIsGivenBackOnce)
+{
+    ExecutionModel m{.usable_threads = 4};
+    {
+        auto a = m.use_threads(2);
+        auto b = std::move(a);
+        EXPECT_EQ(a.size(), 0u); // NOLINT(bugprone-use-after-move): moved from, empty
+        EXPECT_EQ(b.size(), 2u);
+        ThreadLease c;
+        c = std::move(b);
+        EXPECT_EQ(m.threads_used, 3u);
+    }
+    EXPECT_EQ(m.threads_used, 1u);
+}
+
+TEST(ExecutionModel, concurrentLeasesNeverPassTheCap)
+{
+    ExecutionModel m{.usable_threads = 16}; // 19 schedulable
+    std::atomic<std::size_t> most{0};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 8; ++t)
+        threads.emplace_back([&] {
+            for (int i = 0; i < 2000; ++i)
+            {
+                auto const lease = m.use_threads(3);
+                auto const used  = m.threads_used.load();
+                for (auto seen = most.load();
+                     used > seen and !most.compare_exchange_weak(seen, used);)
+                {
+                }
+            }
+        });
+    for (auto& t : threads)
+        t.join();
+    EXPECT_LE(most, m.schedulable());
+    EXPECT_EQ(m.threads_used, 1u);
 }
 
 TEST(ExecutionModel, nothingToRunOnThrows)
 {
-    for (auto const& m : {ExecutionModel{.mpi_ranks = -1}, ExecutionModel{.usable_threads = 0},
-                          ExecutionModel{.n_pools = 0}, ExecutionModel{.threads_per_pool = 0},
-                          ExecutionModel{.max_scheduled = 0}})
-        EXPECT_THROW(m.check(), std::runtime_error);
-}
-
-TEST(ExecutionModel, splitDividesTheUsableThreads)
-{
-    ExecutionModel const m{.usable_threads = 8};
-    auto const one = split(m, 1), per = split(m, 8), two = split(m, 2), more = split(m, 12);
-    EXPECT_EQ(one.threads_per_pool, 8u);
-    EXPECT_EQ(per.threads_per_pool, 1u);
-    EXPECT_EQ(two.threads_per_pool, 4u);
-    EXPECT_EQ(more.threads_per_pool, 1u);
-    EXPECT_NO_THROW(two.check());
-    EXPECT_THROW(more.check(), std::runtime_error); // 12 > 9
-    EXPECT_THROW(std::ignore = split(m, 0), std::runtime_error);
-}
-
-TEST(ExecutionModel, configuresTheThreadPool)
-{
-    auto& tp = ThreadPool::INSTANCE();
-    tp.configure(split(ExecutionModel{.usable_threads = 4}, 2));
-    EXPECT_EQ(ThreadPool::n_pools, 2u);
-    EXPECT_EQ(ThreadPool::threads_per_pool, 2u);
-    EXPECT_THROW(tp.configure(ExecutionModel{.n_pools = 4}), std::runtime_error);
-    EXPECT_EQ(ThreadPool::n_pools, 2u); // unchanged
-    tp.configure(ExecutionModel{});
+    EXPECT_THROW(ExecutionModel{.mpi_ranks = -1}.check(), std::runtime_error);
+    EXPECT_THROW(ExecutionModel{.usable_threads = 0}.check(), std::runtime_error);
+    EXPECT_THROW(ExecutionModel{.max_scheduled = 0}.check(), std::runtime_error);
 }
 
 } // namespace damn::core

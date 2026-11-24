@@ -68,7 +68,8 @@ TYPED_TEST(MPICollectScalar, gathers_one_value_per_rank_in_rank_order)
 
 TEST(MPIExecutionModel, ranksFromMPI)
 {
-    auto const m = mpi::with_ranks(core::ExecutionModel{});
+    core::ExecutionModel m;
+    mpi::set_ranks(m);
     EXPECT_EQ(m.mpi_ranks, mpi::size());
     EXPECT_NO_THROW(mpi::check(m));
     EXPECT_THROW(mpi::check(core::ExecutionModel{}), std::runtime_error); // 0: MPI is initialised

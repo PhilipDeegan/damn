@@ -4,7 +4,6 @@
 // damn::core::ExecutionModel's mpi_ranks from MPI: the size of MPI_COMM_WORLD if MPI is
 // initialised, else 0
 
-#include "damn/core/def.hpp"
 #include "damn/core/exec/execution_model.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
@@ -13,8 +12,8 @@
 
 namespace damn::mpi
 {
-// model with mpi_ranks from MPI
-NO_DISCARD core::ExecutionModel with_ranks(core::ExecutionModel model);
+// model's mpi_ranks from MPI
+void set_ranks(core::ExecutionModel& model);
 
 // model.check(), and its mpi_ranks those MPI has
 void check(core::ExecutionModel const& model);
@@ -24,10 +23,9 @@ void check(core::ExecutionModel const& model);
 
 namespace damn::mpi
 {
-inline core::ExecutionModel with_ranks(core::ExecutionModel model)
+inline void set_ranks(core::ExecutionModel& model)
 {
     model.mpi_ranks = is_init() ? size() : 0;
-    return model;
 }
 
 inline void check(core::ExecutionModel const& model)
