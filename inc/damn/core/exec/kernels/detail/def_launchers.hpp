@@ -5,9 +5,9 @@
 
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
-
 #include "mkn/gpu.hpp"
-#include "mkn/gpu/def.hpp"
+
+#include <cstddef>
 
 #if DAMN_HAVE_MKN_GPU
 
