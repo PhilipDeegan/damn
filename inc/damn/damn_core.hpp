@@ -5,6 +5,7 @@
 // damn is agnostic to what the data is; users bring its shape
 
 #include "damn/amr/hierarchy.hpp"                      // IWYU pragma: export
+#include "damn/amr/lattice.hpp"                        // IWYU pragma: export
 #include "damn/amr/box_data.hpp"                       // IWYU pragma: export
 #include "damn/amr/level_data.hpp"                     // IWYU pragma: export
 #include "damn/amr/level_map.hpp"                      // IWYU pragma: export

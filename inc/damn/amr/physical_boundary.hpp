@@ -38,10 +38,10 @@ struct PhysicalBoundaryRegion
 };
 
 // the regions of box grown by ghost_width past level ln's physical boundaries
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 NO_DISCARD std::vector<PhysicalBoundaryRegion<dim>>
-physical_boundary_regions(Hierarchy<dim> const& h, int const ln, core::Box<int, dim> const& box,
-                          int const ghost_width)
+physical_boundary_regions(Hierarchy<dim, Lattice> const& h, int const ln,
+                          core::Box<int, dim> const& box, int const ghost_width)
 {
     auto const domain = level_domain(h, ln);
     auto const ghosts = core::grow(box, mkn::kul::ConstArray<int, dim>(ghost_width));

@@ -143,7 +143,8 @@ public:
     }
 
     // one step dt of level 0 from t, its finer levels with it
-    void advance(Hierarchy<dim> const& h, auto& hooks, double const t, double const dt)
+    template<typename Lattice>
+    void advance(Hierarchy<dim, Lattice> const& h, auto& hooks, double const t, double const dt)
     {
         ratio_ = options_.time_ratio > 0 ? options_.time_ratio : h.ratio;
         if (levels_.size() < static_cast<std::size_t>(std::max(h.max_levels, 1)))
@@ -172,7 +173,8 @@ private:
     int last_finest_      = 0; // the finest level before the last regrid (SAMRAI's)
     bool level0_advanced_ = false;
 
-    static bool can_be_refined_(Hierarchy<dim> const& h, int const ln)
+    template<typename Lattice>
+    static bool can_be_refined_(Hierarchy<dim, Lattice> const& h, int const ln)
     {
         return ln + 1 < h.max_levels;
     }
@@ -185,8 +187,9 @@ private:
 
     // SAMRAI's findNextDtAndStepsRemaining: dt_max, the steps left, the next substep's dt;
     //  whether that one is the last
-    bool next_dt_and_steps_(Hierarchy<dim> const& h, int const ln, double const time_remaining,
-                            double const dt_bound)
+    template<typename Lattice>
+    bool next_dt_and_steps_(Hierarchy<dim, Lattice> const& h, int const ln,
+                            double const time_remaining, double const dt_bound)
     {
         auto& l  = levels_[static_cast<std::size_t>(ln)];
         l.dt_max = std::min(dt_bound, l.dt_max * options_.grow_dt);
@@ -223,8 +226,9 @@ private:
 
     // SAMRAI's advanceRecursivelyForRefinedTimestepping: level ln from its coarser level's time
     //  (coarse_t) to end_time (= coarse_t + coarse_dt)
-    void advance_level_(Hierarchy<dim> const& h, auto& hooks, int const ln, double const end_time,
-                        double const coarse_t, double const coarse_dt)
+    template<typename Lattice>
+    void advance_level_(Hierarchy<dim, Lattice> const& h, auto& hooks, int const ln,
+                        double const end_time, double const coarse_t, double const coarse_dt)
     {
         auto& l               = levels_[static_cast<std::size_t>(ln)];
         double time_remaining = 0;
@@ -302,8 +306,8 @@ private:
 // one step dt of level 0 from t with a fresh stepping state (every level new: each finer level
 //  time_ratio substeps per step of its coarser level when no hooks.next_dt), 0: the refinement
 //  ratio
-template<std::size_t dim>
-void advance(Hierarchy<dim> const& h, auto& hooks, double const t, double const dt,
+template<std::size_t dim, typename Lattice>
+void advance(Hierarchy<dim, Lattice> const& h, auto& hooks, double const t, double const dt,
              int const time_ratio = 0)
 {
     TimeRefinement<dim> stepping{{.time_ratio = time_ratio}};

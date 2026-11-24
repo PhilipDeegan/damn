@@ -30,6 +30,10 @@ a map of them.
 - **LevelData** (`level_data.hpp`): one rank's patch data on one level. Generic code reaches a
   patch's resources only through the user's `for_each_resource`, or through accessors the user
   hands it.
+- **Lattice** (`lattice.hpp`): a tag on the hierarchy, `Hierarchy<dim, Lattice>`: `Cartesian`
+  (the default) or `Kelvin` (BCC: a corner and a body site per cell, odd refinement ratios).
+  Generic code takes any lattice; what differs is overloaded, the lattice's own constrained by its
+  concept (`requires KelvinLattice<L>`), Cartesian's unconstrained and last.
 - **Copies** (`copy.hpp`, `neighbours.hpp`): same level exchanges along neighbour links: ghost
   fills, border sums and maxes (deposits, reproducible bit for bit), leaving particles.
 - **Inter level** (`inter_level.hpp`, `level_map.hpp`): refine and coarsen between consecutive

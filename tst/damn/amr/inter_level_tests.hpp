@@ -3,7 +3,7 @@
 
 // refine and coarsen's tests with brute force expectations, serial (test_inter_level.cpp) and
 // over MPI (test_mpi_inter_level.cpp). The including file defines, before including this:
-//   int test_rank(); int test_ranks();
+//   int test_rank(); int test_ranks(); int test_ratio();
 //   void do_refine(op, region, map, pairs, coarse_ld, fine_ld, alpha);
 //   void do_coarsen(op, map, pairs, fine_ld, coarse_ld);
 //   void do_refine_by(access, op, region, map, pairs, coarse_ld, fine_ld, alpha);
@@ -30,20 +30,27 @@ namespace damn::amr
 {
 namespace
 {
-    // fine level: 16 x 12 cells. A and B side by side (their shared border is no level
-    //  ghost), C at the upper corner (periodic images reach A)
-    std::vector<Box2> const fine_boxes_{Box2{std::array{0, 0}, std::array{5, 3}},
-                                        Box2{std::array{6, 0}, std::array{11, 3}},
-                                        Box2{std::array{10, 6}, std::array{15, 11}}};
+    // fine level: 8 r x 6 r cells (r: test_ratio()), boxes of whole coarse cells. A and B side
+    //  by side (their shared border is no level ghost), C at the upper corner (periodic images
+    //  reach A)
+    std::vector<Box2> fine_boxes()
+    {
+        auto const r = test_ratio();
+        return {Box2{std::array{0, 0}, std::array{3 * r - 1, 2 * r - 1}},
+                Box2{std::array{3 * r, 0}, std::array{6 * r - 1, 2 * r - 1}},
+                Box2{std::array{5 * r, 3 * r}, std::array{8 * r - 1, 6 * r - 1}}};
+    }
 
     Hierarchy<2> two_levels(std::array<bool, 2> const periodic)
     {
-        auto h       = make_hierarchy(periodic, test_ranks());
-        h.max_levels = 2;
+        auto h        = make_hierarchy(periodic, test_ranks());
+        h.max_levels  = 2;
+        h.ratio       = test_ratio();
+        auto const fb = fine_boxes();
         std::vector<int> ranks;
-        for (std::size_t i = 0; i < fine_boxes_.size(); ++i) // not the coarse ones' ranks
+        for (std::size_t i = 0; i < fb.size(); ++i) // not the coarse ones' ranks
             ranks.push_back(static_cast<int>(i + 1) % test_ranks());
-        set_level(h, make_level(1, fine_boxes_, ranks));
+        set_level(h, make_level(1, fb, ranks));
         return h;
     }
 
@@ -105,20 +112,22 @@ namespace
         void operator()(toy::Field& f, Box2 const& cells, Box2 const& box,
                         BoxValues<double const, 2> const& coarse) const
         {
-            core::for_each_point(
-                box, [&](auto const& p) { value(f, cells, p) = coarse(core::floor_div(p, 2)); });
+            core::for_each_point(box, [&](auto const& p) {
+                value(f, cells, p) = coarse(core::floor_div(p, test_ratio()));
+            });
         }
 
         // every coarse item split in one per fine cell of its coarse cell, those in box kept
         void operator()(toy::Particles& particles, Box2 const&, Box2 const& box,
                         std::span<toy::Item const> const coarse, Point2 const& shift) const
         {
+            auto const r = test_ratio();
             for (auto const& item : coarse)
-                for (int x = 0; x < 2; ++x)
-                    for (int y = 0; y < 2; ++y)
+                for (int x = 0; x < r; ++x)
+                    for (int y = 0; y < r; ++y)
                     {
                         auto const c = cell(item) + shift;
-                        Point2 const fine_cell{std::array{2 * c[0] + x, 2 * c[1] + y}};
+                        Point2 const fine_cell{std::array{r * c[0] + x, r * c[1] + y}};
                         if (core::isIn(fine_cell, box))
                         {
                             auto child = item;
@@ -159,11 +168,12 @@ namespace
                     if (in_region(l, region, f, cell, p))
                     {
                         // level ghosts past a non periodic edge have no coarse data
-                        if (!core::isIn(core::floor_div(p, 2), domain_box(f, l.h.domain))
+                        if (!core::isIn(core::floor_div(p, test_ratio()), domain_box(f, l.h.domain))
                             and region == LevelRegion::LevelGhosts)
                             return;
                         ++n;
-                        EXPECT_EQ(value(f, cell, p), scale * f_on(l.h, 0, core::floor_div(p, 2)))
+                        EXPECT_EQ(value(f, cell, p),
+                                  scale * f_on(l.h, 0, core::floor_div(p, test_ratio())))
                             << name << " " << i << " " << p;
                     }
                     else
@@ -208,7 +218,9 @@ TEST(Refine, timeInterpolated)
         auto& f          = l.fine.data[i].rho;
         auto const& cell = l.fine.patches[i].box;
         core::for_each_point(domain_box(f, cell), [&](auto const& p) {
-            EXPECT_DOUBLE_EQ(value(f, cell, p), 1.25 * f_on(l.h, 0, core::floor_div(p, 2))) << p;
+            EXPECT_DOUBLE_EQ(value(f, cell, p),
+                             1.25 * f_on(l.h, 0, core::floor_div(p, test_ratio())))
+                << p;
         });
     }
 }
@@ -231,7 +243,8 @@ TEST(Refine, theEndsOfATimeInterpolationReadOneSideOnly)
             auto& f          = l.fine.data[i].rho;
             auto const& cell = l.fine.patches[i].box;
             core::for_each_point(domain_box(f, cell), [&](auto const& p) {
-                EXPECT_EQ(value(f, cell, p), (1 + alpha) * f_on(l.h, 0, core::floor_div(p, 2)))
+                EXPECT_EQ(value(f, cell, p),
+                          (1 + alpha) * f_on(l.h, 0, core::floor_div(p, test_ratio())))
                     << alpha << " " << p;
             });
         }
@@ -300,7 +313,8 @@ namespace
         void operator()(toy::Field const& f, Box2 const& cells,
                         BoxValues<double, 2> const& out) const
         {
-            core::for_each_point(out.box, [&](auto const& q) { out(q) = value(f, cells, q * 2); });
+            core::for_each_point(
+                out.box, [&](auto const& q) { out(q) = value(f, cells, q * test_ratio()); });
         }
     };
 } // namespace
@@ -333,8 +347,10 @@ TEST(Coarsen, theCoarsePointsUnderTheFineDomains)
                     for (auto const& g : l.h.levels[1].patches)
                         for (auto const& s : shifts)
                             under |= core::isIn(
-                                q, domain_box(f, core::shift(core::coarsen(g.box, 2), s)));
-                    EXPECT_EQ(value(f, cell, q), under ? -f_on(l.h, 1, q * 2) : f_on(l.h, 0, q))
+                                q,
+                                domain_box(f, core::shift(core::coarsen(g.box, test_ratio()), s)));
+                    EXPECT_EQ(value(f, cell, q),
+                              under ? -f_on(l.h, 1, q * test_ratio()) : f_on(l.h, 0, q))
                         << name << " " << i << " " << q;
                 });
             }
@@ -512,11 +528,13 @@ TEST(Refine, intoAnotherPatchDataType)
                     core::for_each_point(ghost_box(f, cell), [&](auto const& p) {
                         if (in_region(l, region, f, cell, p))
                         {
-                            if (!core::isIn(core::floor_div(p, 2), domain_box(f, l.h.domain))
+                            if (!core::isIn(core::floor_div(p, test_ratio()),
+                                            domain_box(f, l.h.domain))
                                 and region == LevelRegion::LevelGhosts)
                                 return;
                             ++n;
-                            EXPECT_EQ(value(f, cell, p), f_on(l.h, 0, core::floor_div(p, 2)))
+                            EXPECT_EQ(value(f, cell, p),
+                                      f_on(l.h, 0, core::floor_div(p, test_ratio())))
                                 << pair.fine << " " << i << " " << p;
                         }
                         else
@@ -557,8 +575,10 @@ TEST(Coarsen, fromAnotherPatchDataType)
                     for (auto const& g : l.h.levels[1].patches)
                         for (auto const& s : shifts)
                             under |= core::isIn(
-                                q, domain_box(f, core::shift(core::coarsen(g.box, 2), s)));
-                    EXPECT_EQ(value(f, cell, q), under ? -f_on(l.h, 1, q * 2) : f_on(l.h, 0, q))
+                                q,
+                                domain_box(f, core::shift(core::coarsen(g.box, test_ratio()), s)));
+                    EXPECT_EQ(value(f, cell, q),
+                              under ? -f_on(l.h, 1, q * test_ratio()) : f_on(l.h, 0, q))
                         << pair.coarse << " " << i << " " << q;
                 });
             }
