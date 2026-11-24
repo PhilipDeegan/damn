@@ -1,94 +1,54 @@
 #ifndef DAMN_CORE_DEF_BOOTSTRAP_HPP
 #define DAMN_CORE_DEF_BOOTSTRAP_HPP
 
-// what this machine and build can do, from etc/bootstrap/bootstrap.py's probes (one binary per
-// capability: built, run, passed): _gen_bootstrap.hpp, generated, not committed. Without it every
-// capability is off. A run still checks for itself what it uses (another node, thread level)
+// what this machine and build can do, from etc/bootstrap/bootstrap.py (its toolchain discovery,
+// then one probe binary per capability: built, run, passed): _gen_bootstrap.hpp, generated, not
+// committed; without it bootstrap_defaults.hpp (committed, every capability off). A run still
+// checks for itself what it uses (another node, thread level)
 //
-//   DAMN_HAVE_BOOTSTRAP              the generated header is there
-//   DAMN_HAVE_MPI_THREAD_MULTIPLE    MPI_THREAD_MULTIPLE, threads exchanging at once
-//   DAMN_HAVE_MPI_CUDA_AWARE         Open MPI CUDA aware, a driver at run time
-//   DAMN_HAVE_HDF5_PARALLEL          parallel HDF5 (MPI-IO), collective round trip
-//   DAMN_HAVE_HDF5_SUBFILING         the subfiling VFD round trip (at MPI_THREAD_MULTIPLE)
-//   DAMN_HAVE_CUDA_DEVICE            a CUDA device
-//   DAMN_HAVE_MPI_VERSION            MPI builds and runs (damn::bootstrap::mpi_version_library)
+// compile time
+//   DAMN_HAVE_BOOTSTRAP, DAMN_HAVE_<AREA>_<PROBE>   1 / 0, for #if
+//   damn::bootstrap::Toolchain::<flag>              discover.py's: mpi_cuda_aware, hdf5_subfiling,
+//                                                   cuda_found, ... (bool); gpu ("none", "cuda",
+//                                                   "rocm")
+//   damn::bootstrap::<Area>::<probe>                each probe passed (Mpi::thread_multiple, ...)
 //
-//   damn::bootstrap::config()        every fact as a map (bootstrap.json's): "<area>_<name>" "1" /
-//                                    "0", "<area>_<name>_<key>" its values, "settings"; empty
-//                                    without the generated header. For python, as PHARE's
-//                                    build_config
-//   damn::bootstrap::number(key, fallback)
-//                                    a fact as a number (a probe's measurement), fallback
-//                                    without it; number(table, key, fallback) for another
-//                                    project's entries (plamn's)
+// run time: every fact a string by path
+//   damn::bootstrap::entries                        ("<area>/<probe>/<key>", value) pairs: also
+//                                                   "<area>/<probe>/ok", "toolchain/<area>/<key>",
+//                                                   "settings"; empty without a bootstrap
+//   damn::bootstrap::get<T>(path, fallback)         a fact as T (kul's from_string), fallback
+//                                                   without it: get<double>(
+//                                                   "mpi/exchange_node/latency_s", 1e-6)
+//   damn::bootstrap::tree()                         the facts as a bon tree (damn/core/bon.hpp):
+//                                                   bon::find(tree(), "mpi") for an area's
 
 #if __has_include("damn/core/def/_gen_bootstrap.hpp")
 #include "damn/core/def/_gen_bootstrap.hpp" // IWYU pragma: export
+#else
+#include "damn/core/def/bootstrap_defaults.hpp" // IWYU pragma: export
 #endif
 
-#ifndef DAMN_HAVE_BOOTSTRAP
-#define DAMN_HAVE_BOOTSTRAP 0
-#endif
-#ifndef DAMN_HAVE_MPI_VERSION
-#define DAMN_HAVE_MPI_VERSION 0
-#endif
-#ifndef DAMN_HAVE_MPI_THREAD_MULTIPLE
-#define DAMN_HAVE_MPI_THREAD_MULTIPLE 0
-#endif
-#ifndef DAMN_HAVE_MPI_CUDA_AWARE
-#define DAMN_HAVE_MPI_CUDA_AWARE 0
-#endif
-#ifndef DAMN_HAVE_HDF5_PARALLEL
-#define DAMN_HAVE_HDF5_PARALLEL 0
-#endif
-#ifndef DAMN_HAVE_HDF5_SUBFILING
-#define DAMN_HAVE_HDF5_SUBFILING 0
-#endif
-#ifndef DAMN_HAVE_CUDA_DEVICE
-#define DAMN_HAVE_CUDA_DEVICE 0
-#endif
+#include "damn/core/bon.hpp"
+#include "mkn/kul/lang/cpp/compiler/def.hpp"
 
 #include <array>
-#include <charconv>
-#include <map>
-#include <string>
 #include <string_view>
-#include <system_error>
-#include <iterator>
 
 namespace damn::bootstrap
 {
-#if !DAMN_HAVE_BOOTSTRAP
-inline constexpr std::array<std::pair<std::string_view, std::string_view>, 0> entries{};
-#endif
-
-inline std::map<std::string, std::string> config()
+// a fact as T, else fallback (no bootstrap, its probe failed or was skipped, or not a T)
+template<typename T>
+MKN_KUL_FN_SIG_RET T get(std::string_view const path, T const& fallback)
 {
-    std::map<std::string, std::string> out;
-    for (auto const& [k, v] : entries)
-        out.emplace(k, v);
-    return out;
+    return bon::get(entries, path, fallback);
 }
 
-// a fact of `table` (a project's entries: damn's, plamn's, ...) as a number, else fallback (no
-// bootstrap, its probe failed, or not a number)
-template<typename Table>
-double number(Table const& table, std::string_view const key, double const fallback)
+// the facts as a tree of paths, made once
+MKN_KUL_FN_SIG_RET inline bon::Node const& tree()
 {
-    for (auto const& [k, v] : table)
-        if (k == key)
-        {
-            double x             = 0;
-            auto const [end, ec] = std::from_chars(v.data(), v.data() + v.size(), x);
-            return ec == std::errc{} and end == v.data() + v.size() ? x : fallback;
-        }
-    return fallback;
-}
-
-// damn's fact as a number, e.g. number("mpi_exchange_node_s_per_byte", 1e-10)
-inline double number(std::string_view const key, double const fallback)
-{
-    return number(entries, key, fallback);
+    static bon::Node const t = bon::tree(entries);
+    return t;
 }
 } // namespace damn::bootstrap
 

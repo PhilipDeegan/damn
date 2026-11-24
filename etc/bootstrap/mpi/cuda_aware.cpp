@@ -1,4 +1,5 @@
 // bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=1 profile=bootstrap
+// needs=mpi_cuda_aware
 // Open MPI's CUDA awareness: built with it (MPIX_CUDA_AWARE_SUPPORT) and available at run time
 // (MPIX_Query_cuda_support: a CUDA driver found). Fails to build without Open MPI's extension
 #include <mpi.h>

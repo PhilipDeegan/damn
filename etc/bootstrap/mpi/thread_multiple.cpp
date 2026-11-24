@@ -1,4 +1,5 @@
 // bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap
+// needs=mpi_found
 // MPI_THREAD_MULTIPLE provided, and two threads per rank exchanging with the other rank at the
 // same time, on one communicator (distinct tags) and on a duplicate each, complete and agree.
 // HDF5's subfiling needs it; Open MPI over UCX needs UCX built --enable-mt for it

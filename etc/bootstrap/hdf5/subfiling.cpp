@@ -1,4 +1,5 @@
 // bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap_hdf5
+// needs=mpi_found,hdf5_subfiling
 // HDF5's subfiling VFD: built with it (H5_HAVE_SUBFILING_VFD), MPI at MPI_THREAD_MULTIPLE (its I/O
 // concentrator threads call MPI), and a file written by every rank through it read back. Fails
 // to build without the VFD
