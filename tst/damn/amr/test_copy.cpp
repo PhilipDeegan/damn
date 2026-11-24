@@ -418,11 +418,11 @@ namespace
     {
         CField f;
     };
-    Box2 domain_box(PointField const& f, Box2 const& cells)
+    [[maybe_unused]] Box2 domain_box(PointField const& f, Box2 const& cells)
     {
         return domain_box(f.f, cells);
     }
-    Box2 ghost_box(PointField const& f, Box2 const& cells)
+    [[maybe_unused]] Box2 ghost_box(PointField const& f, Box2 const& cells)
     {
         return ghost_box(f.f, cells);
     }
