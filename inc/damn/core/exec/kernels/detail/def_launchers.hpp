@@ -15,14 +15,14 @@
 namespace damn::kernel
 {
 
-auto inline warp_size() DAMN_ALL // make runtime interrogation?
+// the device's: wave64 AMD GPUs (CDNA) are 64 wide, so launch shapes sized from it match the
+//  kernels' warpSize
+std::size_t inline warp_size() DAMN_ALL
 {
-#if !defined(MKN_GPU_CUDA) || !defined(MKN_GPU_ROCM)
-    throw std::runtime_error("warpsize is not available for cpu");
-#elif defined(MKN_GPU_ROCM)
-    return 32ull; // not always
-#elif defined(MKN_GPU_CUDA)
-    return 32ull;
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+    return static_cast<std::size_t>(warpSize);
+#else
+    return mkn::gpu::warp_size;
 #endif
 }
 
