@@ -8,7 +8,8 @@
 #include "damn/core/exec/execution_model.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
-#include <cstddef>
+#include <string>
+#include <stdexcept>
 
 namespace damn::mpi
 {
@@ -20,9 +21,6 @@ void check(core::ExecutionModel const& model);
 
 } // namespace damn::mpi
 
-
-#include <stdexcept>
-#include <string>
 
 namespace damn::mpi
 {

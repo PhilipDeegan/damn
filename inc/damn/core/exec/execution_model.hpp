@@ -16,7 +16,11 @@
 
 #include "damn/core/def.hpp"
 
+#include <cmath>
+#include <string>
 #include <cstddef>
+#include <algorithm>
+#include <stdexcept>
 
 namespace damn::core
 {
@@ -39,11 +43,6 @@ NO_DISCARD ExecutionModel split(ExecutionModel model, std::size_t n_pools);
 
 } // namespace damn::core
 
-
-#include <cmath>
-#include <stdexcept>
-#include <string>
-#include <algorithm>
 
 namespace damn::core
 {
