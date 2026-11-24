@@ -149,12 +149,85 @@ TEST(VtkHdf, aTimeSeriesOfLevelsReadBack)
         std::filesystem::remove(name);
 }
 
+// cell data beside the point data (a Kelvin lattice's body sites beside its corner sites), at
+//  ratio 3: each rank's cell rows where CellDataOffset says, spacings by 3^level
+TEST(VtkHdf, cellDataAndRatioThree)
+{
+    int const rank = mpi::rank(), size = mpi::size();
+    std::string const name   = "test_damn_vtkhdf_cells.vtkhdf";
+    std::size_t constexpr nc = 2;
+
+    std::array const levels
+        = {amr::make_level(0,
+                           std::vector<Box2>{{std::array{0, 0}, std::array{5, 3}},
+                                             {std::array{6, 0}, std::array{11, 3}}},
+                           std::vector<int>{1 % size, 0}),
+           amr::make_level(1, std::vector<Box2>{{std::array{6, 3}, std::array{14, 8}}},
+                           std::vector<int>{size - 1})};
+    auto const cell_value = [](std::uint32_t const id, std::size_t const r, std::size_t const c) {
+        return -1000.f * static_cast<float>(id + 1) - 2.f * static_cast<float>(r)
+               - static_cast<float>(c);
+    };
+
+    {
+        h5::HighFiveFile file{name, h5::HiFile::Create | h5::HiFile::Truncate};
+        init(file, VtkInit<2>{.n_components      = components,
+                              .max_levels        = 2,
+                              .spacing           = {0.9, 0.3},
+                              .ratio             = 3,
+                              .n_cell_components = nc});
+        append_step(file, 0.);
+        for (auto const& level : levels)
+        {
+            auto const rows = rows_for(level, rank);
+            std::vector<float> cells;
+            for (auto const& p : level.patches)
+                if (p.rank == rank)
+                    for (std::size_t r = 0; r < cell_rows_of(p.box); ++r)
+                        for (std::size_t c = 0; c < nc; ++c)
+                            cells.push_back(cell_value(p.id, r, c));
+            append_level(file, VtkLevel<float, 2>{level.number, level, rank, components, rows, nc,
+                                                  std::span<float const>{cells}});
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    h5::HighFiveFile file{name, h5::HiFile::ReadOnly, false};
+    for (auto const& level : levels)
+    {
+        auto const ln    = std::to_string(level.number);
+        auto const at    = read_1d<std::int64_t>(file, std::string{base} + "/Steps/Level" + ln
+                                                           + "/CellDataOffset/data");
+        auto const cells = file.getDataSet(std::string{base} + "/Level" + ln + "/CellData/data")
+                               .read<std::vector<std::vector<float>>>();
+        ASSERT_EQ(at, std::vector<std::int64_t>{0});
+        auto row = std::size_t{0};
+        for (int r = 0; r < size; ++r)
+            for (auto const& p : level.patches)
+                if (p.rank == r)
+                    for (std::size_t k = 0; k < cell_rows_of(p.box); ++k, ++row)
+                        for (std::size_t c = 0; c < nc; ++c)
+                            ASSERT_EQ(cells[row][c], cell_value(p.id, k, c)) << ln << " " << row;
+        EXPECT_EQ(row, cells.size());
+    }
+    EXPECT_EQ(file.file()
+                  .getGroup(std::string{base} + "/Level1")
+                  .getAttribute("Spacing")
+                  .read<std::vector<float>>(),
+              (std::vector<float>{0.3f, 0.1f}));
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (rank == 0)
+        std::filesystem::remove(name);
+}
+
 TEST(VtkHdf, rowsAndPoints)
 {
     Box2 const cells{std::array{2, 0}, std::array{4, 0}}; // 3 x 1 cells: 4 x 2 nodes
     EXPECT_EQ(points_of(cells), 8u);
     EXPECT_EQ(rows_of(cells), 16u); // 2D: twice, a 3D view
     EXPECT_EQ(rows_of(core::Box<int, 1>{std::array{0}, std::array{9}}), 44u); // 11 nodes x 4
+    EXPECT_EQ(cell_rows_of(cells), 3u);
+    EXPECT_EQ(cell_rows_of(core::Box<int, 3>{std::array{0, 0, 0}, std::array{1, 2, 3}}), 24u);
 }
 
 } // namespace damn::hdf5::vtkhdf
