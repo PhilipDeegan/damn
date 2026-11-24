@@ -12,7 +12,7 @@ phases:
       - {prefix: "${prefix} -n 1"}
     "../bin/test_damn_mpi/test/*_test_mpi_utils.cpp":
       - {prefix: "${prefix} -n 2"}
-    "../bin/test_damn_mpi/test/*_test_mpi_{copy,regrid,inter_level,clustering,scope_timing}.cpp":
+    "../bin/test_damn_mpi/test/*_test_mpi_{copy,regrid,inter_level,clustering,scope_timing,kelvin}.cpp":
       - {prefix: "${prefix} -n 2"}
       - {prefix: "${prefix} -n 3"}
       - {prefix: "${prefix} -n 8"}
