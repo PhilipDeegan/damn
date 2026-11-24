@@ -5,7 +5,11 @@ and an mkn settings file for that toolchain when none is given (-x)
     --mpi-home DIR      (MPI_HOME, MPI_ROOT; else the mpicxx on PATH)   DIR/bin/mpicxx, mpirun
     --hdf5-root DIR     (HDF5_ROOT, HDF5_DIR; else the HDF5 built with that MPI: DIR/../hdf5,
                          then the system's)
-    --gpu none|cuda|rocm|auto   (none: a CPU build; auto: a toolkit with a device, else none)
+    --gpu [cuda|rocm|auto]      (absent: a CPU build; bare --gpu: auto, a toolkit with a device,
+                                 else CPU)
+    --compiler gcc|clang|nvcc|hipcc   the family (default: gcc for CPU, clang for CUDA, hipcc
+                                 for ROCm; nvcc runs over the MPI wrapper, -ccbin, and does
+                                 not build damn's device code yet: damn#68); --cxx its binary
     --cuda-home DIR     (CUDA_HOME, CUDA_PATH; else /usr/local/cuda)  --cuda-arch sm_120 (else
                          nvptx-arch's first device)
     --rocm-path DIR     (ROCM_PATH; else /opt/rocm)  --gpu-targets gfx942 (else amdgpu-arch's)
@@ -33,6 +37,10 @@ SYSTEM_HDF5 = [
 ]
 
 
+# compiler families and the targets they build for
+COMPILERS = dict(gcc=("none",), clang=("none", "cuda"), nvcc=("cuda",), hipcc=("rocm",))
+
+
 def add_arguments(a):
     g = a.add_argument_group(
         "toolchain (when no -x is given, a settings file is made of it)"
@@ -43,12 +51,27 @@ def add_arguments(a):
     g.add_argument("--hdf5-root", help="HDF5 install prefix (include, lib)")
     g.add_argument("--hdf5-include-dir")
     g.add_argument("--hdf5-library-dir")
-    g.add_argument("--gpu", choices=["none", "cuda", "rocm", "auto"], default="none")
+    g.add_argument(
+        "--gpu",
+        nargs="?",
+        const="auto",
+        default="none",
+        choices=["none", "cpu", "cuda", "rocm", "auto"],
+        help="absent: a CPU build; bare --gpu: auto (a toolkit with a device, else CPU)",
+    )
+    g.add_argument(
+        "--compiler",
+        choices=sorted(COMPILERS),
+        help="compiler family (default: gcc for CPU, clang for CUDA, hipcc for ROCm)",
+    )
     g.add_argument("--cuda-home")
     g.add_argument("--cuda-arch", help="e.g. sm_120")
     g.add_argument("--rocm-path")
     g.add_argument("--gpu-targets", help="e.g. gfx942")
-    g.add_argument("--cxx", help="the compiler under the MPI wrapper")
+    g.add_argument(
+        "--cxx",
+        help="the compiler binary under the MPI wrapper (nvcc: its host compiler)",
+    )
 
 
 def sh(*cmd, env=None):
@@ -251,14 +274,41 @@ def discover(args):
     found = dict(
         mpi=mpi, hdf5=find_hdf5(args, mpi), cuda=find_cuda(args), rocm=find_rocm(args)
     )
-    gpu = args.gpu
+    gpu = "none" if args.gpu == "cpu" else args.gpu
     if gpu == "auto":
         gpu = next(
             (k for k in ("cuda", "rocm") if found[k]["found"] and found[k]["devices"]),
             "none",
         )
     found["gpu"] = gpu
+    found["compiler"] = choose_compiler(args, gpu, found["cuda"])
     return found
+
+
+def choose_compiler(args, gpu, cuda):
+    """the compiler family for the target (--compiler, else gcc for CPU, clang for CUDA, hipcc
+    for ROCm) and its binary. No nvcc fallback without a clang++: damn's device code builds with
+    clang only (damn#68); --compiler nvcc to try anyway"""
+    family = args.compiler or dict(none="gcc", cuda="clang", rocm="hipcc")[gpu]
+    if gpu not in COMPILERS[family]:
+        target = "CPU" if gpu == "none" else gpu
+        return dict(
+            found=False, family=family, why=f"{family} does not build for {target}"
+        )
+    if family == "nvcc":
+        nvcc = Path(cuda.get("home", ""), "bin", "nvcc")
+        if not nvcc.exists():
+            return dict(found=False, family=family, why=f"no {nvcc}")
+        host = args.cxx or "g++"  # nvcc's host compiler, under the MPI wrapper (-ccbin)
+        return dict(found=True, family=family, cxx=host, driver=str(nvcc))
+    cxx = args.cxx or dict(gcc="g++", clang="clang++", hipcc="hipcc")[family]
+    if not shutil.which(cxx):
+        why = f"no {cxx} on PATH"
+        if gpu == "cuda" and family == "clang":
+            why += " (damn's CUDA code needs clang: nvcc rejects its device lambdas, damn#68;"
+            why += " --compiler nvcc to try anyway)"
+        return dict(found=False, family=family, why=why)
+    return dict(found=True, family=family, cxx=cxx, driver="")
 
 
 # the toolchain's compile time flags (the header's Toolchain struct): each always there, false
@@ -282,7 +332,7 @@ def facts(found):
     """what was found, flat and typed ("<area>_<key>": bool / int / str), for the header"""
     out = no_facts()
     out["gpu"] = found["gpu"]
-    for area in ("mpi", "hdf5", "cuda", "rocm"):
+    for area in ("mpi", "hdf5", "cuda", "rocm", "compiler"):
         for k, v in found[area].items():
             if k in ("inc", "lib") and isinstance(v, list):
                 v = ":".join(v)
@@ -318,6 +368,12 @@ def report(found):
             else f"{k:<5} none: {g['why']}"
         )
     lines.append(f"gpu   {found['gpu']}")
+    cc = found["compiler"]
+    lines.append(
+        f"cxx   {cc['family']} ({cc['cxx']}{', ' + cc['driver'] if cc['driver'] else ''})"
+        if cc["found"]
+        else f"cxx   {cc['family']}: {cc['why']}"
+    )
     if found["gpu"] == "cuda" and m["found"] and not m["cuda_aware"]:
         lines.append(
             "      (this MPI is not CUDA aware: device buffers are staged on the host)"
@@ -335,17 +391,32 @@ def settings(found, args, command, incs=()):
         raise SystemExit(f"bootstrap: {m['why']} (or give -x)")
     if gpu in ("cuda", "rocm") and not found[gpu]["found"]:
         raise SystemExit(f"bootstrap: --gpu {gpu}: {found[gpu]['why']}")
+    cc = found["compiler"]
+    if not cc["found"]:
+        raise SystemExit(f"bootstrap: --compiler {cc['family']}: {cc['why']}")
+    cxx = cc["cxx"]
+    driver = m["cxx"]  # what mkn runs: the MPI wrapper, or nvcc over it (-ccbin)
     system = lambda d: str(d).startswith(("/usr/", "/lib"))  # noqa: E731
     runpath = [d for d in [*m["lib"], h.get("lib", "")] if d and not system(d)]
     rpath = " ".join(f"-Wl,-rpath,{d}" for d in runpath)
     common = "-std=c++20 -fPIC -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX"
     env = [f"PATH={m['bin']}:${{PATH}}"]  # its mpirun; libraries through the run paths
     inc = path = ""
-    if gpu == "cuda":
+    if gpu == "cuda" and cc["family"] == "nvcc":
         c = found["cuda"]
         if not c["arch"]:
             raise SystemExit("bootstrap: --gpu cuda: no device found, give --cuda-arch")
-        cxx = args.cxx or "clang++"
+        driver = f"{cc['driver']} -ccbin {m['cxx']}"
+        flags = (
+            f"-std=c++20 -x cu -arch={c['arch']} --extended-lambda --expt-relaxed-constexpr"
+            " -Xcompiler -fPIC -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX -DMKN_GPU_CUDA=1"
+            " -DMKN_GPU_ROCM=0 -DDAMN_HAVE_MKN_GPU=1 -DDAMN_HAVE_GPU_HARDWARE=1"
+        )
+        link = "-lcudart " + " ".join(f"-Xlinker -rpath={d}" for d in runpath)
+    elif gpu == "cuda":
+        c = found["cuda"]
+        if not c["arch"]:
+            raise SystemExit("bootstrap: --gpu cuda: no device found, give --cuda-arch")
         flags = (
             f"{common} -fsized-deallocation -Wno-unknown-cuda-version"
             f" -Xclang -fcuda-allow-variadic-functions -x cuda --cuda-path={c['home']}"
@@ -356,7 +427,6 @@ def settings(found, args, command, incs=()):
         inc, path = c["cccl"], c["lib"]
     elif gpu == "rocm":
         r = found["rocm"]
-        cxx = args.cxx or "hipcc"
         arch = f" --offload-arch={r['arch']}" if r["arch"] else ""
         flags = (
             f"{common} -fsized-deallocation{arch} -DMKN_GPU_ROCM=1 -DMKN_GPU_CUDA=0"
@@ -365,7 +435,6 @@ def settings(found, args, command, incs=()):
         link = f"-lamdhip64 {rpath}"
         env = [f"PATH={m['bin']}:{r['home']}/bin:${{PATH}}", *env[1:]]
     else:
-        cxx = args.cxx or "g++"
         flags = f"{common} ${{cpu.thrust}}"
         link = rpath
     env += [f"OMPI_CXX={cxx}", f"MPICH_CXX={cxx}"]
@@ -401,17 +470,16 @@ def settings(found, args, command, incs=()):
     out += [""]
     if h.get("found"):
         out += ["find:", "  hdf5:", f"    inc: {h['inc']}", f"    lib: {h['lib']}", ""]
+    if (
+        driver == m["cxx"]
+    ):  # the wrapper takes gcc style flags (nvcc as mkn.gpu's: no mask)
+        out += ["compiler:", "  mask:", "    g++:", f"      {m['cxx']}", ""]
     out += [
-        "compiler:",
-        "  mask:",
-        "    g++:",
-        f"      {m['cxx']}",
-        "",
         "file:",
         "  - type: cpp:cxx:cc",
         "    archiver: ar -cr",
-        f"    compiler: {m['cxx']} ${{cxx.flags}}",
-        f"    linker: {m['cxx']}" + (" ${lnk.flags}" if link.strip() else ""),
+        f"    compiler: {driver} ${{cxx.flags}}",
+        f"    linker: {driver}" + (" ${lnk.flags}" if link.strip() else ""),
         "",
     ]
     return "\n".join(out)

@@ -23,8 +23,13 @@ profile:
        phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
        cccl#v3.5.0&tpp/cccl(https://github.com/NVIDIA/cccl)
   dep: mkn.kul#${mkn.kul.version} mkn.gpu#${mkn.gpu.version}
-  # nothing reads errno: sqrt, pow ... stay inline, their loops vectorise (results unchanged)
-  arg: -std=c++20 -fno-math-errno
+  # nothing reads errno: sqrt, pow ... stay inline, their loops vectorise (results unchanged);
+  #  per compiler: nvcc passes it to its host compiler
+  arg: -std=c++20
+  if_arg:
+    g++: -fno-math-errno
+    clang++: -fno-math-errno
+    nvcc: -Xcompiler -fno-math-errno
 
 - name: damn_core
   parent: base
