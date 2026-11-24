@@ -67,15 +67,15 @@ namespace core
 
         constexpr Point() { mkn::kul::fill(Type{0}, r); }
 
-        NO_DISCARD constexpr auto& operator[](std::size_t const i) DAMN_ALL { return r[i]; }
-        NO_DISCARD constexpr auto const& operator[](std::size_t const i) const DAMN_ALL
+        MKN_KUL_FN_SIG_RET constexpr auto& operator[](std::size_t const i) DAMN_ALL { return r[i]; }
+        MKN_KUL_FN_SIG_RET constexpr auto const& operator[](std::size_t const i) const DAMN_ALL
         {
             return r[i];
         }
 
 
         template<typename T2>
-        NO_DISCARD bool operator==(Point<T2, dim> const& p) const DAMN_ALL
+        MKN_KUL_FN_SIG_RET bool operator==(Point<T2, dim> const& p) const DAMN_ALL
         {
             bool areEqual = true;
             for (std::size_t i = 0; i < dim; ++i)
@@ -88,7 +88,7 @@ namespace core
             return areEqual;
         }
 
-        NO_DISCARD bool operator!=(Point const& other) const DAMN_ALL
+        MKN_KUL_FN_SIG_RET bool operator!=(Point const& other) const DAMN_ALL
         {
             return !(*this == other);
         }
@@ -133,7 +133,7 @@ namespace core
 
 
         template<typename DestType = Type>
-        NO_DISCARD auto toArray() const DAMN_ALL
+        MKN_KUL_FN_SIG_RET auto toArray() const DAMN_ALL
         {
             std::array<DestType, dimension> destArray;
             for (auto i = 0u; i < dimension; ++i)
@@ -144,13 +144,13 @@ namespace core
         }
 
 
-        NO_DISCARD std::vector<Type> toVector() const
+        MKN_KUL_FN_SIG_RET std::vector<Type> toVector() const
         {
             return std::vector<Type>(r.data(), r.data() + dimension);
         }
 
-        NO_DISCARD std::string str(std::uint8_t const precision = 6,
-                                   bool left_pad_positive       = true) const
+        MKN_KUL_FN_SIG_RET std::string str(std::uint8_t const precision = 6,
+                                           bool left_pad_positive       = true) const
             requires(std::floating_point<Type>)
         {
             std::stringstream ss;
@@ -166,7 +166,7 @@ namespace core
         }
 
 
-        NO_DISCARD std::string str() const
+        MKN_KUL_FN_SIG_RET std::string str() const
             requires(!std::floating_point<Type>)
         {
             std::stringstream ss;
@@ -178,7 +178,7 @@ namespace core
             return ss.str();
         }
 
-        NO_DISCARD static Point fromString(std::string csv)
+        MKN_KUL_FN_SIG_RET static Point fromString(std::string csv)
         {
             Point p;
             std::istringstream split(csv);
@@ -316,15 +316,15 @@ namespace core
         // }
 
 
-        NO_DISCARD constexpr auto size() const { return dim; }
-        NO_DISCARD auto data() const { return r.data(); }
-        NO_DISCARD auto begin() DAMN_ALL { return r.begin(); }
-        NO_DISCARD auto begin() const DAMN_ALL { return r.begin(); }
-        NO_DISCARD auto end() DAMN_ALL { return r.end(); }
-        NO_DISCARD auto end() const DAMN_ALL { return r.end(); }
+        MKN_KUL_FN_SIG_RET constexpr auto size() const { return dim; }
+        MKN_KUL_FN_SIG_RET auto data() const { return r.data(); }
+        MKN_KUL_FN_SIG_RET auto begin() DAMN_ALL { return r.begin(); }
+        MKN_KUL_FN_SIG_RET auto begin() const DAMN_ALL { return r.begin(); }
+        MKN_KUL_FN_SIG_RET auto end() DAMN_ALL { return r.end(); }
+        MKN_KUL_FN_SIG_RET auto end() const DAMN_ALL { return r.end(); }
 
-        NO_DISCARD auto& operator*() const DAMN_ALL { return r; }
-        NO_DISCARD auto& operator()() const DAMN_ALL { return r; }
+        MKN_KUL_FN_SIG_RET auto& operator*() const DAMN_ALL { return r; }
+        MKN_KUL_FN_SIG_RET auto& operator()() const DAMN_ALL { return r; }
 
         operator std::array<Type, dim>() const DAMN_ALL { return r; }
 
@@ -354,7 +354,7 @@ namespace core
         }
 
 
-        NO_DISCARD constexpr Point<Type, dim> shift(std::size_t d, int offset) const
+        MKN_KUL_FN_SIG_RET constexpr Point<Type, dim> shift(std::size_t d, int offset) const
         {
             assert(d < dim);
             Point<Type, dim> result = *this;
@@ -409,7 +409,7 @@ auto as_point(Arr<T, dim> const& arr)
 }
 
 template<typename Type, std::size_t dim, typename Shifter>
-NO_DISCARD Point<Type, dim> shift(Point<Type, dim> const& point, Shifter const& offset)
+MKN_KUL_FN_SIG_RET Point<Type, dim> shift(Point<Type, dim> const& point, Shifter const& offset)
 {
     auto copy{point};
     copy += offset;
@@ -422,7 +422,7 @@ NO_DISCARD Point<Type, dim> shift(Point<Type, dim> const& point, Shifter const& 
 namespace std
 {
 template<typename Type, std::size_t dim>
-NO_DISCARD damn::core::Point<Type, dim> abs(damn::core::Point<Type, dim> const& point)
+MKN_KUL_FN_SIG_RET damn::core::Point<Type, dim> abs(damn::core::Point<Type, dim> const& point)
 {
     std::array<Type, dim> postive;
     for (std::size_t i = 0; i < dim; ++i)

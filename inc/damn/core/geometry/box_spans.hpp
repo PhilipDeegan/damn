@@ -160,7 +160,7 @@ void for_each_point_reverse(Box<T, dim> const& box, auto&& fn) DAMN_ALL
  * For kernels where each thread handles one cell of a box.
  */
 template<typename T, std::size_t dim>
-NO_DISCARD auto point_at(Box<T, dim> const& box, std::size_t const i) DAMN_ALL
+MKN_KUL_FN_SIG_RET auto point_at(Box<T, dim> const& box, std::size_t const i) DAMN_ALL
 {
     static_assert(dim >= 1 and dim <= 3);
 

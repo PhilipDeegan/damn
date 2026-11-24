@@ -50,8 +50,8 @@ struct NdArrayViewer
 
 
     template<template<typename, std::size_t> typename Indexes, typename Index>
-    NO_DISCARD static inline auto& at(auto* data, auto const& nCells,
-                                      Indexes<Index, dim> const& indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET static inline auto& at(auto* data, auto const& nCells,
+                                              Indexes<Index, dim> const& indexes) DAMN_ALL
 
     {
         auto const& i = idx(nCells, indexes);

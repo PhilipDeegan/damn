@@ -50,46 +50,49 @@ namespace damn::amr
 // "Programming the Hilbert curve", AIP Conf. Proc. 707, 381 (2004): consecutive indices are
 // face neighbours
 template<std::size_t dim>
-NO_DISCARD std::uint64_t hilbert_index(std::array<std::uint32_t, dim> x, unsigned const bits);
+MKN_KUL_FN_SIG_RET std::uint64_t hilbert_index(std::array<std::uint32_t, dim> x,
+                                               unsigned const bits);
 
 // the order of boxes along the curve, by their centres in box's index space
 template<std::size_t dim>
-NO_DISCARD std::vector<std::size_t> curve_order(std::vector<core::Box<int, dim>> const& boxes);
+MKN_KUL_FN_SIG_RET std::vector<std::size_t>
+curve_order(std::vector<core::Box<int, dim>> const& boxes);
 
 // each box's rank in [0, capacity.size())
 template<std::size_t dim>
-NO_DISCARD std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
-                                      std::vector<double> const& weights,
-                                      std::vector<double> const& capacity);
+MKN_KUL_FN_SIG_RET std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
+                                              std::vector<double> const& weights,
+                                              std::vector<double> const& capacity);
 
 // each box's rank in [0, n_ranks), every rank the same capacity
 template<std::size_t dim>
-NO_DISCARD std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
-                                      std::vector<double> const& weights, int n_ranks);
+MKN_KUL_FN_SIG_RET std::vector<int> partition(std::vector<core::Box<int, dim>> const& boxes,
+                                              std::vector<double> const& weights, int n_ranks);
 
 // a box's cells, the weight of field work
 template<std::size_t dim>
-NO_DISCARD std::vector<double> cell_weights(std::vector<core::Box<int, dim>> const& boxes);
+MKN_KUL_FN_SIG_RET std::vector<double> cell_weights(std::vector<core::Box<int, dim>> const& boxes);
 
 // a and b as one box, if their union is one
 template<std::size_t dim>
-NO_DISCARD std::optional<core::Box<int, dim>> union_box(core::Box<int, dim> const& a,
-                                                        core::Box<int, dim> const& b);
+MKN_KUL_FN_SIG_RET std::optional<core::Box<int, dim>> union_box(core::Box<int, dim> const& a,
+                                                                core::Box<int, dim> const& b);
 
 // boxes merged two by two while their union is a box, deterministic (lower corner order)
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> coalesce(std::vector<core::Box<int, dim>> boxes);
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
+coalesce(std::vector<core::Box<int, dim>> boxes);
 
 // box cut from its lower corner into blocks of `block` cells per direction, the remainder in the
 // last block (block to 2 * block - 1 cells, or the box's width if less), x fastest
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> blocks_of(core::Box<int, dim> const& box,
-                                                      std::array<int, dim> const& block);
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> blocks_of(core::Box<int, dim> const& box,
+                                                              std::array<int, dim> const& block);
 
 // every box's blocks, box after box: the order of cut_partition's block weights
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> blocks(std::vector<core::Box<int, dim>> const& boxes,
-                                                   std::array<int, dim> const& block);
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
+blocks(std::vector<core::Box<int, dim>> const& boxes, std::array<int, dim> const& block);
 
 template<std::size_t dim>
 struct Partition
@@ -117,18 +120,18 @@ struct CutPartition
 // the rank holding the middle of its weight). Each rank ends within a block's weight of its share,
 // plus tol of the smallest share per end of its run left uncut
 template<std::size_t dim>
-NO_DISCARD Partition<dim> cut_partition(CutPartition<dim> const& in);
+MKN_KUL_FN_SIG_RET Partition<dim> cut_partition(CutPartition<dim> const& in);
 
 // the same from CutPartition's members as arguments, in order; missing ones (tol) defaulted
 template<std::size_t dim>
-NO_DISCARD Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
-                                        auto&&... args)
+MKN_KUL_FN_SIG_RET Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
+                                                auto&&... args)
 {
     return cut_partition(CutPartition<dim>{boxes, std::forward<decltype(args)>(args)...});
 }
 
 // n_ranks ranks of the same capacity
-NO_DISCARD inline std::vector<double> equal_capacity(int const n_ranks)
+MKN_KUL_FN_SIG_RET inline std::vector<double> equal_capacity(int const n_ranks)
 {
     if (n_ranks < 1)
         throw std::runtime_error("damn::amr::equal_capacity: n_ranks < 1");
@@ -145,18 +148,18 @@ namespace detail
         std::vector<double> ends;
         double smallest = 0; // the smallest non zero share
 
-        NO_DISCARD int size() const { return static_cast<int>(ends.size()); }
+        MKN_KUL_FN_SIG_RET int size() const { return static_cast<int>(ends.size()); }
 
         // the rank whose run holds x along the curve (a rank of capacity 0 holds nothing)
-        NO_DISCARD int rank_of(double const x) const
+        MKN_KUL_FN_SIG_RET int rank_of(double const x) const
         {
             auto const it = std::upper_bound(ends.begin(), ends.end(), x);
             return std::min(size() - 1, static_cast<int>(it - ends.begin()));
         }
     };
 
-    NO_DISCARD inline Shares shares(double const total, std::vector<double> const& capacity,
-                                    char const* const who)
+    MKN_KUL_FN_SIG_RET inline Shares shares(double const total, std::vector<double> const& capacity,
+                                            char const* const who)
     {
         if (capacity.empty())
             throw std::runtime_error(std::string{who} + ": no ranks");

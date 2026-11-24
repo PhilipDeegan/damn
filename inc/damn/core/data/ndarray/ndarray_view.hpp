@@ -51,31 +51,31 @@ public:
 
 
     template<typename Index>
-    NO_DISCARD inline auto& operator[](std::array<Index, dim> const& indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto& operator[](std::array<Index, dim> const& indexes) DAMN_ALL
     {
         return viewer::at(ptr_, nCells_, indexes);
     }
     template<typename Index>
-    NO_DISCARD inline auto& operator[](std::array<Index, dim> const& indexes) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto& operator[](std::array<Index, dim> const& indexes) const DAMN_ALL
     {
         return viewer::at(ptr_, nCells_, indexes);
     }
 
     template<typename Index>
-    NO_DISCARD inline auto const&
+    MKN_KUL_FN_SIG_RET inline auto const&
     operator()(std::array<Index, dim> const& indexes) const DAMN_ALL
     {
         return viewer::at(ptr_, nCells_, indexes);
     }
 
     template<typename Index>
-    NO_DISCARD inline auto& operator()(std::array<Index, dim> const& indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto& operator()(std::array<Index, dim> const& indexes) DAMN_ALL
     {
         return const_cast<DataType&>(static_cast<NdArrayView const&>(*this)(indexes));
     }
 
 
-    NO_DISCARD inline auto const& operator()(auto const... indexes) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto const& operator()(auto const... indexes) const DAMN_ALL
     {
         return viewer::at(ptr_, nCells_, indexes...);
     }
@@ -86,17 +86,17 @@ public:
     }
 
 
-    NO_DISCARD auto& data() const DAMN_ALL { return ptr_; }
-    NO_DISCARD auto& data() DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto& data() const DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto& data() DAMN_ALL { return ptr_; }
 
-    NO_DISCARD auto& size() const DAMN_ALL { return size_; }
-    NO_DISCARD auto& shape() const DAMN_ALL { return nCells_; }
+    MKN_KUL_FN_SIG_RET auto& size() const DAMN_ALL { return size_; }
+    MKN_KUL_FN_SIG_RET auto& shape() const DAMN_ALL { return nCells_; }
 
-    NO_DISCARD auto begin() const DAMN_ALL { return ptr_; }
-    NO_DISCARD auto begin() DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto begin() const DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto begin() DAMN_ALL { return ptr_; }
 
-    NO_DISCARD auto end() const DAMN_ALL { return ptr_ + size_; }
-    NO_DISCARD auto end() DAMN_ALL { return ptr_ + size_; }
+    MKN_KUL_FN_SIG_RET auto end() const DAMN_ALL { return ptr_ + size_; }
+    MKN_KUL_FN_SIG_RET auto end() DAMN_ALL { return ptr_ + size_; }
 
 
     void zero() DAMN_ALL { fill(0); }
@@ -190,11 +190,11 @@ public:
     auto size_address() DAMN_ALL { return &size_; }
 
 
-    NO_DISCARD auto operator[](NdArrayMask&& mask)
+    MKN_KUL_FN_SIG_RET auto operator[](NdArrayMask&& mask)
     {
         return MaskedView{*this, std::forward<NdArrayMask>(mask)};
     }
-    NO_DISCARD auto operator[](NdArrayMask const& mask) { return MaskedView{*this, mask}; }
+    MKN_KUL_FN_SIG_RET auto operator[](NdArrayMask const& mask) { return MaskedView{*this, mask}; }
 
 private:
     pointer_type ptr_  = nullptr;
@@ -235,34 +235,38 @@ public:
     NdArrayViewSpan& operator=(NdArrayViewSpan const&) DAMN_ALL = default;
 
     template<typename Index>
-    NO_DISCARD inline auto& operator()(std::array<Index, dim> const& indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto& operator()(std::array<Index, dim> const& indexes) DAMN_ALL
     {
         return hax<V, T>(ptr_, viewer::idx(nCells_, indexes));
     }
     template<typename Index>
-    NO_DISCARD inline auto const& operator()(std::array<Index, dim> const& indexes) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto const&
+    operator()(std::array<Index, dim> const& indexes) const DAMN_ALL
     {
         return hax<V const, T const>(ptr_, viewer::idx(nCells_, indexes));
     }
-    NO_DISCARD inline auto& operator()(auto const... indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto& operator()(auto const... indexes) DAMN_ALL
     {
         return hax<V, T>(ptr_, viewer::idx(nCells_, indexes...));
     }
-    NO_DISCARD inline auto const& operator()(auto const... indexes) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET inline auto const& operator()(auto const... indexes) const DAMN_ALL
     {
         return hax<V const, T const>(ptr_, viewer::idx(nCells_, indexes...));
     }
 
-    NO_DISCARD auto data() DAMN_ALL { return ptr_; }
-    NO_DISCARD auto data() const DAMN_ALL { return ptr_; }
-    NO_DISCARD auto& size() const DAMN_ALL { return size_; }
-    NO_DISCARD auto& shape() const DAMN_ALL { return nCells_; }
+    MKN_KUL_FN_SIG_RET auto data() DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto data() const DAMN_ALL { return ptr_; }
+    MKN_KUL_FN_SIG_RET auto& size() const DAMN_ALL { return size_; }
+    MKN_KUL_FN_SIG_RET auto& shape() const DAMN_ALL { return nCells_; }
 
     // Iteration yields T& (full derived type) — correct step size, full CPU interface.
-    NO_DISCARD auto begin() DAMN_ALL { return reinterpret_cast<T*>(ptr_); }
-    NO_DISCARD auto begin() const DAMN_ALL { return reinterpret_cast<T const*>(ptr_); }
-    NO_DISCARD auto end() DAMN_ALL { return reinterpret_cast<T*>(ptr_) + size_; }
-    NO_DISCARD auto end() const DAMN_ALL { return reinterpret_cast<T const*>(ptr_) + size_; }
+    MKN_KUL_FN_SIG_RET auto begin() DAMN_ALL { return reinterpret_cast<T*>(ptr_); }
+    MKN_KUL_FN_SIG_RET auto begin() const DAMN_ALL { return reinterpret_cast<T const*>(ptr_); }
+    MKN_KUL_FN_SIG_RET auto end() DAMN_ALL { return reinterpret_cast<T*>(ptr_) + size_; }
+    MKN_KUL_FN_SIG_RET auto end() const DAMN_ALL
+    {
+        return reinterpret_cast<T const*>(ptr_) + size_;
+    }
 
 private:
     V* ptr_                              = nullptr;

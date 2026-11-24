@@ -540,10 +540,10 @@ namespace detail
 } // namespace detail
 
 template<std::size_t dim>
-NO_DISCARD Level<dim> decompose_level(Hierarchy<dim> const& h, int const ln,
-                                      std::vector<core::Box<int, dim>> const& boxes,
-                                      Decompose<dim> const& in,
-                                      std::vector<core::Box<int, dim>> const* finer = nullptr)
+MKN_KUL_FN_SIG_RET Level<dim>
+decompose_level(Hierarchy<dim> const& h, int const ln,
+                std::vector<core::Box<int, dim>> const& boxes, Decompose<dim> const& in,
+                std::vector<core::Box<int, dim>> const* finer = nullptr)
 {
     using Box_t = core::Box<int, dim>;
     // "finest" / "aligned", one level (the coarser ones fixed, the finer unknown): to the owners
@@ -626,7 +626,7 @@ NO_DISCARD Level<dim> decompose_level(Hierarchy<dim> const& h, int const ln,
 
 
 template<std::size_t dim>
-NO_DISCARD std::vector<Level<dim>>
+MKN_KUL_FN_SIG_RET std::vector<Level<dim>>
 decompose(Hierarchy<dim> h, int const from,
           std::vector<std::vector<core::Box<int, dim>>> const& boxes, Decompose<dim> const& in)
 {

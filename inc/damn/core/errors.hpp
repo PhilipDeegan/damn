@@ -14,13 +14,13 @@ namespace damn::core
 class Errors
 {
 public:
-    NO_DISCARD static Errors& instance()
+    MKN_KUL_FN_SIG_RET static Errors& instance()
     {
         static Errors i;
         return i;
     }
 
-    NO_DISCARD bool any() { return errors.size() > 0; }
+    MKN_KUL_FN_SIG_RET bool any() { return errors.size() > 0; }
 
 
     void log(std::string const key, std::string const val)
