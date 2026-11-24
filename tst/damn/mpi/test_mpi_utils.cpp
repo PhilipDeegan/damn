@@ -1,5 +1,6 @@
 
 #include "damn/mpi/copy.hpp"
+#include "damn/mpi/execution_model.hpp"
 #include "damn/mpi/inter_level.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 #include "damn/mpi/regrid.hpp"
@@ -7,6 +8,7 @@
 #include "gtest/gtest.h"
 
 #include <array>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -63,6 +65,14 @@ TYPED_TEST(MPICollectScalar, gathers_one_value_per_rank_in_rank_order)
         EXPECT_EQ(values[i], value_for<TypeParam>(i));
 }
 
+
+TEST(MPIExecutionModel, ranksFromMPI)
+{
+    auto const m = mpi::with_ranks(core::ExecutionModel{});
+    EXPECT_EQ(m.mpi_ranks, mpi::size());
+    EXPECT_NO_THROW(mpi::check(m));
+    EXPECT_THROW(mpi::check(core::ExecutionModel{}), std::runtime_error); // 0: MPI is initialised
+}
 
 TEST(MPICollect, strings_of_different_lengths_including_empty)
 {

@@ -2,11 +2,13 @@
 #define DAMN_CORE_EXEC_THREAD_POOL_HPP
 
 // ThreadPool: n_pools BS thread pools of threads_per_pool threads, patches to pools, tiles to a
-// pool's threads (patch_exec, tile_exec)
+// pool's threads (patch_exec, tile_exec); configure(ExecutionModel) checks the decomposition
 //
 // -DDAMN_THREAD_POOL_SYNC=1: every pool is synchronous, a task runs on the calling thread when
 // it is submitted, in submission order. The same calls and results, no threads: serial numbers
 // for timings and hardware counters (which count the calling thread), and simpler debugging
+
+#include "damn/core/exec/execution_model.hpp"
 
 #include "BS_thread_pool.hpp"
 
@@ -66,6 +68,9 @@ struct ThreadPool
         for (std::size_t i = 0; i < n_pools; ++i)
             thread_pools.emplace_back(std::make_shared<Pool>(threads_per_pool));
     }
+
+    // model's pools, once model.check() passes
+    void configure(ExecutionModel const& model);
 
     // joins and destroys every pool's threads, configure() is needed before further use
     void stop()
@@ -242,6 +247,12 @@ private:
     std::exception_ptr error_ = nullptr;
 };
 
+
+inline void ThreadPool::configure(ExecutionModel const& model)
+{
+    model.check();
+    configure(model.n_pools, model.threads_per_pool);
+}
 
 } // namespace damn::core
 
