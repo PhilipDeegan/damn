@@ -167,9 +167,9 @@ std::vector<core::Point<int, dim>> detail::with_no_shift(std::vector<core::Point
 
 
 // the map between level coarse and level coarse + 1, for rank's patches of both
-template<std::size_t dim>
-NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int const coarse, int const rank,
-                                        Topology const& topology, int const reach)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim, Lattice> const& h, int const coarse,
+                                        int const rank, Topology const& topology, int const reach)
 {
     DAMN_LOG_SCOPE(1, "damn::amr::make_level_map");
     int const fine = coarse + 1;
@@ -247,8 +247,8 @@ NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim> const& h, int const coars
 }
 
 // true if both levels still have the patches the map was built on
-template<std::size_t dim>
-NO_DISCARD bool is_current(LevelMap<dim> const& map, Hierarchy<dim> const& h)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD bool is_current(LevelMap<dim> const& map, Hierarchy<dim, Lattice> const& h)
 {
     return level_exists(h, map.fine) and h.levels[map.coarse].patches == map.coarse_built_on
            and h.levels[map.fine].patches == map.fine_built_on;

@@ -136,9 +136,10 @@ struct Neighbours
 
 
 // level ln's neighbours of rank's patches
-template<std::size_t dim>
-NO_DISCARD Neighbours<dim> make_neighbours(Hierarchy<dim> const& h, int const ln, int const rank,
-                                           Topology const& topology, int const reach)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD Neighbours<dim> make_neighbours(Hierarchy<dim, Lattice> const& h, int const ln,
+                                           int const rank, Topology const& topology,
+                                           int const reach)
 {
     DAMN_LOG_SCOPE(1, "damn::amr::make_neighbours");
     if (!level_exists(h, ln))

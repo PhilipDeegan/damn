@@ -16,9 +16,9 @@
 
 namespace damn::mpi
 {
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice>
 NO_DISCARD std::vector<core::Box<int, dim>>
-cluster(amr::Hierarchy<dim> const& h, int const ln,
+cluster(amr::Hierarchy<dim, Lattice> const& h, int const ln,
         std::vector<core::Point<int, dim>> const& tagged,
         amr::ClusteringOptions<dim> const& options, MPI_Comm const comm = MPI_COMM_WORLD)
 {

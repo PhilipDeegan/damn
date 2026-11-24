@@ -3,7 +3,8 @@
 
 // a patch hierarchy as data, and free functions over it
 //
-//   Hierarchy: level 0 domain, mesh size, origin, periodicity, refinement ratio, levels
+//   Hierarchy: level 0 domain, mesh size, origin, periodicity, refinement ratio, levels; its
+//              Lattice (damn/amr/lattice.hpp) a tag: Cartesian by default, or Kelvin
 //   Level:     every patch of the level, whichever rank owns it (same on every rank)
 //   Patch:     a cell box in its level's index space, owner rank, id unique on the level
 //
@@ -14,6 +15,7 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/amr/lattice.hpp"
 #include "damn/amr/partition.hpp"
 #include "mkn/kul/std/array.hpp"
 
@@ -45,10 +47,11 @@ struct Level
     std::vector<Patch<dim>> patches{}; // all of them, local or not
 };
 
-template<std::size_t dim>
+template<std::size_t dim, typename Lattice_ = Cartesian>
 struct Hierarchy
 {
     auto static constexpr dimension = dim;
+    using Lattice                   = Lattice_;
 
     core::Box<int, dim> domain{};      // level 0 cells
     std::array<double, dim> dx{};      // level 0 mesh size
@@ -62,27 +65,27 @@ struct Hierarchy
 
 // ---------------------------------------------------------------- levels
 
-template<std::size_t dim>
-NO_DISCARD int n_levels(Hierarchy<dim> const& h)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD int n_levels(Hierarchy<dim, Lattice> const& h)
 {
     return static_cast<int>(h.levels.size());
 }
 
-template<std::size_t dim>
-NO_DISCARD int finest_level(Hierarchy<dim> const& h)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD int finest_level(Hierarchy<dim, Lattice> const& h)
 {
     return n_levels(h) - 1;
 }
 
-template<std::size_t dim>
-NO_DISCARD bool level_exists(Hierarchy<dim> const& h, int const ln)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD bool level_exists(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     return ln >= 0 and ln < n_levels(h);
 }
 
 // level ln's index space is ratio_to_level_0 times finer than level 0's
-template<std::size_t dim>
-NO_DISCARD int ratio_to_level_0(Hierarchy<dim> const& h, int const ln)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD int ratio_to_level_0(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     int r = 1;
     for (int i = 0; i < ln; ++i)
@@ -91,14 +94,14 @@ NO_DISCARD int ratio_to_level_0(Hierarchy<dim> const& h, int const ln)
 }
 
 // the domain in level ln's index space
-template<std::size_t dim>
-NO_DISCARD core::Box<int, dim> level_domain(Hierarchy<dim> const& h, int const ln)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD core::Box<int, dim> level_domain(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     return core::refine(h.domain, ratio_to_level_0(h, ln));
 }
 
-template<std::size_t dim>
-NO_DISCARD std::array<double, dim> mesh_size(Hierarchy<dim> const& h, int const ln)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD std::array<double, dim> mesh_size(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     auto dx      = h.dx;
     auto const r = ratio_to_level_0(h, ln);
@@ -108,8 +111,8 @@ NO_DISCARD std::array<double, dim> mesh_size(Hierarchy<dim> const& h, int const 
 }
 
 // physical position of the lower corner of cell `cell` of level ln
-template<std::size_t dim>
-NO_DISCARD core::Point<double, dim> position(Hierarchy<dim> const& h, int const ln,
+template<std::size_t dim, typename Lattice>
+NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
                                              core::Point<int, dim> const& cell)
 {
     auto const dx    = mesh_size(h, ln);
@@ -120,10 +123,45 @@ NO_DISCARD core::Point<double, dim> position(Hierarchy<dim> const& h, int const 
     return x;
 }
 
+// physical position of a Kelvin site of cell `cell` of level ln: the cell's lower corner, or its
+//  centre
+template<std::size_t dim, typename Lattice>
+    requires KelvinLattice<Lattice>
+NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
+                                             core::Point<int, dim> const& cell, Site const site)
+{
+    auto x = position(h, ln, cell);
+    if (site == Site::body)
+    {
+        auto const dx = mesh_size(h, ln);
+        for (std::size_t i = 0; i < dim; ++i)
+            x[i] += dx[i] / 2;
+    }
+    return x;
+}
 
-// throws if level's patches are not inside the domain or overlap each other, or ids repeat
-template<std::size_t dim>
-void check_level(Hierarchy<dim> const& h, Level<dim> const& level)
+
+// throws if the refinement ratio does not suit the lattice: Kelvin's must be odd
+template<std::size_t dim, typename Lattice>
+    requires KelvinLattice<Lattice>
+void check_ratio(Hierarchy<dim, Lattice> const& h)
+{
+    if (h.ratio < 1 or h.ratio % 2 == 0)
+        throw std::runtime_error("damn::amr: a Kelvin lattice's refinement ratio is odd, not "
+                                 + std::to_string(h.ratio));
+}
+
+template<std::size_t dim, typename Lattice>
+void check_ratio(Hierarchy<dim, Lattice> const& h)
+{
+    if (h.ratio < 1)
+        throw std::runtime_error("damn::amr: refinement ratio " + std::to_string(h.ratio));
+}
+
+// throws if level's patches are not inside the domain, not of whole cells of the level below,
+//  overlap each other, or ids repeat, or the ratio does not suit the lattice
+template<std::size_t dim, typename Lattice>
+void check_level(Hierarchy<dim, Lattice> const& h, Level<dim> const& level)
 {
     auto const fail = [&](std::string const& why) {
         throw std::runtime_error("damn::amr level " + std::to_string(level.number) + ": " + why);
@@ -135,6 +173,7 @@ void check_level(Hierarchy<dim> const& h, Level<dim> const& level)
         fail("coarser level missing");
     if (level.patches.empty())
         fail("no patches");
+    check_ratio(h);
 
     auto const domain = level_domain(h, level.number);
     for (std::size_t i = 0; i < level.patches.size(); ++i)
@@ -142,6 +181,8 @@ void check_level(Hierarchy<dim> const& h, Level<dim> const& level)
         auto const& p = level.patches[i];
         if (auto const in = p.box * domain; !in or *in != p.box)
             fail("patch outside the domain");
+        if (level.number > 0 and core::refine(core::coarsen(p.box, h.ratio), h.ratio) != p.box)
+            fail("patch not of whole coarser cells");
         for (std::size_t j = i + 1; j < level.patches.size(); ++j)
         {
             if (p.box * level.patches[j].box)
@@ -154,8 +195,8 @@ void check_level(Hierarchy<dim> const& h, Level<dim> const& level)
 
 // sets level.number, replacing it if it exists; finer levels are removed, they were built
 // on the replaced one
-template<std::size_t dim>
-void set_level(Hierarchy<dim>& h, Level<dim> level)
+template<std::size_t dim, typename Lattice>
+void set_level(Hierarchy<dim, Lattice>& h, Level<dim> level)
 {
     check_level(h, level);
     auto const ln = level.number;
@@ -163,8 +204,8 @@ void set_level(Hierarchy<dim>& h, Level<dim> level)
     h.levels.emplace_back(std::move(level));
 }
 
-template<std::size_t dim>
-void remove_finer_levels(Hierarchy<dim>& h, int const ln)
+template<std::size_t dim, typename Lattice>
+void remove_finer_levels(Hierarchy<dim, Lattice>& h, int const ln)
 {
     if (ln + 1 < n_levels(h))
         h.levels.resize(ln + 1);
@@ -314,9 +355,9 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> cons
 
 // level 0 as the domain chopped into patches of `size`, partitioned over n_ranks by cells along
 // the Hilbert curve (partition.hpp; for other weights: make_level(0, boxes, partition(...)))
-template<std::size_t dim>
-NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim> const& h, std::array<int, dim> const& size,
-                                      int const n_ranks = 1)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim, Lattice> const& h,
+                                      std::array<int, dim> const& size, int const n_ranks = 1)
 {
     auto const boxes = chop(h.domain, size);
     return make_level(0, boxes, partition(boxes, cell_weights(boxes), n_ranks));
@@ -327,8 +368,9 @@ NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim> const& h, std::array<int, d
 
 // offsets, in level ln's index space, of the periodic images of the domain next to it
 // (not the domain itself): 3^p - 1 of them for p periodic directions
-template<std::size_t dim>
-NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> const& h, int const ln)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim, Lattice> const& h,
+                                                              int const ln)
 {
     auto const shape = level_domain(h, ln).shape();
 
@@ -352,9 +394,9 @@ NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim> con
 
 // the parts of box (level ln index space) that level ln's patches cover, periodic images
 // included, e.g. the ghost cells of a patch that are not level border
-template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> covered_by_level(Hierarchy<dim> const& h, int const ln,
-                                                             core::Box<int, dim> const& box)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD std::vector<core::Box<int, dim>>
+covered_by_level(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, dim> const& box)
 {
     std::vector<core::Point<int, dim>> shifts{core::Point<int, dim>{}};
     for (auto const& s : periodic_shifts(h, ln))
@@ -376,10 +418,10 @@ NO_DISCARD std::vector<core::Box<int, dim>> covered_by_level(Hierarchy<dim> cons
 //  cell's owner only (PHAREHUB/PHARE#1580's owner, nearest rather than first): it stays in its
 //  holder's ghost box the longest, e.g. a cell diagonal to one patch's corner and next to
 //  another's side is the latter's. As boxes of cells, along the last direction
-template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> owned_elsewhere(Hierarchy<dim> const& h, int const ln,
-                                                            core::Box<int, dim> const& box,
-                                                            int const width)
+template<std::size_t dim, typename Lattice>
+NO_DISCARD std::vector<core::Box<int, dim>>
+owned_elsewhere(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, dim> const& box,
+                int const width)
 {
     using Box_t   = core::Box<int, dim>;
     using Point_t = core::Point<int, dim>;
