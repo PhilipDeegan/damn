@@ -20,7 +20,8 @@ Probes: etc/bootstrap/<area>/<name>.cpp, a leading comment with "ranks=<n> profi
 short, clang-format reflows long ones), needs: toolchain facts (discover.facts: hdf5_parallel,
 mpi_cuda_aware, ...) without which it is skipped, not built,
 stdout "key=value" lines. Each is built with mkn (-p <profile> -M <probe>: the build's
-compilers, flags and find paths, copied to <run>/bin), run with
+compilers, flags and find paths; the probes' own project, etc/bootstrap/mkn.yaml, mkn -C;
+copied to <run>/bin), run with
 mpirun [<mpirun args>] -n <ranks> (--mpirun) in its own directory under <run>/run, its
 output kept in <run>/<area>_<name>.log. mpirun's args place the ranks, e.g.
 mpirun=--map-by,numa,--bind-to,numa: a machine that cannot (one memory domain) fails the probe.
@@ -121,20 +122,21 @@ def probes(project, only):
 
 
 def build(project, p, args, log):
-    """the probe as the profile's binary (bin/<profile>), copied out before the next one builds
-    over it: no mkn -N needed"""
-    out = project.root / "bin" / p["profile"]
+    """the probe as the profile's binary, built in the probes' own project (etc/bootstrap/mkn.yaml,
+    mkn -C: binaries in etc/bootstrap/bin/<profile>), copied out before the next one builds over
+    it: no mkn -N needed"""
+    out = project.probes / "bin" / p["profile"]
     shutil.rmtree(out, ignore_errors=True)  # no stale binary of another probe
-    cmd = [
-        "mkn",
-        "build",
-        "-p",
-        p["profile"],
+    cmd = ["mkn", "build", "-C", str(project.probes / "mkn.yaml"), "-p", p["profile"]]
+    cmd += [
         "-M",
-        str(p["path"].relative_to(project.root)),
+        str(p["path"].relative_to(project.probes)),
+        "-O",
+        "2",
+        "-x",
+        args.settings,
     ]
-    cmd += ["-O", "2", "-x", args.settings]
-    r = subprocess.run(cmd, cwd=project.root, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=project.probes, capture_output=True, text=True)
     log.write(f"$ {' '.join(cmd)}\n{r.stdout}{r.stderr}\n")
     exes = [f for f in out.glob("*") if f.is_file() and f.stat().st_mode & 0o111]
     if r.returncode or not exes:
@@ -143,6 +145,15 @@ def build(project, p, args, log):
     exe.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(exes[0], exe)
     return exe
+
+
+def settings_path(x):
+    """-x as an absolute path when it names a file from here (the probes build from
+    etc/bootstrap), else as given (mkn looks in its settings directory)"""
+    for f in (Path(x), Path(f"{x}.yaml"), Path(f"{x}.yml")):
+        if f.is_file():
+            return str(f.resolve().with_suffix(""))
+    return x
 
 
 def run(project, p, exe, args, log, env):
@@ -320,6 +331,7 @@ def main(project=DAMN, argv=None):
         out.write_text(discover.settings(found, args, command, [project.inc.resolve()]))
         args.settings = str(out)
         print(f"settings {out}")
+    args.settings = settings_path(args.settings)
     if not args.mpirun:
         args.mpirun = found["mpi"].get("mpirun", "mpirun")
     env = discover.run_env(found)
