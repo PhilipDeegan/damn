@@ -29,6 +29,7 @@
 #include "damn/core/exec/kernels.hpp"                  // IWYU pragma: export
 #include "damn/core/exec/kernels/launchers.hpp"        // IWYU pragma: export
 #include "damn/core/exec/kernels/region_chunks.hpp"    // IWYU pragma: export
+#include "damn/core/exec/execution_model.hpp"          // IWYU pragma: export
 #include "damn/core/exec/thread_pool.hpp"              // IWYU pragma: export
 #include "damn/core/geometry/box.hpp"                  // IWYU pragma: export
 #include "damn/core/geometry/box_spans.hpp"            // IWYU pragma: export
