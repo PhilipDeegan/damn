@@ -31,8 +31,11 @@ struct Kelvin
 template<typename Lattice>
 concept KelvinLattice = std::same_as<Lattice, Kelvin>;
 
-// a Kelvin cell's two sites
-enum class Site : std::uint8_t { corner, body };
+namespace kelvin
+{
+    // a Kelvin cell's two sites
+    enum class Site : std::uint8_t { corner, body };
+} // namespace kelvin
 
 } // namespace damn::amr
 

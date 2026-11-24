@@ -143,16 +143,18 @@ TEST(Hierarchy, kelvinSitesAtCellCornersAndCentres)
     h.ratio  = 3;
 
     core::Point<int, 2> const cell{std::array{3, 1}};
-    auto const corner = position(h, 0, cell, Site::corner);
-    auto const body   = position(h, 0, cell, Site::body);
+    auto const corner = position(h, 0, cell, kelvin::Site::corner);
+    auto const body   = position(h, 0, cell, kelvin::Site::body);
     EXPECT_DOUBLE_EQ(corner[0], 1.3);
     EXPECT_DOUBLE_EQ(corner[1], 2.2);
     EXPECT_DOUBLE_EQ(body[0], 1.35);
     EXPECT_DOUBLE_EQ(body[1], 2.3);
 
     // odd ratio: coarse corner i on fine corner 3 i, coarse body i on fine body 3 i + 1
-    auto const fine_corner = position(h, 1, core::Point<int, 2>{std::array{9, 3}}, Site::corner);
-    auto const fine_body   = position(h, 1, core::Point<int, 2>{std::array{10, 4}}, Site::body);
+    auto const fine_corner
+        = position(h, 1, core::Point<int, 2>{std::array{9, 3}}, kelvin::Site::corner);
+    auto const fine_body
+        = position(h, 1, core::Point<int, 2>{std::array{10, 4}}, kelvin::Site::body);
     for (std::size_t i = 0; i < 2; ++i)
     {
         EXPECT_DOUBLE_EQ(fine_corner[i], corner[i]);
@@ -163,7 +165,7 @@ TEST(Hierarchy, kelvinSitesAtCellCornersAndCentres)
 // Cartesian hierarchies have no sites
 template<typename H>
 concept has_sites
-    = requires(H const& h, core::Point<int, 2> const& c) { position(h, 0, c, Site::body); };
+    = requires(H const& h, core::Point<int, 2> const& c) { position(h, 0, c, kelvin::Site::body); };
 static_assert(not has_sites<Hierarchy<2>>);
 static_assert(has_sites<Hierarchy<2, Kelvin>>);
 

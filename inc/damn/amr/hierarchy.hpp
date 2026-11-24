@@ -128,10 +128,11 @@ NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, i
 template<std::size_t dim, typename Lattice>
     requires KelvinLattice<Lattice>
 NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
-                                             core::Point<int, dim> const& cell, Site const site)
+                                             core::Point<int, dim> const& cell,
+                                             kelvin::Site const site)
 {
     auto x = position(h, ln, cell);
-    if (site == Site::body)
+    if (site == kelvin::Site::body)
     {
         auto const dx = mesh_size(h, ln);
         for (std::size_t i = 0; i < dim; ++i)
