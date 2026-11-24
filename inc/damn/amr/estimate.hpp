@@ -85,14 +85,14 @@ exchange_costs(double const node_latency, double const node_s_per_byte, double c
 // shared memory exchange of ~1 us latency, 1e-10 s a byte)
 NO_DISCARD inline ExchangeCosts bootstrapped_exchange_costs(double const bytes_per_cell)
 {
-    auto c
-        = exchange_costs(bootstrap::number("mpi_exchange_node_latency_s", 1e-6),
-                         bootstrap::number("mpi_exchange_node_s_per_byte", 1e-10), bytes_per_cell);
+    auto c = exchange_costs(bootstrap::get<double>("mpi/exchange_node/latency_s", 1e-6),
+                            bootstrap::get<double>("mpi/exchange_node/s_per_byte", 1e-10),
+                            bytes_per_cell);
     auto const socket = static_cast<std::size_t>(Distance::Socket);
-    c.latency[socket] = bootstrap::number("mpi_exchange_socket_latency_s", c.latency[socket]);
-    c.per_cell[socket]
-        = bootstrap::number("mpi_exchange_socket_s_per_byte", c.per_cell[socket] / bytes_per_cell)
-          * bytes_per_cell;
+    c.latency[socket]  = bootstrap::get<double>("mpi/exchange_socket/latency_s", c.latency[socket]);
+    c.per_cell[socket] = bootstrap::get<double>("mpi/exchange_socket/s_per_byte",
+                                                c.per_cell[socket] / bytes_per_cell)
+                         * bytes_per_cell;
     return c;
 }
 

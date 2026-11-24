@@ -49,11 +49,6 @@ def add_arguments(a):
     g.add_argument("--rocm-path")
     g.add_argument("--gpu-targets", help="e.g. gfx942")
     g.add_argument("--cxx", help="the compiler under the MPI wrapper")
-    g.add_argument(
-        "-o",
-        "--out-settings",
-        help="the generated settings (.damn/bootstrap/toolchain.yaml)",
-    )
 
 
 def sh(*cmd, env=None):
@@ -266,9 +261,27 @@ def discover(args):
     return found
 
 
+# the toolchain's compile time flags (the header's Toolchain struct): each always there, false
+#  when its area was not found
+FLAGS = dict(
+    mpi=["found", "cuda_aware", "rocm_aware"],
+    hdf5=["found", "parallel", "subfiling", "matches_mpi"],
+    cuda=["found"],
+    rocm=["found"],
+)
+
+
+def no_facts():
+    """the facts of no toolchain: every flag false, no GPU (the defaults header)"""
+    return dict(
+        gpu="none", **{f"{a}_{k}": False for a, ks in FLAGS.items() for k in ks}
+    )
+
+
 def facts(found):
     """what was found, flat and typed ("<area>_<key>": bool / int / str), for the header"""
-    out = dict(gpu=found["gpu"])
+    out = no_facts()
+    out["gpu"] = found["gpu"]
     for area in ("mpi", "hdf5", "cuda", "rocm"):
         for k, v in found[area].items():
             if k in ("inc", "lib") and isinstance(v, list):
@@ -312,10 +325,11 @@ def report(found):
     return "\n".join(lines)
 
 
-def settings(found, args, command):
+def settings(found, args, command, incs=()):
     """an mkn settings file for the found toolchain: the MPI wrapper over the GPU's compiler,
     HDF5's find paths, run paths (-Wl,-rpath) for libraries outside the system's: binaries and
-    python modules run without LD_LIBRARY_PATH"""
+    python modules run without LD_LIBRARY_PATH; incs: include dirs every build gets (the
+    generated header's)"""
     m, h, gpu = found["mpi"], found["hdf5"], found["gpu"]
     if not m["found"]:
         raise SystemExit(f"bootstrap: {m['why']} (or give -x)")
@@ -379,8 +393,12 @@ def settings(found, args, command):
         *[f"  {e}" for e in env],
         "",
     ]
-    if inc:
-        out += [f"inc: {inc}", f"path: {path}", ""]
+    incs = [str(i) for i in incs] + ([inc] if inc else [])
+    if incs:
+        out += ["inc: " + incs[0], *[f"  {i}" for i in incs[1:]]]
+    if path:
+        out += [f"path: {path}"]
+    out += [""]
     if h.get("found"):
         out += ["find:", "  hdf5:", f"    inc: {h['inc']}", f"    lib: {h['lib']}", ""]
     out += [

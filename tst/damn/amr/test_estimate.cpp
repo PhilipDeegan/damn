@@ -164,7 +164,7 @@ TEST(Estimate, ExchangeCostsAreRelativeToNode)
     // no bootstrap on this build: the defaults
     auto const b = bootstrapped_exchange_costs(8.);
     EXPECT_DOUBLE_EQ(b.latency[static_cast<std::size_t>(Distance::Node)],
-                     bootstrap::number("mpi_exchange_node_latency_s", 1e-6));
+                     bootstrap::get<double>("mpi/exchange_node/latency_s", 1e-6));
 }
 
 } // namespace damn::amr

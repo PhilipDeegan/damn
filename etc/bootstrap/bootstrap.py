@@ -10,36 +10,40 @@ aborts or times out: not available)
     python3 etc/bootstrap/bootstrap.py --only mpi hdf5        # some areas
 
 Toolchain (discover.py): MPI, HDF5 and the GPU toolkits are found first (options, environment,
-system), nothing built; without -x an mkn settings file is written for them,
-.damn/bootstrap/toolchain.yaml, for the probes and for later builds (-x <that file>).
+system), nothing built. Each run has its own directory, .damn/bootstrap/<name> (--name; default
+cpu, cuda or rocm: configurations side by side); without -x an mkn settings file is written
+there, toolchain.yaml, for the probes and for later builds: -x .damn/bootstrap/<name>/toolchain.yaml
+(its inc: has the generated header). With your own -x: -x <it> -f .damn/bootstrap/<name>/inc.
 
-Probes: etc/bootstrap/<area>/<name>.cpp, a first line comment
-"// bootstrap probe ...: ranks=<n> profile=<mkn profile> [mpirun=<args,comma,separated>]
-[needs=<fact,comma,separated>]", needs: toolchain facts (discover.facts: hdf5_parallel,
+Probes: etc/bootstrap/<area>/<name>.cpp, a leading comment with "ranks=<n> profile=<mkn profile>
+[mpirun=<args,comma,separated>] [needs=<fact,comma,separated>]" (on any of its lines: keep each
+short, clang-format reflows long ones), needs: toolchain facts (discover.facts: hdf5_parallel,
 mpi_cuda_aware, ...) without which it is skipped, not built,
 stdout "key=value" lines. Each is built with mkn (-p <profile> -M <probe>: the build's
-compilers, flags and find paths, copied to .damn/bootstrap/bin), run with
-mpirun [<mpirun args>] -n <ranks> (--mpirun) in its own directory under .damn/bootstrap/run, its
-output kept in .damn/bootstrap/<area>_<name>.log. mpirun's args place the ranks, e.g.
+compilers, flags and find paths, copied to <run>/bin), run with
+mpirun [<mpirun args>] -n <ranks> (--mpirun) in its own directory under <run>/run, its
+output kept in <run>/<area>_<name>.log. mpirun's args place the ranks, e.g.
 mpirun=--map-by,numa,--bind-to,numa: a machine that cannot (one memory domain) fails the probe.
 Writes
 
-    inc/damn/core/def/_gen_bootstrap.hpp   DAMN_HAVE_<AREA>_<NAME> 1 / 0 per probe,
-                                           damn::bootstrap::toolchain::<fact> typed constexpr
-                                           (what discover.py found: gpu, mpi_impl, ...),
-                                           damn::bootstrap::<area>_<name>_<key> strings, and
-                                           every fact in damn::bootstrap::entries (config():
-                                           a map, e.g. for python, as PHARE's build_config)
-    .damn/bootstrap/bootstrap.json         the same map: "<area>_<name>": "1" / "0",
-                                           "<area>_<name>_<key>": value, "settings"
+    <run>/inc/damn/core/def/_gen_bootstrap.hpp
+                                           compile time: DAMN_HAVE_<AREA>_<NAME> 1 / 0 per
+                                           probe (for #if), damn::bootstrap::<Area>::<name>
+                                           bools (each probe passed) and Toolchain (discover.py's
+                                           flags, gpu); run time: damn::bootstrap::entries, every
+                                           fact a string by path ("mpi/exchange_node/latency_s",
+                                           "toolchain/mpi/version"), read with damn::bon::get<T>
+                                           or as a tree (damn::bon::tree)
+    <run>/bootstrap.json                   the same facts, nested by path
 
-The header is this machine's: not committed (.gitignore); damn/core/def/bootstrap.hpp includes it
-if there, every DAMN_HAVE_* 0 otherwise. Run from the damn root. What it says the build can do,
-a run still checks for itself (another node, another thread level)
+The header is this machine's and toolchain's, outside the source tree: damn/core/def/bootstrap.hpp
+includes it when the build's include paths have it, else the committed damn/core/def/bootstrap_defaults.hpp (every capability off, made by
+--defaults: rerun it when probes or toolchain flags change). Run from the damn root. What it
+says the build can do, a run still checks for itself (another node, another thread level)
 
 A project built on damn has probes of its own (plamn: its kernels' costs) and runs them with this
 code: its etc/bootstrap/bootstrap.py calls main(Project(root, name, header)), writing its own
-header (<NAME>_HAVE_*, <name>::bootstrap) and .<name>/bootstrap
+header (<NAME>_HAVE_*, <name>::bootstrap) under .<name>/bootstrap/<run>
 """
 
 import argparse
@@ -65,12 +69,38 @@ class Project:
         self.root = Path(root)
         self.name = name
         self.probes = self.root / "etc" / "bootstrap"
-        self.out = self.root / f".{name}" / "bootstrap"
-        self.header = self.root / header
+        self.base = self.root / f".{name}" / "bootstrap"
+        self.include = Path(header)  # as included: <name>/core/def/_gen_bootstrap.hpp
+        self.at(self.base)
         self.guard = f"{name.upper()}_CORE_DEF_GEN_BOOTSTRAP_HPP"
+        # the committed header for builds without a bootstrap, beside the generated one
+        self.defaults = (
+            self.root / "inc" / self.include.parent / "bootstrap_defaults.hpp"
+        )
+        self.defaults_guard = f"{name.upper()}_CORE_DEF_BOOTSTRAP_DEFAULTS_HPP"
+
+    def at(self, out):
+        """a run's directory: its logs, binaries, toolchain.yaml, bootstrap.json and inc/ (the
+        generated header, outside the source tree: the toolchain's inc, or mkn -f <inc>)
+        """
+        self.out = Path(out)
+        self.inc = self.out / "inc"
+        self.header = self.inc / self.include
 
 
-DAMN = Project(ROOT, "damn", "inc/damn/core/def/_gen_bootstrap.hpp")
+DAMN = Project(ROOT, "damn", "damn/core/def/_gen_bootstrap.hpp")
+
+
+def metadata(cpp):
+    """a probe's ranks / profile / mpirun / needs, from its leading // comment block (any line:
+    clang-format may reflow them)"""
+    block = []
+    for line in cpp.read_text().splitlines():
+        if not line.startswith("//"):
+            break
+        block.append(line)
+    keys = r"\b(ranks|profile|mpirun|needs)=(\S+)"
+    return dict(re.findall(keys, "\n".join(block)))
 
 
 def probes(project, only):
@@ -78,7 +108,7 @@ def probes(project, only):
         area = cpp.parent.name
         if only and area not in only:
             continue
-        meta = dict(re.findall(r"(\w+)=(\S+)", cpp.read_text().splitlines()[0]))
+        meta = metadata(cpp)
         yield dict(
             area=area,
             name=cpp.stem,
@@ -140,82 +170,102 @@ def run(project, p, exe, args, log, env):
 
 
 def entries(results, settings, tool):
-    """every fact as "<area>_<name>" (1 / 0) and "<area>_<name>_<key>" (its values), settings,
-    and the toolchain's as "toolchain_<fact>" """
+    """every fact as a string by path: "settings", "toolchain/<area>/<key>" (discover.py's),
+    "<area>/<probe>/ok" (1 / 0) and "<area>/<probe>/<key>" (its output)"""
     out = [("settings", settings)]
-    out += [
-        (f"toolchain_{k}", str(int(v)) if isinstance(v, bool) else str(v))
-        for k, v in tool.items()
-    ]
+    for k, v in tool.items():
+        area, _, key = k.partition("_")
+        path = f"toolchain/{area}/{key}" if key else f"toolchain/{area}"
+        out.append((path, str(int(v)) if isinstance(v, bool) else str(v)))
     for r in results:
-        key = f"{r['area']}_{r['name']}"
-        out.append((key, str(int(r["ok"]))))
-        out += [(f"{key}_{k}", v) for k, v in r["values"].items()]
+        out.append((f"{r['area']}/{r['name']}/ok", str(int(r["ok"]))))
+        out += [(f"{r['area']}/{r['name']}/{k}", v) for k, v in r["values"].items()]
     return out
 
 
-def cpp(v):
-    """a fact's C++ type and literal"""
-    if isinstance(v, bool):
-        return "bool", "true" if v else "false"
-    if isinstance(v, int):
-        return "int", str(v)
-    return (
-        "std::string_view",
-        '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"',
-    )
+def nested(table):
+    """entries as nested dicts (bootstrap.json), as damn::bon::tree"""
+    root = {}
+    for path, value in table:
+        *parents, leaf = path.split("/")
+        node = root
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[leaf] = value
+    return root
 
 
-def header(project, results, settings, tool):
-    quote = (
-        lambda v: '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
-    )  # noqa: E731
-    table = entries(results, settings, tool)
+def raw(v):
+    """a C++ raw string literal of v"""
+    return f'R"bs({v})bs"'
+
+
+def area_struct(area):
+    return area[:1].upper() + area[1:]
+
+
+def header(project, results, settings, tool, defaults=False):
+    """the generated header (or, defaults, the committed one for builds without a bootstrap):
+    macros for #if, a struct per area of compile time facts (bools; Toolchain's gpu), every fact
+    as a string in entries"""
+    table = [] if defaults else entries(results, settings, tool)
     prefix, ns = project.name.upper(), f"{project.name}::bootstrap"
+    guard = project.defaults_guard if defaults else project.guard
+    what = (
+        "every capability off, for builds without a bootstrap: regenerate (--defaults) when "
+        "probes or toolchain flags change"
+        if defaults
+        else f"this machine's and build's ({settings}). Not committed: rerun to update"
+    )
     out = [
-        "// generated by etc/bootstrap/bootstrap.py ("
-        + settings
-        + "): this machine's and build's",
-        f"// capabilities, see {project.name}/core/def/bootstrap.hpp. Not committed: rerun to "
-        "update",
-        f"#ifndef {project.guard}",
-        f"#define {project.guard}",
+        f"// generated by etc/bootstrap/bootstrap.py{' --defaults' if defaults else ''}: {what}",
+        f"// see {project.name}/core/def/bootstrap.hpp",
+        f"#ifndef {guard}",
+        f"#define {guard}",
         "",
         "#include <array>",
         "#include <string_view>",
         "#include <utility>",
         "",
-        f"#define {prefix}_HAVE_BOOTSTRAP 1",
+        f"#define {prefix}_HAVE_BOOTSTRAP {0 if defaults else 1}",
     ]
     for r in results:
         out.append(
             f"#define {prefix}_HAVE_{r['area'].upper()}_{r['name'].upper()} {int(r['ok'])}"
         )
-    out += ["", f"namespace {ns}::toolchain", "{"]
-    out += ["// what discover.py found (etc/bootstrap/discover.py: facts)"]
-    for k, v in tool.items():
-        t, lit = cpp(v)
-        out.append(f"inline constexpr {t} {k} = {lit};")
-    out += [f"}} // namespace {ns}::toolchain"]
     out += ["", f"namespace {ns}", "{"]
+    out += ["// what discover.py found", "struct Toolchain", "{"]
+    for k, v in tool.items():
+        if isinstance(v, bool):
+            out.append(f"    static constexpr bool {k} = {'true' if v else 'false'};")
+    out.append(f"    static constexpr std::string_view gpu = {raw(tool['gpu'])};")
+    out.append("};")
+    areas = {}
     for r in results:
-        for k, v in r["values"].items():
-            out.append(
-                f'inline constexpr std::string_view {r["area"]}_{r["name"]}_{k} = {quote(v)};'
-            )
+        areas.setdefault(r["area"], []).append(r)
+    for area, rs in areas.items():
+        out += [
+            "",
+            f"// etc/bootstrap/{area}: each probe passed",
+            f"struct {area_struct(area)}",
+            "{",
+        ]
+        out += [
+            f"    static constexpr bool {r['name']} = {'true' if r['ok'] else 'false'};"
+            for r in rs
+        ]
+        out.append("};")
     out += [
         "",
-        f"// every fact, as bootstrap.json: {ns}::config() makes a map of it",
-        f"inline constexpr std::array<std::pair<std::string_view, std::string_view>, {len(table)}> entries{{{{",
+        '// every fact as a string by path ("settings", "toolchain/<area>/<key>",',
+        '//  "<area>/<probe>/ok", "<area>/<probe>/<key>"): damn::bon::get / damn::bon::tree',
+        f"inline constexpr std::array<std::pair<std::string_view, std::string_view>, {len(table)}>"
+        + (" entries{};" if not table else " entries{{"),
     ]
-    out += [f"    {{{quote(k)}, {quote(v)}}}," for k, v in table]
-    out += [
-        "}};",
-        f"}} // namespace {ns}",
-        "",
-        f"#endif // {project.guard}",
-        "",
-    ]
+    if table:
+        out += [f"    {{{raw(k)}, {raw(v)}}}," for k, v in table]
+        out.append("}};")
+    out += [f"}} // namespace {ns}", "", f"#endif // {guard}", ""]
     return "\n".join(out)
 
 
@@ -232,18 +282,42 @@ def main(project=DAMN, argv=None):
         "--mpirun", help="the settings' MPI's launcher (default: the found MPI's)"
     )
     a.add_argument("--timeout", type=float, default=60)
+    a.add_argument(
+        "--name",
+        help="this run's directory, .<project>/bootstrap/<name> (default: cpu, cuda or rocm)",
+    )
     a.add_argument("--only", nargs="*", help="areas (mpi, hdf5, cuda, ...)")
+    a.add_argument(
+        "--defaults",
+        action="store_true",
+        help="write the committed header for builds without a bootstrap (all off), nothing run",
+    )
     discover.add_arguments(a)
     args = a.parse_args(argv)
 
-    project.out.mkdir(parents=True, exist_ok=True)
+    if args.defaults:
+        results = [
+            dict(area=p["area"], name=p["name"], ok=False, values={}, why="")
+            for p in probes(project, None)
+        ]
+        project.defaults.write_text(
+            header(project, results, "", discover.no_facts(), defaults=True)
+        )
+        print(f"wrote {project.defaults.relative_to(project.root)}")
+        return
+
     found = discover.discover(args)
     tool = discover.facts(found)
+    name = args.name or ("cpu" if found["gpu"] == "none" else found["gpu"])
+    project.at(project.base / name)
+    project.out.mkdir(parents=True, exist_ok=True)
+    project.header.parent.mkdir(parents=True, exist_ok=True)  # mkn: an inc: must exist
     print(discover.report(found))
-    if not args.settings:
-        out = Path(args.out_settings or project.out / "toolchain.yaml").resolve()
+    generated = not args.settings
+    if generated:
+        out = (project.out / "toolchain.yaml").resolve()
         command = " ".join(["etc/bootstrap/bootstrap.py", *(argv or sys.argv[1:])])
-        out.write_text(discover.settings(found, args, command))
+        out.write_text(discover.settings(found, args, command, [project.inc.resolve()]))
         args.settings = str(out)
         print(f"settings {out}")
     if not args.mpirun:
@@ -252,8 +326,13 @@ def main(project=DAMN, argv=None):
     print()
 
     results = []
-    for p in probes(project, args.only):
+    for p in probes(project, None):  # every probe in the header: its structs complete
         key = f"{p['area']}_{p['name']}"
+        if args.only and p["area"] not in args.only:
+            results.append(
+                dict(area=p["area"], name=p["name"], ok=False, values={}, why="--only")
+            )
+            continue
         missing = [n for n in p["needs"] if not tool.get(n)]
         if missing:
             results.append(
@@ -283,13 +362,20 @@ def main(project=DAMN, argv=None):
         )
         sys.stdout.flush()
 
+    project.header.parent.mkdir(parents=True, exist_ok=True)
     project.header.write_text(header(project, results, args.settings, tool))
     (project.out / "bootstrap.json").write_text(
-        json.dumps(dict(entries(results, args.settings, tool)), indent=1)
+        json.dumps(nested(entries(results, args.settings, tool)), indent=1)
     )
     print(
         f"wrote {project.header.relative_to(project.root)}, "
         f"{(project.out / 'bootstrap.json').relative_to(project.root)}"
+    )
+    inc = project.inc.resolve()
+    print(
+        f"build with: -x {args.settings}"
+        if generated
+        else f"build with: -x {args.settings} -f {inc}"
     )
 
 

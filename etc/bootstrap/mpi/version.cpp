@@ -1,4 +1,5 @@
-// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=1 profile=bootstrap needs=mpi_found
+// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=1 profile=bootstrap
+// needs=mpi_found
 // the MPI library and the standard it implements; always passes when MPI builds and runs
 #include <mpi.h>
 

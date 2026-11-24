@@ -1,4 +1,5 @@
-// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap_hdf5 needs=mpi_found,hdf5_parallel
+// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap_hdf5
+// needs=mpi_found,hdf5_parallel
 // parallel HDF5 through MPI-IO: each rank writes its rows of one dataset, collectively, and reads
 // every rank's back. Fails to build without H5_HAVE_PARALLEL
 #include <hdf5.h>
