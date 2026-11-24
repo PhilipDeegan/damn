@@ -129,6 +129,25 @@ TEST(Clustering, levelTwoBoxesAreNestedInLevelOne)
               core::refine(box(18, 18, 23, 23), h.ratio).size());
 }
 
+TEST(Clustering, ratioThreeRefinesTilesByThreeAndNestsLevelTwo)
+{
+    auto h  = level0(32, true);
+    h.ratio = 3;
+    EXPECT_EQ(clusters(h, 0, {cell(12, 12)}), (std::vector{box(24, 24, 47, 47)}));
+
+    set_level(h, make_level(1, std::vector{box(24, 24, 71, 71)})); // coarse 8..23
+    auto const boxes = clusters(h, 1, {cell(24, 24)});
+    ASSERT_FALSE(boxes.empty());
+    auto const nest = core::refine(box(25, 25, 70, 70), h.ratio);
+    for (auto const& b : boxes)
+    {
+        auto const overlap = b * nest;
+        ASSERT_TRUE(overlap.has_value());
+        EXPECT_EQ(*overlap, b) << b;
+    }
+    EXPECT_EQ(cells(boxes), core::refine(box(25, 25, 31, 31), h.ratio).size());
+}
+
 TEST(Clustering, nothingTaggedNoBoxes)
 {
     auto const h = level0(32, true);

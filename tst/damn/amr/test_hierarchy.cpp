@@ -84,6 +84,29 @@ TEST(Hierarchy, levelIndexSpacesAndMeshSizes)
     EXPECT_DOUBLE_EQ(dx[1], .05);
 }
 
+TEST(Hierarchy, ratioThreeLevelIndexSpacesAndMeshSizes)
+{
+    auto h  = hierarchy_2d();
+    h.ratio = 3;
+
+    EXPECT_EQ(ratio_to_level_0(h, 2), 9);
+    EXPECT_EQ(level_domain(h, 1), box<2>({0, 0}, {29, 23}));
+    EXPECT_EQ(level_domain(h, 2), box<2>({0, 0}, {89, 71}));
+
+    auto const dx = mesh_size(h, 2);
+    EXPECT_DOUBLE_EQ(dx[0], .1 / 9);
+    EXPECT_DOUBLE_EQ(dx[1], .2 / 9);
+
+    // a coarse cell's lower corner is its first fine cell's, its centre its middle fine cell's
+    auto const x0 = position(h, 0, core::Point<int, 2>{std::array{3, 1}});
+    auto const x1 = position(h, 1, core::Point<int, 2>{std::array{9, 3}});
+    EXPECT_DOUBLE_EQ(x1[0], x0[0]);
+    EXPECT_DOUBLE_EQ(x1[1], x0[1]);
+    auto const c1 = position(h, 1, core::Point<int, 2>{std::array{10, 4}});
+    EXPECT_DOUBLE_EQ(c1[0] + mesh_size(h, 1)[0] / 2, x0[0] + h.dx[0] / 2);
+    EXPECT_DOUBLE_EQ(c1[1] + mesh_size(h, 1)[1] / 2, x0[1] + h.dx[1] / 2);
+}
+
 TEST(Hierarchy, positionOfCellLowerCorners)
 {
     auto const h = hierarchy_2d();
