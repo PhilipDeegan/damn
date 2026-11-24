@@ -48,33 +48,33 @@ public:
     TileSetView& operator=(TileSetView&&)      = default;
 
 
-    NO_DISCARD auto box() const { return box_; }
-    NO_DISCARD auto size() const { return tiles_.size(); }
+    MKN_KUL_FN_SIG_RET auto box() const { return box_; }
+    MKN_KUL_FN_SIG_RET auto size() const { return tiles_.size(); }
 
-    NO_DISCARD auto begin() { return tiles_.begin(); }
-    NO_DISCARD auto begin() const { return tiles_.begin(); }
+    MKN_KUL_FN_SIG_RET auto begin() { return tiles_.begin(); }
+    MKN_KUL_FN_SIG_RET auto begin() const { return tiles_.begin(); }
 
-    NO_DISCARD auto end() { return tiles_.end(); }
-    NO_DISCARD auto end() const { return tiles_.end(); }
+    MKN_KUL_FN_SIG_RET auto end() { return tiles_.end(); }
+    MKN_KUL_FN_SIG_RET auto end() const { return tiles_.end(); }
 
-    NO_DISCARD auto data() { return tiles_.data(); }
-    NO_DISCARD auto data() const { return tiles_.data(); }
+    MKN_KUL_FN_SIG_RET auto data() { return tiles_.data(); }
+    MKN_KUL_FN_SIG_RET auto data() const { return tiles_.data(); }
 
-    NO_DISCARD auto& operator[](std::size_t const i) DAMN_ALL { return tiles_[i]; }
-    NO_DISCARD auto& operator[](std::size_t const i) const DAMN_ALL { return tiles_[i]; }
+    MKN_KUL_FN_SIG_RET auto& operator[](std::size_t const i) DAMN_ALL { return tiles_[i]; }
+    MKN_KUL_FN_SIG_RET auto& operator[](std::size_t const i) const DAMN_ALL { return tiles_[i]; }
 
-    NO_DISCARD auto& operator()() { return tiles_; }
-    NO_DISCARD auto& operator()() const { return tiles_; }
+    MKN_KUL_FN_SIG_RET auto& operator()() { return tiles_; }
+    MKN_KUL_FN_SIG_RET auto& operator()() const { return tiles_; }
 
     template<typename... Index>
-    NO_DISCARD auto at(Index... indexes) DAMN_ALL
+    MKN_KUL_FN_SIG_RET auto at(Index... indexes) DAMN_ALL
     {
         auto const& idx = cell_idx(indexes...);
         assert(idx < cells_.size());
         return cells_[idx];
     }
     template<typename... Index>
-    NO_DISCARD auto at(Index... indexes) const DAMN_ALL
+    MKN_KUL_FN_SIG_RET auto at(Index... indexes) const DAMN_ALL
     {
         auto const& idx = cell_idx(indexes...);
         return cells_[idx];
@@ -165,40 +165,40 @@ public:
         return *this;
     }
 
-    NO_DISCARD auto box() const { return box_; }
-    NO_DISCARD auto size() const { return tiles_.size(); }
+    MKN_KUL_FN_SIG_RET auto box() const { return box_; }
+    MKN_KUL_FN_SIG_RET auto size() const { return tiles_.size(); }
 
-    NO_DISCARD auto begin() { return tiles_.begin(); }
-    NO_DISCARD auto begin() const { return tiles_.begin(); }
+    MKN_KUL_FN_SIG_RET auto begin() { return tiles_.begin(); }
+    MKN_KUL_FN_SIG_RET auto begin() const { return tiles_.begin(); }
 
-    NO_DISCARD auto end() { return tiles_.end(); }
-    NO_DISCARD auto end() const { return tiles_.end(); }
+    MKN_KUL_FN_SIG_RET auto end() { return tiles_.end(); }
+    MKN_KUL_FN_SIG_RET auto end() const { return tiles_.end(); }
 
-    NO_DISCARD auto data() { return tiles_.data(); }
-    NO_DISCARD auto data() const { return tiles_.data(); }
+    MKN_KUL_FN_SIG_RET auto data() { return tiles_.data(); }
+    MKN_KUL_FN_SIG_RET auto data() const { return tiles_.data(); }
 
-    NO_DISCARD auto& operator[](std::size_t i) { return tiles_[i]; }
-    NO_DISCARD auto const& operator[](std::size_t i) const { return tiles_[i]; }
+    MKN_KUL_FN_SIG_RET auto& operator[](std::size_t i) { return tiles_[i]; }
+    MKN_KUL_FN_SIG_RET auto const& operator[](std::size_t i) const { return tiles_[i]; }
 
-    NO_DISCARD auto& operator()() { return tiles_; }
-    NO_DISCARD auto& operator()() const { return tiles_; }
+    MKN_KUL_FN_SIG_RET auto& operator()() { return tiles_; }
+    MKN_KUL_FN_SIG_RET auto& operator()() const { return tiles_; }
 
-    NO_DISCARD auto& at(Point<int, dimension> const& amr_point)
+    MKN_KUL_FN_SIG_RET auto& at(Point<int, dimension> const& amr_point)
     {
         return cells_((amr_point - box_.lower).as_unsigned());
     }
-    NO_DISCARD auto& at(Point<int, dimension> const& amr_point) const
+    MKN_KUL_FN_SIG_RET auto& at(Point<int, dimension> const& amr_point) const
     {
         return cells_((amr_point - box_.lower).as_unsigned());
     }
 
     template<typename... Index>
-    NO_DISCARD auto& at(Index... indexes)
+    MKN_KUL_FN_SIG_RET auto& at(Index... indexes)
     {
         return cells_(indexes...);
     }
     template<typename... Index>
-    NO_DISCARD auto& at(Index... indexes) const
+    MKN_KUL_FN_SIG_RET auto& at(Index... indexes) const
     {
         return cells_(indexes...);
     }
@@ -463,8 +463,8 @@ public:
         return ts;
     }
 
-    NO_DISCARD auto& domain_box() const { return domain_box_; }
-    NO_DISCARD auto ghosts() const { return ghosts_; }
+    MKN_KUL_FN_SIG_RET auto& domain_box() const { return domain_box_; }
+    MKN_KUL_FN_SIG_RET auto ghosts() const { return ghosts_; }
 
 private:
     auto static ghost_cells_(Box_t const& domain_box, std::size_t const ghosts)

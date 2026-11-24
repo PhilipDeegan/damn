@@ -127,7 +127,7 @@ public:
     {
     }
 
-    NO_DISCARD TimeRefinementState state() const
+    MKN_KUL_FN_SIG_RET TimeRefinementState state() const
     {
         TimeRefinementState s{.dt_max = {}, .last_finest = last_finest_};
         for (auto const& l : levels_)

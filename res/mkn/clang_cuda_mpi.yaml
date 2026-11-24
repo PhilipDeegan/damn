@@ -12,7 +12,7 @@ super: clang_cuda
 
 
 # as base.yaml, clang_cuda does not inherit it
-env: |
+env: | # a versioned clang, e.g. OMPI_CXX=clang++-22
   OMPI_CXX=clang++
   PATH=/opt/mpi/cuda/bin:${PATH}
 
@@ -26,6 +26,6 @@ compiler:
 
 file:
   - type: cpp:cxx:cc
-    archiver: ar -cr
+    archiver: llvm-ar -cr # clang's (GNU ar cannot index its LTO bitcode), e.g. llvm-ar-22 with clang++-22
     compiler:  mpicxx -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX ${cxx.flags}
     linker:  mpicxx ${lnk.flags}

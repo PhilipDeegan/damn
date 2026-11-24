@@ -3,12 +3,13 @@
 
 #include "damn/core/def/damn_config.hpp" // IWYU pragma: keep
 
+#include "mkn/kul/lang/cpp/compiler/def.hpp"        // IWYU pragma: export
 #include "mkn/kul/lang/cpp/compiler/def/inline.hpp" // IWYU pragma: export
 
 #include <cassert>
 #include <type_traits>
 
-#define NO_DISCARD [[nodiscard]]
+// [[nodiscard]]: mkn.kul's MKN_KUL_FN_SIG_RET (no damn macro)
 
 // inline regardless of the compiler's heuristics: mkn.kul's MKN_KUL_ALWAYS_INLINE (a function),
 //  MKN_KUL_LAMBDA_ALWAYS_INLINE (after a lambda's parameter list), MKN_KUL_INLINE_CALL (a call).
@@ -55,7 +56,7 @@
 namespace damn::core
 {
 
-NO_DISCARD bool isUsable(auto const&... args)
+MKN_KUL_FN_SIG_RET bool isUsable(auto const&... args)
 {
     static_assert(sizeof...(args) > 0);
     auto constexpr check = [](auto const& arg) {
@@ -68,7 +69,7 @@ NO_DISCARD bool isUsable(auto const&... args)
 }
 
 
-NO_DISCARD bool isSettable(auto const&... args)
+MKN_KUL_FN_SIG_RET bool isSettable(auto const&... args)
 {
     static_assert(sizeof...(args) > 0);
     auto constexpr check = [](auto const& arg) {

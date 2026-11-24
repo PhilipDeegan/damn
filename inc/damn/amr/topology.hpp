@@ -34,7 +34,7 @@ enum class Distance : std::uint8_t {
     Remote, // another node
 };
 
-NO_DISCARD constexpr std::string_view to_string(Distance const d)
+MKN_KUL_FN_SIG_RET constexpr std::string_view to_string(Distance const d)
 {
     switch (d)
     {
@@ -59,7 +59,7 @@ struct Location
 };
 
 // distance between data in two different patches at a and b
-NO_DISCARD constexpr Distance distance(Location const& a, Location const& b)
+MKN_KUL_FN_SIG_RET constexpr Distance distance(Location const& a, Location const& b)
 {
     if (a.rank == b.rank)
         return a.numa == b.numa and a.device == b.device ? Distance::Local : Distance::Numa;
@@ -75,7 +75,7 @@ struct Topology
 
 // n ranks on one node and one memory domain, e.g. tests and single node runs before a real
 // topology is gathered
-NO_DISCARD inline Topology single_node(int const n_ranks = 1)
+MKN_KUL_FN_SIG_RET inline Topology single_node(int const n_ranks = 1)
 {
     Topology t;
     t.ranks.resize(n_ranks);
@@ -84,19 +84,19 @@ NO_DISCARD inline Topology single_node(int const n_ranks = 1)
     return t;
 }
 
-NO_DISCARD inline Location const& location(Topology const& t, int const rank)
+MKN_KUL_FN_SIG_RET inline Location const& location(Topology const& t, int const rank)
 {
     if (rank < 0 or static_cast<std::size_t>(rank) >= t.ranks.size())
         throw std::runtime_error("damn::amr::Topology: no rank " + std::to_string(rank));
     return t.ranks[rank];
 }
 
-NO_DISCARD inline Distance distance(Topology const& t, int const rank_a, int const rank_b)
+MKN_KUL_FN_SIG_RET inline Distance distance(Topology const& t, int const rank_a, int const rank_b)
 {
     return distance(location(t, rank_a), location(t, rank_b));
 }
 
-NO_DISCARD inline std::vector<double> node_share_capacity(Topology const& t)
+MKN_KUL_FN_SIG_RET inline std::vector<double> node_share_capacity(Topology const& t)
 {
     std::map<int, int> per_node; // ranks
     for (auto const& l : t.ranks)

@@ -82,7 +82,7 @@ inline constexpr CopyOp<Region::Leaving, Arrival::Append> gather_leaving{};
 
 // a copy's name, for scopes
 template<Region region, Arrival arrival>
-NO_DISCARD constexpr std::string_view name(CopyOp<region, arrival>)
+MKN_KUL_FN_SIG_RET constexpr std::string_view name(CopyOp<region, arrival>)
 {
     if constexpr (region == Region::Ghosts)
         return "fill_ghosts";
@@ -119,7 +119,8 @@ namespace detail
     void with_particle_data(PatchData& patch_data, std::string const& name, Fn&& fn);
 
     template<std::size_t dim>
-    NO_DISCARD bool contains(core::Box<int, dim> const& outer, core::Box<int, dim> const& inner);
+    MKN_KUL_FN_SIG_RET bool contains(core::Box<int, dim> const& outer,
+                                     core::Box<int, dim> const& inner);
 
     // throws if a resource's ghost box reaches past the neighbours' reach
     template<std::size_t dim>
@@ -129,24 +130,25 @@ namespace detail
 
     // the pieces of leaving items (Region::Leaving): ParticleData
     template<std::size_t dim, typename PatchData>
-    NO_DISCARD Plan<dim> particle_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>& ld,
-                                       std::vector<ResourcePair> const& pairs);
+    MKN_KUL_FN_SIG_RET Plan<dim> particle_plan(Neighbours<dim> const& n,
+                                               LevelData<dim, PatchData>& ld,
+                                               std::vector<ResourcePair> const& pairs);
 
     // the pieces of ghosts or borders: BoxData; local borders through the plan's buffer
     template<std::size_t dim, typename PatchData>
-    NO_DISCARD Plan<dim> box_plan(Region region, Neighbours<dim> const& n,
-                                  LevelData<dim, PatchData>& ld,
-                                  std::vector<ResourcePair> const& pairs);
+    MKN_KUL_FN_SIG_RET Plan<dim> box_plan(Region region, Neighbours<dim> const& n,
+                                          LevelData<dim, PatchData>& ld,
+                                          std::vector<ResourcePair> const& pairs);
 
     template<std::size_t dim>
-    NO_DISCARD bool is_local(Piece<dim> const& piece);
+    MKN_KUL_FN_SIG_RET bool is_local(Piece<dim> const& piece);
 
     // throws if the plan has pieces to or from another rank
     template<std::size_t dim>
     void check_local(Plan<dim> const& plan);
 
     template<typename T>
-    NO_DISCARD T read(std::byte const*& at);
+    MKN_KUL_FN_SIG_RET T read(std::byte const*& at);
 
     template<typename T>
     void write(std::vector<std::byte>& out, T const& v);
@@ -166,7 +168,7 @@ namespace detail
 
     // the first value of the span starting at p (amr index space) of a resource's box_span
     template<std::size_t dim>
-    NO_DISCARD auto* row(auto const& span, core::Point<int, dim> const& p)
+    MKN_KUL_FN_SIG_RET auto* row(auto const& span, core::Point<int, dim> const& p)
     {
         auto const shape = span.box.shape();
         std::size_t flat = 0;

@@ -74,7 +74,7 @@ namespace detail
 } // namespace detail
 
 template<std::size_t dim>
-NO_DISCARD std::vector<OwnedBox<dim>>
+MKN_KUL_FN_SIG_RET std::vector<OwnedBox<dim>>
 keep(std::vector<core::Box<int, dim>> const& boxes, std::vector<Patch<dim>> const& old,
      std::vector<Patch<dim>> const& coarser, int const ratio, auto&& fresh)
 {
@@ -127,7 +127,7 @@ keep(std::vector<core::Box<int, dim>> const& boxes, std::vector<Patch<dim>> cons
 
 // per rank (0 .. n_ranks - 1) its pieces' boxes coalesced
 template<std::size_t dim>
-NO_DISCARD std::vector<std::vector<core::Box<int, dim>>>
+MKN_KUL_FN_SIG_RET std::vector<std::vector<core::Box<int, dim>>>
 owned_boxes(std::vector<OwnedBox<dim>> const& pieces, int const n_ranks)
 {
     std::vector<std::vector<core::Box<int, dim>>> out(static_cast<std::size_t>(n_ranks));
@@ -144,9 +144,9 @@ owned_boxes(std::vector<OwnedBox<dim>> const& pieces, int const n_ranks)
 }
 
 template<std::size_t dim>
-NO_DISCARD std::vector<int> spill(std::vector<core::Box<int, dim>> const& boxes,
-                                  std::vector<int> ranks, std::vector<double> const& weights,
-                                  Topology const& topology, double const tol)
+MKN_KUL_FN_SIG_RET std::vector<int>
+spill(std::vector<core::Box<int, dim>> const& boxes, std::vector<int> ranks,
+      std::vector<double> const& weights, Topology const& topology, double const tol)
 {
     if (ranks.size() != boxes.size() or weights.size() != boxes.size())
         throw std::runtime_error("damn::amr::spill: one rank and one weight per box");
