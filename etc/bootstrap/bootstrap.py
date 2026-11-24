@@ -3,12 +3,20 @@
 per capability so each passes or fails alone (a probe that does not build, exits non zero,
 aborts or times out: not available)
 
-    python3 etc/bootstrap/bootstrap.py                    # Debian's MPI / HDF5 (res/mkn/mpi)
-    python3 etc/bootstrap/bootstrap.py -x res/mkn/hpc     # another mkn settings file
-    python3 etc/bootstrap/bootstrap.py --only mpi hdf5    # some areas
+    python3 etc/bootstrap/bootstrap.py                        # the system's MPI / HDF5, CPU
+    python3 etc/bootstrap/bootstrap.py --mpi-home /opt/hpc/mpi --gpu cuda
+                                                  # that MPI, the HDF5 beside it, CUDA (clang)
+    python3 etc/bootstrap/bootstrap.py -x res/mkn/hpc         # an mkn settings file of your own
+    python3 etc/bootstrap/bootstrap.py --only mpi hdf5        # some areas
+
+Toolchain (discover.py): MPI, HDF5 and the GPU toolkits are found first (options, environment,
+system), nothing built; without -x an mkn settings file is written for them,
+.damn/bootstrap/toolchain.yaml, for the probes and for later builds (-x <that file>).
 
 Probes: etc/bootstrap/<area>/<name>.cpp, a first line comment
-"// bootstrap probe ...: ranks=<n> profile=<mkn profile> [mpirun=<args,comma,separated>]",
+"// bootstrap probe ...: ranks=<n> profile=<mkn profile> [mpirun=<args,comma,separated>]
+[needs=<fact,comma,separated>]", needs: toolchain facts (discover.facts: hdf5_parallel,
+mpi_cuda_aware, ...) without which it is skipped, not built,
 stdout "key=value" lines. Each is built with mkn (-p <profile> -M <probe>: the build's
 compilers, flags and find paths, copied to .damn/bootstrap/bin), run with
 mpirun [<mpirun args>] -n <ranks> (--mpirun) in its own directory under .damn/bootstrap/run, its
@@ -17,6 +25,8 @@ mpirun=--map-by,numa,--bind-to,numa: a machine that cannot (one memory domain) f
 Writes
 
     inc/damn/core/def/_gen_bootstrap.hpp   DAMN_HAVE_<AREA>_<NAME> 1 / 0 per probe,
+                                           damn::bootstrap::toolchain::<fact> typed constexpr
+                                           (what discover.py found: gpu, mpi_impl, ...),
                                            damn::bootstrap::<area>_<name>_<key> strings, and
                                            every fact in damn::bootstrap::entries (config():
                                            a map, e.g. for python, as PHARE's build_config)
@@ -39,6 +49,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import discover  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -73,6 +86,7 @@ def probes(project, only):
             ranks=int(meta.get("ranks", 1)),
             profile=meta.get("profile", "bootstrap"),
             mpirun=[x for x in meta.get("mpirun", "").split(",") if x],
+            needs=[x for x in meta.get("needs", "").split(",") if x],
         )
 
 
@@ -81,7 +95,14 @@ def build(project, p, args, log):
     over it: no mkn -N needed"""
     out = project.root / "bin" / p["profile"]
     shutil.rmtree(out, ignore_errors=True)  # no stale binary of another probe
-    cmd = ["mkn", "build", "-p", p["profile"], "-M", str(p["path"].relative_to(project.root))]
+    cmd = [
+        "mkn",
+        "build",
+        "-p",
+        p["profile"],
+        "-M",
+        str(p["path"].relative_to(project.root)),
+    ]
     cmd += ["-O", "2", "-x", args.settings]
     r = subprocess.run(cmd, cwd=project.root, capture_output=True, text=True)
     log.write(f"$ {' '.join(cmd)}\n{r.stdout}{r.stderr}\n")
@@ -94,14 +115,14 @@ def build(project, p, args, log):
     return exe
 
 
-def run(project, p, exe, args, log):
+def run(project, p, exe, args, log, env):
     work = project.out / "run" / f"{p['area']}_{p['name']}"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     cmd = [args.mpirun, *p["mpirun"], "-n", str(p["ranks"]), str(exe)]
     try:
         r = subprocess.run(
-            cmd, cwd=work, capture_output=True, text=True, timeout=args.timeout
+            cmd, cwd=work, capture_output=True, text=True, timeout=args.timeout, env=env
         )
     except subprocess.TimeoutExpired as e:
         log.write(
@@ -118,9 +139,14 @@ def run(project, p, exe, args, log):
     return r.returncode == 0, values, f"exit {r.returncode}"
 
 
-def entries(results, settings):
-    """every fact as "<area>_<name>" (1 / 0) and "<area>_<name>_<key>" (its values), and settings"""
+def entries(results, settings, tool):
+    """every fact as "<area>_<name>" (1 / 0) and "<area>_<name>_<key>" (its values), settings,
+    and the toolchain's as "toolchain_<fact>" """
     out = [("settings", settings)]
+    out += [
+        (f"toolchain_{k}", str(int(v)) if isinstance(v, bool) else str(v))
+        for k, v in tool.items()
+    ]
     for r in results:
         key = f"{r['area']}_{r['name']}"
         out.append((key, str(int(r["ok"]))))
@@ -128,11 +154,23 @@ def entries(results, settings):
     return out
 
 
-def header(project, results, settings):
+def cpp(v):
+    """a fact's C++ type and literal"""
+    if isinstance(v, bool):
+        return "bool", "true" if v else "false"
+    if isinstance(v, int):
+        return "int", str(v)
+    return (
+        "std::string_view",
+        '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"',
+    )
+
+
+def header(project, results, settings, tool):
     quote = (
         lambda v: '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
     )  # noqa: E731
-    table = entries(results, settings)
+    table = entries(results, settings, tool)
     prefix, ns = project.name.upper(), f"{project.name}::bootstrap"
     out = [
         "// generated by etc/bootstrap/bootstrap.py ("
@@ -153,6 +191,12 @@ def header(project, results, settings):
         out.append(
             f"#define {prefix}_HAVE_{r['area'].upper()}_{r['name'].upper()} {int(r['ok'])}"
         )
+    out += ["", f"namespace {ns}::toolchain", "{"]
+    out += ["// what discover.py found (etc/bootstrap/discover.py: facts)"]
+    for k, v in tool.items():
+        t, lit = cpp(v)
+        out.append(f"inline constexpr {t} {k} = {lit};")
+    out += [f"}} // namespace {ns}::toolchain"]
     out += ["", f"namespace {ns}", "{"]
     for r in results:
         for k, v in r["values"].items():
@@ -180,21 +224,55 @@ def main(project=DAMN, argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     a.add_argument(
-        "-x", "--settings", default="res/mkn/mpi", help="mkn settings (compilers, find)"
+        "-x",
+        "--settings",
+        help="mkn settings (compilers, find); default: generated, see below",
     )
-    a.add_argument("--mpirun", default="mpirun", help="the settings' MPI's launcher")
+    a.add_argument(
+        "--mpirun", help="the settings' MPI's launcher (default: the found MPI's)"
+    )
     a.add_argument("--timeout", type=float, default=60)
     a.add_argument("--only", nargs="*", help="areas (mpi, hdf5, cuda, ...)")
+    discover.add_arguments(a)
     args = a.parse_args(argv)
 
     project.out.mkdir(parents=True, exist_ok=True)
+    found = discover.discover(args)
+    tool = discover.facts(found)
+    print(discover.report(found))
+    if not args.settings:
+        out = Path(args.out_settings or project.out / "toolchain.yaml").resolve()
+        command = " ".join(["etc/bootstrap/bootstrap.py", *(argv or sys.argv[1:])])
+        out.write_text(discover.settings(found, args, command))
+        args.settings = str(out)
+        print(f"settings {out}")
+    if not args.mpirun:
+        args.mpirun = found["mpi"].get("mpirun", "mpirun")
+    env = discover.run_env(found)
+    print()
+
     results = []
     for p in probes(project, args.only):
         key = f"{p['area']}_{p['name']}"
+        missing = [n for n in p["needs"] if not tool.get(n)]
+        if missing:
+            results.append(
+                dict(
+                    area=p["area"],
+                    name=p["name"],
+                    ok=False,
+                    values={},
+                    why=f"skipped: no {', '.join(missing)}",
+                )
+            )
+            print(f"{'no':<4} {key:<22} skipped: no {', '.join(missing)}")
+            continue
         with open(project.out / f"{key}.log", "w") as log:
             exe = build(project, p, args, log)
             ok, values, why = (
-                run(project, p, exe, args, log) if exe else (False, {}, "build failed")
+                run(project, p, exe, args, log, env)
+                if exe
+                else (False, {}, "build failed")
             )
         results.append(
             dict(area=p["area"], name=p["name"], ok=ok, values=values, why=why)
@@ -205,9 +283,9 @@ def main(project=DAMN, argv=None):
         )
         sys.stdout.flush()
 
-    project.header.write_text(header(project, results, args.settings))
+    project.header.write_text(header(project, results, args.settings, tool))
     (project.out / "bootstrap.json").write_text(
-        json.dumps(dict(entries(results, args.settings)), indent=1)
+        json.dumps(dict(entries(results, args.settings, tool)), indent=1)
     )
     print(
         f"wrote {project.header.relative_to(project.root)}, "

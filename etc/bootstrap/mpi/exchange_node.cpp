@@ -1,4 +1,4 @@
-// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap mpirun=--map-by,core,--bind-to,core
+// bootstrap probe (see etc/bootstrap/bootstrap.py): ranks=2 profile=bootstrap mpirun=--map-by,core,--bind-to,core needs=mpi_found
 // the cost of an exchange between two ranks on one node and one memory domain (Distance::Node):
 // latency_s, s_per_byte (exchange.hpp)
 #include "exchange.hpp"
