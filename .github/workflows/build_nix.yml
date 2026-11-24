@@ -30,16 +30,21 @@ jobs:
         apt update && apt install -y curl
         $CURL_GET -o mkn $PATH_GET/mkn_nix
         chmod +x mkn
-        KLOG=3 ./mkn clean build test -dtKOqp test_damn_core -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
-        KLOG=3 ./mkn clean build test -dtKOqp test_damn_mpi -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
-        mpirun --oversubscribe -n 2 bin/test_damn_mpi/test/*_test_mpi_utils.cpp
-        # copies and regrids between ranks: 3 ranks share 6 patches unevenly, 8 leave two ranks without one
-        for n in 2 3 8; do
-          mpirun --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_copy.cpp
-          mpirun --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_regrid.cpp
-          mpirun --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_inter_level.cpp
-          mpirun --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_clustering.cpp
-          mpirun --oversubscribe -n $n bin/test_damn_mpi/test/*_test_mpi_scope_timing.cpp
+        # build builds the test executables (bin/<profile>/test), phlop runs them below
+        for p in test_damn_core test_damn_mpi test_damn_hdf5; do
+          KLOG=3 ./mkn clean build -dtKOqp $p -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
         done
-        KLOG=3 ./mkn clean build test -dtKOqp test_damn_hdf5 -W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing" -x res/mkn/mpi
-        mpirun --oversubscribe -n 2 bin/test_damn_hdf5/test/*_test_h5_file.cpp
+
+    # tst/.phlop.exec.yaml: each test once, the mpi ones on 1 rank and most on 2, 3 and 8 (-c 8:
+    #  an 8 rank job, oversubscribed, runs alone); a failing test's output kept under .phlop/
+    - run: |
+        for venv in /.venv /root/.venv; do [ -x $venv/bin/python3 ] && export PATH=$venv/bin:$PATH && break; done
+        python3 -m pip install "phlop[psutil]>=0.1.1"
+        python3 -m phlop.run.test_cases -i tst -c 8 --tags mpi
+    - if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: phlop-logs
+        path: .phlop/
+        include-hidden-files: true
+        if-no-files-found: ignore

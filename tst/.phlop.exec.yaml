@@ -1,0 +1,25 @@
+# python3 -m phlop.run.test_cases -i tst --tags mpi: damn's gtest binaries (built by mkn into
+# bin/test_damn_*/test) in phases, each mpi one on 1 rank, most also on 2, 3 and 8 (8 leaves ranks
+# without patches). A failing run's output is kept under .phlop/ (CI uploads it)
+env: {PHLOP_STALL_TIMEOUT: 60, PHLOP_STALL_BUSY_TIMEOUT: 60}
+phases:
+  - name: core
+    "../bin/test_damn_core/test/*": [{}]
+  - name: mpi
+    tags: [mpi]
+    prefix: mpirun --oversubscribe
+    "../bin/test_damn_mpi/test/*":
+      - {prefix: "${prefix} -n 1"}
+    "../bin/test_damn_mpi/test/*_test_mpi_utils.cpp":
+      - {prefix: "${prefix} -n 2"}
+    "../bin/test_damn_mpi/test/*_test_mpi_{copy,regrid,inter_level,clustering,scope_timing,kelvin}.cpp":
+      - {prefix: "${prefix} -n 2"}
+      - {prefix: "${prefix} -n 3"}
+      - {prefix: "${prefix} -n 8"}
+  - name: hdf5
+    tags: [mpi]
+    prefix: mpirun --oversubscribe
+    "../bin/test_damn_hdf5/test/*":
+      - {prefix: "${prefix} -n 1"}
+    "../bin/test_damn_hdf5/test/*_test_h5_file.cpp":
+      - {prefix: "${prefix} -n 2"}
