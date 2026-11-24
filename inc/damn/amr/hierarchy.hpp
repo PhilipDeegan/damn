@@ -66,26 +66,26 @@ struct Hierarchy
 // ---------------------------------------------------------------- levels
 
 template<std::size_t dim, typename Lattice>
-NO_DISCARD int n_levels(Hierarchy<dim, Lattice> const& h)
+MKN_KUL_FN_SIG_RET int n_levels(Hierarchy<dim, Lattice> const& h)
 {
     return static_cast<int>(h.levels.size());
 }
 
 template<std::size_t dim, typename Lattice>
-NO_DISCARD int finest_level(Hierarchy<dim, Lattice> const& h)
+MKN_KUL_FN_SIG_RET int finest_level(Hierarchy<dim, Lattice> const& h)
 {
     return n_levels(h) - 1;
 }
 
 template<std::size_t dim, typename Lattice>
-NO_DISCARD bool level_exists(Hierarchy<dim, Lattice> const& h, int const ln)
+MKN_KUL_FN_SIG_RET bool level_exists(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     return ln >= 0 and ln < n_levels(h);
 }
 
 // level ln's index space is ratio_to_level_0 times finer than level 0's
 template<std::size_t dim, typename Lattice>
-NO_DISCARD int ratio_to_level_0(Hierarchy<dim, Lattice> const& h, int const ln)
+MKN_KUL_FN_SIG_RET int ratio_to_level_0(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     int r = 1;
     for (int i = 0; i < ln; ++i)
@@ -95,13 +95,13 @@ NO_DISCARD int ratio_to_level_0(Hierarchy<dim, Lattice> const& h, int const ln)
 
 // the domain in level ln's index space
 template<std::size_t dim, typename Lattice>
-NO_DISCARD core::Box<int, dim> level_domain(Hierarchy<dim, Lattice> const& h, int const ln)
+MKN_KUL_FN_SIG_RET core::Box<int, dim> level_domain(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     return core::refine(h.domain, ratio_to_level_0(h, ln));
 }
 
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::array<double, dim> mesh_size(Hierarchy<dim, Lattice> const& h, int const ln)
+MKN_KUL_FN_SIG_RET std::array<double, dim> mesh_size(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     auto dx      = h.dx;
     auto const r = ratio_to_level_0(h, ln);
@@ -112,8 +112,8 @@ NO_DISCARD std::array<double, dim> mesh_size(Hierarchy<dim, Lattice> const& h, i
 
 // physical position of the lower corner of cell `cell` of level ln
 template<std::size_t dim, typename Lattice>
-NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
-                                             core::Point<int, dim> const& cell)
+MKN_KUL_FN_SIG_RET core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
+                                                     core::Point<int, dim> const& cell)
 {
     auto const dx    = mesh_size(h, ln);
     auto const lower = level_domain(h, ln).lower;
@@ -127,9 +127,9 @@ NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, i
 //  centre
 template<std::size_t dim, typename Lattice>
     requires KelvinLattice<Lattice>
-NO_DISCARD core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
-                                             core::Point<int, dim> const& cell,
-                                             kelvin::Site const site)
+MKN_KUL_FN_SIG_RET core::Point<double, dim> position(Hierarchy<dim, Lattice> const& h, int const ln,
+                                                     core::Point<int, dim> const& cell,
+                                                     kelvin::Site const site)
 {
     auto x = position(h, ln, cell);
     if (site == kelvin::Site::body)
@@ -214,8 +214,9 @@ void remove_finer_levels(Hierarchy<dim, Lattice>& h, int const ln)
 
 // a level of the given boxes, ids 0.., owned per `ranks` (all rank 0 if empty)
 template<std::size_t dim>
-NO_DISCARD Level<dim> make_level(int const ln, std::vector<core::Box<int, dim>> const& boxes,
-                                 std::vector<int> const& ranks = {})
+MKN_KUL_FN_SIG_RET Level<dim> make_level(int const ln,
+                                         std::vector<core::Box<int, dim>> const& boxes,
+                                         std::vector<int> const& ranks = {})
 {
     if (!ranks.empty() and ranks.size() != boxes.size())
         throw std::runtime_error("damn::amr::make_level: one rank per box");
@@ -241,7 +242,7 @@ void for_each_local_patch(Level<dim> const& level, int const rank, auto&& fn)
 }
 
 template<std::size_t dim>
-NO_DISCARD std::vector<Patch<dim>> local_patches(Level<dim> const& level, int const rank)
+MKN_KUL_FN_SIG_RET std::vector<Patch<dim>> local_patches(Level<dim> const& level, int const rank)
 {
     std::vector<Patch<dim>> local;
     for_each_local_patch(level, rank, [&](auto const& p) { local.push_back(p); });
@@ -249,7 +250,7 @@ NO_DISCARD std::vector<Patch<dim>> local_patches(Level<dim> const& level, int co
 }
 
 template<std::size_t dim>
-NO_DISCARD Patch<dim> const& patch_with_id(Level<dim> const& level, std::uint32_t const id)
+MKN_KUL_FN_SIG_RET Patch<dim> const& patch_with_id(Level<dim> const& level, std::uint32_t const id)
 {
     for (auto const& patch : level.patches)
         if (patch.id == id)
@@ -263,8 +264,8 @@ NO_DISCARD Patch<dim> const& patch_with_id(Level<dim> const& level, std::uint32_
 
 // box cut into boxes of at most `size` cells per direction, in lexicographic order (x fastest)
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
-                                                 std::array<int, dim> const& size)
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> chop(core::Box<int, dim> const& box,
+                                                         std::array<int, dim> const& size)
 {
     std::array<int, dim> n{};
     for (std::size_t i = 0; i < dim; ++i)
@@ -308,9 +309,9 @@ double constexpr chop_size_slack = 1.25;
 // Size 20: 100 cells: 20 x 5; 45: 23, 22 (chop: 20, 20, 5); 24: 24; 26: 13, 13. Size 60,
 // granularity 2: 122 cells: 62, 60 (chop: 60, 60, 2)
 template<std::size_t dim>
-NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
-                                                        std::array<int, dim> const& size,
-                                                        int const granularity = 1)
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
+                                                                std::array<int, dim> const& size,
+                                                                int const granularity = 1)
 {
     if (granularity < 1)
         throw std::runtime_error("damn::amr::chop_evenly: granularity < 1");
@@ -357,8 +358,9 @@ NO_DISCARD std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> cons
 // level 0 as the domain chopped into patches of `size`, partitioned over n_ranks by cells along
 // the Hilbert curve (partition.hpp; for other weights: make_level(0, boxes, partition(...)))
 template<std::size_t dim, typename Lattice>
-NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim, Lattice> const& h,
-                                      std::array<int, dim> const& size, int const n_ranks = 1)
+MKN_KUL_FN_SIG_RET Level<dim> uniform_level_0(Hierarchy<dim, Lattice> const& h,
+                                              std::array<int, dim> const& size,
+                                              int const n_ranks = 1)
 {
     auto const boxes = chop(h.domain, size);
     return make_level(0, boxes, partition(boxes, cell_weights(boxes), n_ranks));
@@ -370,8 +372,8 @@ NO_DISCARD Level<dim> uniform_level_0(Hierarchy<dim, Lattice> const& h,
 // offsets, in level ln's index space, of the periodic images of the domain next to it
 // (not the domain itself): 3^p - 1 of them for p periodic directions
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim, Lattice> const& h,
-                                                              int const ln)
+MKN_KUL_FN_SIG_RET std::vector<core::Point<int, dim>>
+periodic_shifts(Hierarchy<dim, Lattice> const& h, int const ln)
 {
     auto const shape = level_domain(h, ln).shape();
 
@@ -396,7 +398,7 @@ NO_DISCARD std::vector<core::Point<int, dim>> periodic_shifts(Hierarchy<dim, Lat
 // the parts of box (level ln index space) that level ln's patches cover, periodic images
 // included, e.g. the ghost cells of a patch that are not level border
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<core::Box<int, dim>>
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
 covered_by_level(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, dim> const& box)
 {
     std::vector<core::Point<int, dim>> shifts{core::Point<int, dim>{}};
@@ -420,7 +422,7 @@ covered_by_level(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, 
 //  holder's ghost box the longest, e.g. a cell diagonal to one patch's corner and next to
 //  another's side is the latter's. As boxes of cells, along the last direction
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<core::Box<int, dim>>
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
 owned_elsewhere(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, dim> const& box,
                 int const width)
 {

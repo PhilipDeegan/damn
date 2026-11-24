@@ -13,7 +13,7 @@
 
 namespace damn::mpi
 {
-NO_DISCARD inline amr::Topology topology(MPI_Comm const comm = MPI_COMM_WORLD)
+MKN_KUL_FN_SIG_RET inline amr::Topology topology(MPI_Comm const comm = MPI_COMM_WORLD)
 {
     int rank = 0, size = 0;
     MPI_Comm_rank(comm, &rank);

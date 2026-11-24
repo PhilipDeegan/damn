@@ -69,7 +69,7 @@ template<std::size_t dim>
 std::size_t constexpr x_times = std::array<std::size_t, 3>{4, 2, 1}[dim - 1];
 
 template<std::size_t dim>
-NO_DISCARD std::size_t points_of(core::Box<int, dim> const& cells)
+MKN_KUL_FN_SIG_RET std::size_t points_of(core::Box<int, dim> const& cells)
 {
     std::size_t n = 1;
     for (std::size_t i = 0; i < dim; ++i)
@@ -78,13 +78,13 @@ NO_DISCARD std::size_t points_of(core::Box<int, dim> const& cells)
 }
 
 template<std::size_t dim>
-NO_DISCARD std::size_t rows_of(core::Box<int, dim> const& cells)
+MKN_KUL_FN_SIG_RET std::size_t rows_of(core::Box<int, dim> const& cells)
 {
     return points_of(cells) * x_times<dim>;
 }
 
 template<std::size_t dim>
-NO_DISCARD std::size_t cell_rows_of(core::Box<int, dim> const& cells)
+MKN_KUL_FN_SIG_RET std::size_t cell_rows_of(core::Box<int, dim> const& cells)
 {
     std::size_t n = 1;
     for (std::size_t i = 0; i < dim; ++i)
@@ -107,11 +107,11 @@ struct VtkInit
 
 namespace detail
 {
-    NO_DISCARD inline std::string level_path(int const ln)
+    MKN_KUL_FN_SIG_RET inline std::string level_path(int const ln)
     {
         return std::string{base} + "/Level" + std::to_string(ln);
     }
-    NO_DISCARD inline std::string step_level_path(int const ln)
+    MKN_KUL_FN_SIG_RET inline std::string step_level_path(int const ln)
     {
         return std::string{base} + "/Steps/Level" + std::to_string(ln);
     }
@@ -133,9 +133,9 @@ namespace detail
             HighFive::DataSpace({0, cols}, {HighFive::DataSpace::UNLIMITED, cols}));
     }
 
-    NO_DISCARD inline std::size_t chunk_rows(std::size_t const chunk_bytes,
-                                             std::size_t const n_components,
-                                             std::size_t const value_bytes)
+    MKN_KUL_FN_SIG_RET inline std::size_t chunk_rows(std::size_t const chunk_bytes,
+                                                     std::size_t const n_components,
+                                                     std::size_t const value_bytes)
     {
         return std::max<std::size_t>(1, chunk_bytes / (n_components * value_bytes));
     }

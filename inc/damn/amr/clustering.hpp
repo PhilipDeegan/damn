@@ -51,8 +51,8 @@ namespace detail
 {
     // the cell wrapped into the level's domain where periodic, std::nullopt if outside it
     template<std::size_t dim, typename Lattice>
-    NO_DISCARD std::optional<core::Point<int, dim>> wrap(Hierarchy<dim, Lattice> const& h,
-                                                         int const ln, core::Point<int, dim> cell)
+    MKN_KUL_FN_SIG_RET std::optional<core::Point<int, dim>>
+    wrap(Hierarchy<dim, Lattice> const& h, int const ln, core::Point<int, dim> cell)
     {
         auto const domain = level_domain(h, ln);
         auto const shape  = domain.shape();
@@ -68,8 +68,9 @@ namespace detail
     }
 
     template<std::size_t dim, typename Lattice>
-    NO_DISCARD core::Box<int, dim> tile_box(Hierarchy<dim, Lattice> const& h, int const ln,
-                                            Tile<dim> const& tile, std::array<int, dim> const& size)
+    MKN_KUL_FN_SIG_RET core::Box<int, dim> tile_box(Hierarchy<dim, Lattice> const& h, int const ln,
+                                                    Tile<dim> const& tile,
+                                                    std::array<int, dim> const& size)
     {
         core::Box<int, dim> box;
         for (std::size_t i = 0; i < dim; ++i)
@@ -86,8 +87,8 @@ namespace detail
     // true if cell is properly nested in level ln: every cell within nesting_buffer of it is on
     // a patch of level ln (or past a non periodic domain boundary)
     template<std::size_t dim, typename Lattice>
-    NO_DISCARD bool nested(Hierarchy<dim, Lattice> const& h, int const ln,
-                           core::Point<int, dim> const& cell, int const buffer)
+    MKN_KUL_FN_SIG_RET bool nested(Hierarchy<dim, Lattice> const& h, int const ln,
+                                   core::Point<int, dim> const& cell, int const buffer)
     {
         auto around       = core::grow(core::Box<int, dim>{cell, cell}, buffer);
         auto const domain = level_domain(h, ln);
@@ -104,8 +105,8 @@ namespace detail
     }
 
     template<std::size_t dim>
-    NO_DISCARD Tile<dim> tile_of(core::Point<int, dim> const& cell,
-                                 std::array<int, dim> const& size)
+    MKN_KUL_FN_SIG_RET Tile<dim> tile_of(core::Point<int, dim> const& cell,
+                                         std::array<int, dim> const& size)
     {
         Tile<dim> tile;
         for (std::size_t i = 0; i < dim; ++i)
@@ -117,9 +118,10 @@ namespace detail
 
 // the tiles holding this rank's tagged cells (level ln), grown by the tag buffer
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::set<Tile<dim>> tagged_tiles(Hierarchy<dim, Lattice> const& h, int const ln,
-                                            std::vector<core::Point<int, dim>> const& tagged,
-                                            ClusteringOptions<dim> const& options)
+MKN_KUL_FN_SIG_RET std::set<Tile<dim>>
+tagged_tiles(Hierarchy<dim, Lattice> const& h, int const ln,
+             std::vector<core::Point<int, dim>> const& tagged,
+             ClusteringOptions<dim> const& options)
 {
     std::set<Tile<dim>> tiles;
     for (auto const& cell : tagged)
@@ -133,9 +135,9 @@ NO_DISCARD std::set<Tile<dim>> tagged_tiles(Hierarchy<dim, Lattice> const& h, in
 
 // level ln + 1's boxes (its index space) from every rank's tagged tiles of level ln
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<core::Box<int, dim>> cluster(Hierarchy<dim, Lattice> const& h, int const ln,
-                                                    std::set<Tile<dim>> const& tiles,
-                                                    ClusteringOptions<dim> const& options)
+MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
+cluster(Hierarchy<dim, Lattice> const& h, int const ln, std::set<Tile<dim>> const& tiles,
+        ClusteringOptions<dim> const& options)
 {
     if (!level_exists(h, ln))
         throw std::runtime_error("damn::amr::cluster: no level " + std::to_string(ln));

@@ -28,7 +28,7 @@ struct PhysicalBoundaryRegion
     core::Box<int, dim> box{};            // the ghost cells (level index space)
 
     // 1: a face, 2: an edge, 3: a corner
-    NO_DISCARD std::size_t codimension() const
+    MKN_KUL_FN_SIG_RET std::size_t codimension() const
     {
         std::size_t n = 0;
         for (auto const s : sides)
@@ -39,7 +39,7 @@ struct PhysicalBoundaryRegion
 
 // the regions of box grown by ghost_width past level ln's physical boundaries
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<PhysicalBoundaryRegion<dim>>
+MKN_KUL_FN_SIG_RET std::vector<PhysicalBoundaryRegion<dim>>
 physical_boundary_regions(Hierarchy<dim, Lattice> const& h, int const ln,
                           core::Box<int, dim> const& box, int const ghost_width)
 {

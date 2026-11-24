@@ -24,10 +24,10 @@ struct BoxSpan
     T* ptr = nullptr;
     Box<int, dim> box{}; // the buffer's points
 
-    NO_DISCARD std::size_t size() const { return box.size(); }
-    NO_DISCARD T* data() const { return ptr; }
+    MKN_KUL_FN_SIG_RET std::size_t size() const { return box.size(); }
+    MKN_KUL_FN_SIG_RET T* data() const { return ptr; }
 
-    NO_DISCARD T& operator()(Point<int, dim> const& p) const
+    MKN_KUL_FN_SIG_RET T& operator()(Point<int, dim> const& p) const
     {
         auto const shape = box.shape();
         std::size_t flat = 0;
@@ -53,7 +53,7 @@ struct BoxRegion
     BoxSpan<T, dim> span;
     Box<int, dim> select;
 
-    NO_DISCARD std::size_t size() const { return select.size(); }
+    MKN_KUL_FN_SIG_RET std::size_t size() const { return select.size(); }
 
     operator BoxRegion<T const, dim>() const
         requires(!std::is_const_v<T>)
@@ -63,7 +63,8 @@ struct BoxRegion
 };
 
 template<typename T, std::size_t dim>
-NO_DISCARD BoxRegion<T, dim> region(BoxSpan<T, dim> const& span, Box<int, dim> const& select)
+MKN_KUL_FN_SIG_RET BoxRegion<T, dim> region(BoxSpan<T, dim> const& span,
+                                            Box<int, dim> const& select)
 {
     auto const overlap = span.box * select;
     if (!overlap or overlap->size() != select.size())

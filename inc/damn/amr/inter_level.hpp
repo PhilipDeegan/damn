@@ -84,7 +84,7 @@ struct BoxValues
     core::Box<int, dim> box{};
     T* data = nullptr;
 
-    NO_DISCARD std::size_t index(core::Point<int, dim> const& p) const
+    MKN_KUL_FN_SIG_RET std::size_t index(core::Point<int, dim> const& p) const
     {
         std::size_t i = 0, stride = 1;
         for (std::size_t d = 0; d < dim; ++d)
@@ -95,7 +95,10 @@ struct BoxValues
         return i;
     }
 
-    NO_DISCARD T& operator()(core::Point<int, dim> const& p) const { return data[index(p)]; }
+    MKN_KUL_FN_SIG_RET T& operator()(core::Point<int, dim> const& p) const
+    {
+        return data[index(p)];
+    }
 };
 
 
@@ -117,29 +120,29 @@ namespace detail
 
     // the fine target boxes of a fine patch for a region
     template<std::size_t dim>
-    NO_DISCARD std::vector<core::Box<int, dim>>
+    MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
     fine_boxes(LevelRegion region, LevelMap<dim> const& map, Patch<dim> const& f, auto const& res);
 
     // refine: coarse points past the coarse level's domains, from coarse patches' ghosts
     template<std::size_t dim>
-    NO_DISCARD std::vector<std::pair<Link<dim>, core::Box<int, dim>>>
+    MKN_KUL_FN_SIG_RET std::vector<std::pair<Link<dim>, core::Box<int, dim>>>
     coarse_ghost_sources(LevelMap<dim> const& map, Patch<dim> const& f, auto const& cres,
                          core::Box<int, dim> const& coarse_box,
                          std::vector<Link<dim>> const& links);
 
     template<std::size_t dim>
-    NO_DISCARD std::size_t aligned(std::size_t bytes);
+    MKN_KUL_FN_SIG_RET std::size_t aligned(std::size_t bytes);
 
     template<std::size_t dim, typename CoarseLD, typename FineLD>
-    NO_DISCARD std::unique_ptr<LevelPlan<dim>>
+    MKN_KUL_FN_SIG_RET std::unique_ptr<LevelPlan<dim>>
     level_plan(LevelRegion region, int stencil, LevelMap<dim> const& map, CoarseLD& coarse_ld,
                FineLD& fine_ld, std::vector<LevelPair> const& pairs);
 
     template<std::size_t dim>
-    NO_DISCARD bool coarse_is_local(LevelPiece<dim> const& piece);
+    MKN_KUL_FN_SIG_RET bool coarse_is_local(LevelPiece<dim> const& piece);
 
     template<std::size_t dim>
-    NO_DISCARD bool fine_is_local(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece);
+    MKN_KUL_FN_SIG_RET bool fine_is_local(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece);
 
     template<std::size_t dim>
     void check_local(LevelPlan<dim> const& plan);
@@ -472,38 +475,38 @@ void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, F
 namespace detail
 {
     template<Side side>
-    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+    MKN_KUL_FN_SIG_RET std::string const& side_name(LevelPair const& pair)
         requires(side == Side::coarse)
     {
         return pair.coarse;
     }
     template<Side side>
-    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+    MKN_KUL_FN_SIG_RET std::string const& side_name(LevelPair const& pair)
         requires(side == Side::coarse_new)
     {
         return pair.coarse_new;
     }
     template<Side side>
-    NO_DISCARD std::string const& side_name(LevelPair const& pair)
+    MKN_KUL_FN_SIG_RET std::string const& side_name(LevelPair const& pair)
         requires(side == Side::fine)
     {
         return pair.fine;
     }
 
     template<Side side>
-    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+    MKN_KUL_FN_SIG_RET decltype(auto) side_of(auto const& accessor, auto& data)
         requires(side == Side::coarse)
     {
         return accessor.coarse(data);
     }
     template<Side side>
-    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+    MKN_KUL_FN_SIG_RET decltype(auto) side_of(auto const& accessor, auto& data)
         requires(side == Side::coarse_new)
     {
         return accessor.coarse_new(data);
     }
     template<Side side>
-    NO_DISCARD decltype(auto) side_of(auto const& accessor, auto& data)
+    MKN_KUL_FN_SIG_RET decltype(auto) side_of(auto const& accessor, auto& data)
         requires(side == Side::fine)
     {
         return accessor.fine(data);

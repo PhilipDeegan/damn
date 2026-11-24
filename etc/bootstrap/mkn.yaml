@@ -1,0 +1,13 @@
+# etc/bootstrap's probes, a project of their own (mkn -C etc/bootstrap/mkn.yaml): built one at a
+# time by bootstrap.py (-M <area>/<probe>.cpp) with the build's settings (-x: compilers, flags,
+# find paths), nothing of damn's; binaries in etc/bootstrap/bin. bootstrap_hdf5: links HDF5
+
+name: damn_bootstrap
+
+profile:
+- name: bootstrap
+  arg: -std=c++20
+
+- name: bootstrap_hdf5
+  parent: bootstrap
+  lib: hdf5

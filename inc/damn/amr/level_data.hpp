@@ -57,13 +57,13 @@ void set_prototype(LevelData<dim, PatchData>& ld, auto&& make)
 // data[0], else the prototype: one PatchData to read resource types and geometry from, null if
 //  there is neither
 template<std::size_t dim, typename PatchData>
-NO_DISCARD PatchData* any_patch_data(LevelData<dim, PatchData>& ld)
+MKN_KUL_FN_SIG_RET PatchData* any_patch_data(LevelData<dim, PatchData>& ld)
 {
     return ld.data.empty() ? ld.prototype.get() : &ld.data[0];
 }
 
 template<std::size_t dim, typename PatchData>
-NO_DISCARD PatchData const* any_patch_data(LevelData<dim, PatchData> const& ld)
+MKN_KUL_FN_SIG_RET PatchData const* any_patch_data(LevelData<dim, PatchData> const& ld)
 {
     return ld.data.empty() ? ld.prototype.get() : &ld.data[0];
 }
@@ -71,7 +71,7 @@ NO_DISCARD PatchData const* any_patch_data(LevelData<dim, PatchData> const& ld)
 
 // the data of rank's patches of level, data[i] = make(patches[i])
 template<std::size_t dim>
-NO_DISCARD auto allocate(Level<dim> const& level, int const rank, auto&& make)
+MKN_KUL_FN_SIG_RET auto allocate(Level<dim> const& level, int const rank, auto&& make)
 {
     using PatchData = std::decay_t<decltype(make(level.patches[0]))>;
 
@@ -85,14 +85,14 @@ NO_DISCARD auto allocate(Level<dim> const& level, int const rank, auto&& make)
 
 
 template<std::size_t dim, typename PatchData>
-NO_DISCARD std::size_t size(LevelData<dim, PatchData> const& ld)
+MKN_KUL_FN_SIG_RET std::size_t size(LevelData<dim, PatchData> const& ld)
 {
     return ld.patches.size();
 }
 
 template<std::size_t dim, typename PatchData>
-NO_DISCARD std::optional<std::size_t> index_of(LevelData<dim, PatchData> const& ld,
-                                               std::uint32_t const id)
+MKN_KUL_FN_SIG_RET std::optional<std::size_t> index_of(LevelData<dim, PatchData> const& ld,
+                                                       std::uint32_t const id)
 {
     for (std::size_t i = 0; i < ld.patches.size(); ++i)
         if (ld.patches[i].id == id)
@@ -102,7 +102,8 @@ NO_DISCARD std::optional<std::size_t> index_of(LevelData<dim, PatchData> const& 
 
 // index of the local patch with id, throws if there is none
 template<std::size_t dim, typename PatchData>
-NO_DISCARD std::size_t local_index(LevelData<dim, PatchData> const& ld, std::uint32_t const id)
+MKN_KUL_FN_SIG_RET std::size_t local_index(LevelData<dim, PatchData> const& ld,
+                                           std::uint32_t const id)
 {
     if (auto const i = index_of(ld, id))
         return *i;
@@ -112,13 +113,13 @@ NO_DISCARD std::size_t local_index(LevelData<dim, PatchData> const& ld, std::uin
 
 // the data of the local patch with id
 template<std::size_t dim, typename PatchData>
-NO_DISCARD PatchData& at(LevelData<dim, PatchData>& ld, std::uint32_t const id)
+MKN_KUL_FN_SIG_RET PatchData& at(LevelData<dim, PatchData>& ld, std::uint32_t const id)
 {
     return ld.data[local_index(ld, id)];
 }
 
 template<std::size_t dim, typename PatchData>
-NO_DISCARD PatchData const& at(LevelData<dim, PatchData> const& ld, std::uint32_t const id)
+MKN_KUL_FN_SIG_RET PatchData const& at(LevelData<dim, PatchData> const& ld, std::uint32_t const id)
 {
     return ld.data[local_index(ld, id)];
 }
@@ -156,7 +157,7 @@ concept HasResources = requires(PatchData& data) {
 
 // names of data's resources, in for_each_resource's order
 template<HasResources PatchData>
-NO_DISCARD std::vector<std::string> resource_names(PatchData& data)
+MKN_KUL_FN_SIG_RET std::vector<std::string> resource_names(PatchData& data)
 {
     std::vector<std::string> names;
     for_each_resource(data, [&](std::string_view name, auto&) { names.emplace_back(name); });

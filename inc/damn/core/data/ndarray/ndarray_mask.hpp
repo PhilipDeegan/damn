@@ -37,27 +37,27 @@ public:
     }
 
     template<typename... Indexes>
-    NO_DISCARD DataType const& operator()(Indexes... indexes) const
+    MKN_KUL_FN_SIG_RET DataType const& operator()(Indexes... indexes) const
     {
         return NdArrayViewer<dimension, true>::at(array_.data(), shape_, indexes...);
     }
 
     template<typename... Indexes>
-    NO_DISCARD DataType& operator()(Indexes... indexes)
+    MKN_KUL_FN_SIG_RET DataType& operator()(Indexes... indexes)
     {
         return const_cast<DataType&>(static_cast<MaskedView const&>(*this)(indexes...));
     }
 
-    NO_DISCARD auto operator=(data_type value) { mask_.fill(array_, value); }
+    MKN_KUL_FN_SIG_RET auto operator=(data_type value) { mask_.fill(array_, value); }
 
-    NO_DISCARD auto xstart() const { return mask_.min(); }
-    NO_DISCARD auto xend() const { return shape_[0] - 1 - mask_.max(); }
+    MKN_KUL_FN_SIG_RET auto xstart() const { return mask_.min(); }
+    MKN_KUL_FN_SIG_RET auto xend() const { return shape_[0] - 1 - mask_.max(); }
 
-    NO_DISCARD auto ystart() const { return mask_.min(); }
-    NO_DISCARD auto yend() const { return shape_[1] - 1 - mask_.max(); }
+    MKN_KUL_FN_SIG_RET auto ystart() const { return mask_.min(); }
+    MKN_KUL_FN_SIG_RET auto yend() const { return shape_[1] - 1 - mask_.max(); }
 
-    NO_DISCARD auto zstart() const { return mask_.min(); }
-    NO_DISCARD auto zend() const { return shape_[2] - 1 - mask_.max(); }
+    MKN_KUL_FN_SIG_RET auto zstart() const { return mask_.min(); }
+    MKN_KUL_FN_SIG_RET auto zend() const { return shape_[2] - 1 - mask_.max(); }
 
 
 private:
@@ -182,7 +182,7 @@ public:
     }
 
     template<typename Array>
-    NO_DISCARD auto nCells(Array const& array)
+    MKN_KUL_FN_SIG_RET auto nCells(Array const& array)
     {
         auto shape = array.shape();
 
@@ -209,8 +209,8 @@ public:
     }
 
 
-    NO_DISCARD auto min() const { return min_; };
-    NO_DISCARD auto max() const { return max_; };
+    MKN_KUL_FN_SIG_RET auto min() const { return min_; };
+    MKN_KUL_FN_SIG_RET auto max() const { return max_; };
 
 private:
     std::size_t min_ = 0, max_ = 0;

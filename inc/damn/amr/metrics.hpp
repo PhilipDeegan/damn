@@ -44,7 +44,7 @@ struct LevelMetrics
     std::array<std::size_t, n_distances> coarse_cells{};
 
     // the busiest rank's weight over the mean (1: balanced)
-    NO_DISCARD double imbalance() const
+    MKN_KUL_FN_SIG_RET double imbalance() const
     {
         if (weight.empty())
             return 1.;
@@ -85,9 +85,9 @@ namespace detail
 // per level of h: weight per rank, ghost and coarse cells exchanged by distance; weights[ln]: one
 // per patch of level ln (empty or missing: the patch's cells); reach in each level's cells
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<LevelMetrics> metrics(Hierarchy<dim, Lattice> const& h, Topology const& t,
-                                             int const reach,
-                                             std::vector<std::vector<double>> const& weights = {})
+MKN_KUL_FN_SIG_RET std::vector<LevelMetrics>
+metrics(Hierarchy<dim, Lattice> const& h, Topology const& t, int const reach,
+        std::vector<std::vector<double>> const& weights = {})
 {
     if (reach < 0)
         throw std::runtime_error("damn::amr::metrics: negative reach");
@@ -157,7 +157,7 @@ struct LevelMigration
 };
 
 template<std::size_t dim, typename Lattice>
-NO_DISCARD std::vector<LevelMigration>
+MKN_KUL_FN_SIG_RET std::vector<LevelMigration>
 migration(Hierarchy<dim, Lattice> const& from, Hierarchy<dim, Lattice> const& to, Topology const& t)
 {
     if (from.ratio != to.ratio)

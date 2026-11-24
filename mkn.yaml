@@ -23,8 +23,13 @@ profile:
        phlop#next&tpp/phlop(https://github.com/PhilipDeegan/phlop)
        cccl#v3.5.0&tpp/cccl(https://github.com/NVIDIA/cccl)
   dep: mkn.kul#${mkn.kul.version} mkn.gpu#${mkn.gpu.version}
-  # nothing reads errno: sqrt, pow ... stay inline, their loops vectorise (results unchanged)
-  arg: -std=c++20 -fno-math-errno
+  # nothing reads errno: sqrt, pow ... stay inline, their loops vectorise (results unchanged);
+  #  per compiler: nvcc passes it to its host compiler
+  arg: -std=c++20
+  if_arg:
+    g++: -fno-math-errno
+    clang++: -fno-math-errno
+    nvcc: -Xcompiler -fno-math-errno
 
 - name: damn_core
   parent: base
@@ -59,15 +64,6 @@ profile:
   inc: tpp/highfive/include
   lib: hdf5
 
-# etc/bootstrap's probes, built one at a time by etc/bootstrap/bootstrap.py (-M <probe>):
-# the build's compilers, flags and find paths, nothing of damn's. bootstrap_hdf5: links HDF5
-- name: bootstrap
-  arg: -std=c++20
-
-- name: bootstrap_hdf5
-  parent: bootstrap
-  lib: hdf5
-
 - name: test_damn_hdf5
   inc: .
   self: damn_hdf5
@@ -84,6 +80,7 @@ profile:
   dep: google.test
   mode: none
   test: tst/damn/core/test_damn_core.cpp
+        tst/damn/core/test_bon.cpp
         tst/damn/amr/test_hierarchy.cpp
         tst/damn/amr/test_level_data.cpp
         tst/damn/amr/test_copy.cpp

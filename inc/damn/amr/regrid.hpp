@@ -65,11 +65,11 @@ struct RegridGhosts
     std::vector<std::string> fields{};    // BoxData resources
     std::vector<std::string> particles{}; // ParticleData resources
 
-    NO_DISCARD bool field(std::string_view const name) const
+    MKN_KUL_FN_SIG_RET bool field(std::string_view const name) const
     {
         return std::find(fields.begin(), fields.end(), name) != fields.end();
     }
-    NO_DISCARD bool particle(std::string_view const name) const
+    MKN_KUL_FN_SIG_RET bool particle(std::string_view const name) const
     {
         return std::find(particles.begin(), particles.end(), name) != particles.end();
     }
@@ -108,7 +108,7 @@ struct RegridMap
 // shifts: the level's periodic images (periodic_shifts, the domain itself excluded); ghosts:
 //  the resources whose old ghosts are valid
 template<std::size_t dim>
-NO_DISCARD RegridMap<dim>
+MKN_KUL_FN_SIG_RET RegridMap<dim>
 make_regrid_map(Level<dim> const& old_level, Level<dim> const& new_level, int const rank,
                 std::vector<core::Point<int, dim>> shifts = {}, RegridGhosts ghosts = {})
 {
@@ -187,7 +187,7 @@ namespace detail
     //  domain points both share; with valid ghosts, the new ghost nodes the old domain holds,
     //  then those the old patch's ghosts hold and no old domain does
     template<std::size_t dim>
-    NO_DISCARD std::vector<core::Box<int, dim>>
+    MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
     transfer_points(RegridMap<dim> const& map, Transfer<dim> const& t, std::string_view const name,
                     auto const& res)
     {
@@ -221,7 +221,7 @@ namespace detail
     // the cells a particle resource's items are taken from: those both share, or, its ghosts
     //  valid, its ghost cells (the resource's own width) on both sides
     template<std::size_t dim>
-    NO_DISCARD std::optional<core::Box<int, dim>>
+    MKN_KUL_FN_SIG_RET std::optional<core::Box<int, dim>>
     transfer_cells(RegridMap<dim> const& map, Transfer<dim> const& t, std::string_view const name,
                    auto const& res)
     {
@@ -406,8 +406,8 @@ namespace detail
 
 // on one rank: throws if anything comes from, or must go to, another rank
 template<std::size_t dim, typename PatchData, typename Make>
-NO_DISCARD LevelData<dim, PatchData> regrid(RegridMap<dim> const& map,
-                                            LevelData<dim, PatchData>&& old, Make&& make)
+MKN_KUL_FN_SIG_RET LevelData<dim, PatchData> regrid(RegridMap<dim> const& map,
+                                                    LevelData<dim, PatchData>&& old, Make&& make)
 {
     for (auto const& t : map.transfers)
         if (t.src == not_local or t.dst == not_local)
@@ -419,7 +419,7 @@ NO_DISCARD LevelData<dim, PatchData> regrid(RegridMap<dim> const& map,
 
 // true if the levels are the same decomposition: nothing to regrid
 template<std::size_t dim>
-NO_DISCARD bool same_decomposition(Level<dim> const& a, Level<dim> const& b)
+MKN_KUL_FN_SIG_RET bool same_decomposition(Level<dim> const& a, Level<dim> const& b)
 {
     if (a.patches.size() != b.patches.size())
         return false;

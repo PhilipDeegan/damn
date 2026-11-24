@@ -29,7 +29,7 @@ using FileOp = HighFive::File::AccessMode;
 
 
 template<typename Data, std::size_t dim>
-NO_DISCARD auto vector_for_dim()
+MKN_KUL_FN_SIG_RET auto vector_for_dim()
 {
     if constexpr (dim == 1)
         return std::vector<Data>();
@@ -46,7 +46,7 @@ NO_DISCARD auto vector_for_dim()
 // MPI_THREAD_MULTIPLE (mpi_thread_multiple_required, for whoever starts MPI). Asked for and not
 // possible (HDF5 without it, MPI below MPI_THREAD_MULTIPLE): opening throws, saying why. Subfiled
 // files are read through the same driver, or merged first (HDF5's h5fuse)
-NO_DISCARD inline int sub_files()
+MKN_KUL_FN_SIG_RET inline int sub_files()
 {
     static int const n = [] {
         auto const* v = std::getenv("DAMN_H5_SUB_FILES");
@@ -55,7 +55,7 @@ NO_DISCARD inline int sub_files()
     return n;
 }
 
-NO_DISCARD inline bool mpi_thread_multiple_required()
+MKN_KUL_FN_SIG_RET inline bool mpi_thread_multiple_required()
 {
     return sub_files() > 0;
 }
@@ -127,11 +127,11 @@ public:
 
     ~HighFiveFile() {}
 
-    NO_DISCARD HiFile& file() { return h5file_; }
+    MKN_KUL_FN_SIG_RET HiFile& file() { return h5file_; }
 
 
     template<typename T, std::size_t dim = 1>
-    NO_DISCARD auto read_data_set_flat(std::string path) const
+    MKN_KUL_FN_SIG_RET auto read_data_set_flat(std::string path) const
     {
         std::vector<T> data(H5Easy::getSize(h5file_, path));
         h5file_.getDataSet(path).read_raw(data.data());
@@ -139,7 +139,7 @@ public:
     }
 
     template<typename T, std::size_t dim = 1>
-    NO_DISCARD auto read_data_set(std::string path) const
+    MKN_KUL_FN_SIG_RET auto read_data_set(std::string path) const
     {
         auto data = vector_for_dim<T, dim>();
         h5file_.getDataSet(path).read(data);

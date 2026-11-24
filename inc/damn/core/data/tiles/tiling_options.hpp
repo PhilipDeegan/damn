@@ -27,7 +27,7 @@ struct TilingOptions
 
     // unset env vars keep the defaults above; max defaults to at least min, so setting only the
     // min can't leave max < min
-    NO_DISCARD static TilingOptions from_env()
+    MKN_KUL_FN_SIG_RET static TilingOptions from_env()
     {
         TilingOptions opts;
         opts.min_tile_size = mkn::kul::env::get_as(min_tile_key, opts.min_tile_size);

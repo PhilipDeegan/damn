@@ -47,7 +47,8 @@ struct CostModel
     int reach         = 0;  // ghost width, in cells
 
     template<std::size_t dim>
-    NO_DISCARD double operator()(core::Box<int, dim> const& box, double const particles) const
+    MKN_KUL_FN_SIG_RET double operator()(core::Box<int, dim> const& box,
+                                         double const particles) const
     {
         auto const cells = static_cast<double>(box.size());
         double ghosts    = 0.;
@@ -63,7 +64,7 @@ struct CostModel
 
 // a hybrid step's seconds per term, measured on one rank (3D, interpolation order 1, ghost
 // reach 4): fitted to the busy time per patch of a decomposition log
-NO_DISCARD inline CostModel measured_hybrid()
+MKN_KUL_FN_SIG_RET inline CostModel measured_hybrid()
 {
     return CostModel{1.259e-7, 2.472e-7, 1.703e-7, 2.087e-4, 4};
 }
@@ -76,7 +77,7 @@ struct CostMap
     std::vector<double> particles{}; // per block, x fastest
 
     // blocks per direction
-    NO_DISCARD std::array<int, dim> shape() const
+    MKN_KUL_FN_SIG_RET std::array<int, dim> shape() const
     {
         std::array<int, dim> n{};
         auto const cells = box.shape();
@@ -90,7 +91,7 @@ struct CostMap
     }
 
     // particles in b: each block's, times the share of its cells inside b
-    NO_DISCARD double operator()(core::Box<int, dim> const& b) const
+    MKN_KUL_FN_SIG_RET double operator()(core::Box<int, dim> const& b) const
     {
         auto const n       = shape();
         std::size_t blocks = 1;
@@ -139,7 +140,7 @@ struct CostMap
 
 // a Weigh: the model's cost of each box from particles(ln, boxes), one count per box
 template<std::size_t dim>
-NO_DISCARD Weigh<dim> weigh_by(CostModel const model, Weigh<dim> particles)
+MKN_KUL_FN_SIG_RET Weigh<dim> weigh_by(CostModel const model, Weigh<dim> particles)
 {
     return [model, particles = std::move(particles)](
                int const ln, std::vector<core::Box<int, dim>> const& boxes) {
@@ -155,7 +156,7 @@ NO_DISCARD Weigh<dim> weigh_by(CostModel const model, Weigh<dim> particles)
 
 // per level its CostMap's particles: a Weigh of particle counts (weigh_by's input)
 template<std::size_t dim>
-NO_DISCARD Weigh<dim> particles_of(std::vector<CostMap<dim>> maps)
+MKN_KUL_FN_SIG_RET Weigh<dim> particles_of(std::vector<CostMap<dim>> maps)
 {
     return [maps = std::move(maps)](int const ln, std::vector<core::Box<int, dim>> const& boxes) {
         if (ln < 0 or static_cast<std::size_t>(ln) >= maps.size())

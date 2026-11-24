@@ -125,7 +125,7 @@ void for_each_point_reverse(Box<T, dim> const& box, auto&& fn) DAMN_ALL
     // each loop checks, then steps back: no index is stepped below its lower bound, so an
     // unsigned box starting at 0 does not wrap, and an ill-formed direction (end <= lo)
     // runs zero times
-    auto const span = [&]() DAMN_ALL {
+    auto const span = [&] DAMN_ALL() {
         for (T i = end[dim - 1]; i > lo[dim - 1];)
         {
             point[dim - 1] = --i;
@@ -160,7 +160,7 @@ void for_each_point_reverse(Box<T, dim> const& box, auto&& fn) DAMN_ALL
  * For kernels where each thread handles one cell of a box.
  */
 template<typename T, std::size_t dim>
-NO_DISCARD auto point_at(Box<T, dim> const& box, std::size_t const i) DAMN_ALL
+MKN_KUL_FN_SIG_RET auto point_at(Box<T, dim> const& box, std::size_t const i) DAMN_ALL
 {
     static_assert(dim >= 1 and dim <= 3);
 
@@ -193,19 +193,18 @@ NO_DISCARD auto point_at(Box<T, dim> const& box, std::size_t const i) DAMN_ALL
 template<typename T, typename U, std::size_t dim>
 void for_each_point_zip(Box<T, dim> const& a, Box<U, dim> const& b, auto&& fn) DAMN_ALL
 {
-    for_each_span(
-        a, b,
-        [&] DAMN_ALL(auto const& a_start, auto const& b_start, std::uint32_t const size) {
-            auto a_point = a_start;
-            auto b_point = b_start;
-            U j          = b_start[dim - 1];
-            for (T i = a_start[dim - 1], end = i + size; i < end; ++i, ++j)
-            {
-                a_point[dim - 1] = i;
-                b_point[dim - 1] = j;
-                fn(a_point, b_point);
-            }
-        });
+    for_each_span(a, b,
+                  [&] DAMN_ALL(auto const& a_start, auto const& b_start, std::uint32_t const size) {
+                      auto a_point = a_start;
+                      auto b_point = b_start;
+                      U j          = b_start[dim - 1];
+                      for (T i = a_start[dim - 1], end = i + size; i < end; ++i, ++j)
+                      {
+                          a_point[dim - 1] = i;
+                          b_point[dim - 1] = j;
+                          fn(a_point, b_point);
+                      }
+                  });
 }
 
 

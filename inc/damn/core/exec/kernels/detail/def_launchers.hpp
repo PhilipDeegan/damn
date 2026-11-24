@@ -5,9 +5,9 @@
 
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
-
 #include "mkn/gpu.hpp"
-#include "mkn/gpu/def.hpp"
+
+#include <cstddef>
 
 #if DAMN_HAVE_MKN_GPU
 
@@ -15,15 +15,11 @@
 namespace damn::kernel
 {
 
-auto inline warp_size() DAMN_ALL // make runtime interrogation?
+// the warpSize kernels run at on the current device (mkn.gpu: a kernel's, e.g. 64 on wave64 AMD
+//  GPUs), for launch shapes; device code reads warpSize
+std::size_t inline warp_size()
 {
-#if !defined(MKN_GPU_CUDA) || !defined(MKN_GPU_ROCM)
-    throw std::runtime_error("warpsize is not available for cpu");
-#elif defined(MKN_GPU_ROCM)
-    return 32ull; // not always
-#elif defined(MKN_GPU_CUDA)
-    return 32ull;
-#endif
+    return mkn::gpu::warp_size();
 }
 
 auto inline thread_idx() DAMN_DEV

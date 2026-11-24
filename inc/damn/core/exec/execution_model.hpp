@@ -44,8 +44,8 @@ struct ThreadLease
     ThreadLease& operator=(ThreadLease&& that) noexcept;
     ~ThreadLease();
 
-    NO_DISCARD std::size_t size() const; // threads leased, 0 if none were free
-    void release();                      // gives them back now
+    MKN_KUL_FN_SIG_RET std::size_t size() const; // threads leased, 0 if none were free
+    void release();                              // gives them back now
 
 private:
     ExecutionModel* model_ = nullptr;
@@ -59,15 +59,15 @@ struct ExecutionModel
     double max_scheduled                  = 1.2;
     std::atomic<std::size_t> threads_used = 1; // the main thread
 
-    NO_DISCARD bool mpi() const;                // mpi_ranks > 0
-    NO_DISCARD bool threaded() const;           // usable_threads > 1
-    NO_DISCARD bool mpi_only() const;           // mpi() and not threaded()
-    NO_DISCARD std::size_t schedulable() const; // the most threads_used may be
-    NO_DISCARD std::size_t available() const;   // free now
-    void check() const;                         // throws what is not runnable
+    MKN_KUL_FN_SIG_RET bool mpi() const;                // mpi_ranks > 0
+    MKN_KUL_FN_SIG_RET bool threaded() const;           // usable_threads > 1
+    MKN_KUL_FN_SIG_RET bool mpi_only() const;           // mpi() and not threaded()
+    MKN_KUL_FN_SIG_RET std::size_t schedulable() const; // the most threads_used may be
+    MKN_KUL_FN_SIG_RET std::size_t available() const;   // free now
+    void check() const;                                 // throws what is not runnable
 
     // up to n more threads, what is free when called
-    NO_DISCARD ThreadLease use_threads(std::size_t n);
+    MKN_KUL_FN_SIG_RET ThreadLease use_threads(std::size_t n);
 };
 
 } // namespace damn::core

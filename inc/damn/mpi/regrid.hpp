@@ -40,7 +40,7 @@ struct RegridLimits
 };
 
 template<std::size_t dim, typename PatchData, typename Make>
-NO_DISCARD amr::LevelData<dim, PatchData>
+MKN_KUL_FN_SIG_RET amr::LevelData<dim, PatchData>
 regrid(amr::RegridMap<dim> const& map, amr::LevelData<dim, PatchData>&& old, Make&& make,
        RegridLimits const limits = {}, MPI_Comm const comm = MPI_COMM_WORLD)
 {

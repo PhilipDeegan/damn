@@ -31,31 +31,31 @@
 namespace damn::mpi
 {
 template<typename Data>
-NO_DISCARD std::vector<Data> collect(Data const& data, int mpi_size = 0);
+MKN_KUL_FN_SIG_RET std::vector<Data> collect(Data const& data, int mpi_size = 0);
 
-NO_DISCARD std::size_t max(std::size_t const local, int mpi_size = 0);
+MKN_KUL_FN_SIG_RET std::size_t max(std::size_t const local, int mpi_size = 0);
 
-NO_DISCARD double min(double const local);
+MKN_KUL_FN_SIG_RET double min(double const local);
 
-NO_DISCARD bool any(bool);
-NO_DISCARD bool any_errors();
+MKN_KUL_FN_SIG_RET bool any(bool);
+MKN_KUL_FN_SIG_RET bool any_errors();
 void log_error(std::string const key, std::string const val);
 
-NO_DISCARD int size();
+MKN_KUL_FN_SIG_RET int size();
 
-NO_DISCARD int rank();
+MKN_KUL_FN_SIG_RET int rank();
 
 void barrier();
 
-NO_DISCARD std::string date_time(std::string format = "%Y-%m-%d-%H:%M:%S");
+MKN_KUL_FN_SIG_RET std::string date_time(std::string format = "%Y-%m-%d-%H:%M:%S");
 
-NO_DISCARD std::int64_t unix_timestamp_now();
+MKN_KUL_FN_SIG_RET std::int64_t unix_timestamp_now();
 
-NO_DISCARD std::string hostname();
+MKN_KUL_FN_SIG_RET std::string hostname();
 
 // true for the lowest rank on each host
 // collective on first call! every rank must make the first call
-NO_DISCARD bool is_root_rank_for_host();
+MKN_KUL_FN_SIG_RET bool is_root_rank_for_host();
 
 inline bool is_init()
 {
@@ -65,7 +65,7 @@ inline bool is_init()
 }
 
 template<typename Data>
-NO_DISCARD auto mpi_type_for()
+MKN_KUL_FN_SIG_RET auto mpi_type_for()
 {
     if constexpr (std::is_same_v<double, Data>)
         return MPI_DOUBLE;
@@ -171,7 +171,7 @@ void _collect_vector(SendBuff const& sendBuff, RcvBuff& rcvBuff, std::vector<int
 }
 
 template<typename Vector>
-NO_DISCARD std::vector<Vector> collectVector(Vector const& sendBuff, int mpi_size = 0)
+MKN_KUL_FN_SIG_RET std::vector<Vector> collectVector(Vector const& sendBuff, int mpi_size = 0)
 {
     using Data = typename Vector::value_type;
 
@@ -197,7 +197,7 @@ NO_DISCARD std::vector<Vector> collectVector(Vector const& sendBuff, int mpi_siz
 }
 
 template<typename T, typename Vector>
-NO_DISCARD core::SpanSet<T, int> collectSpanSet(Vector const& sendBuff, int mpi_size = 0)
+MKN_KUL_FN_SIG_RET core::SpanSet<T, int> collectSpanSet(Vector const& sendBuff, int mpi_size = 0)
 {
     if (mpi_size == 0)
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
@@ -211,7 +211,7 @@ NO_DISCARD core::SpanSet<T, int> collectSpanSet(Vector const& sendBuff, int mpi_
 
 
 template<typename T, std::size_t size>
-NO_DISCARD auto collectArrays(std::array<T, size> const& arr, int mpi_size)
+MKN_KUL_FN_SIG_RET auto collectArrays(std::array<T, size> const& arr, int mpi_size)
 {
     using Array = std::array<T, size>;
     using Data  = typename Array::value_type;
@@ -232,8 +232,8 @@ NO_DISCARD auto collectArrays(std::array<T, size> const& arr, int mpi_size)
 
 
 template<typename Vector>
-NO_DISCARD core::SpanSet<typename Vector::value_type, int> collect_raw(Vector const& data,
-                                                                       int mpi_size)
+MKN_KUL_FN_SIG_RET core::SpanSet<typename Vector::value_type, int> collect_raw(Vector const& data,
+                                                                               int mpi_size)
 {
     if (mpi_size == 0)
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
@@ -243,7 +243,7 @@ NO_DISCARD core::SpanSet<typename Vector::value_type, int> collect_raw(Vector co
 
 
 template<typename Data>
-NO_DISCARD std::vector<Data> collect(Data const& data, int mpi_size)
+MKN_KUL_FN_SIG_RET std::vector<Data> collect(Data const& data, int mpi_size)
 {
     if (mpi_size == 0)
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);

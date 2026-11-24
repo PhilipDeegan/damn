@@ -47,7 +47,8 @@ struct LevelPair
     auto operator<=>(LevelPair const&) const = default;
 };
 
-NO_DISCARD inline std::vector<LevelPair> same_level_names(std::vector<std::string> const& names)
+MKN_KUL_FN_SIG_RET inline std::vector<LevelPair>
+same_level_names(std::vector<std::string> const& names)
 {
     std::vector<LevelPair> pairs;
     pairs.reserve(names.size());
@@ -57,9 +58,9 @@ NO_DISCARD inline std::vector<LevelPair> same_level_names(std::vector<std::strin
 }
 
 // time interpolated: names at the old and new coarse times
-NO_DISCARD inline std::vector<LevelPair> same_level_names(std::vector<std::string> const& names,
-                                                          std::string const& old_suffix,
-                                                          std::string const& new_suffix)
+MKN_KUL_FN_SIG_RET inline std::vector<LevelPair>
+same_level_names(std::vector<std::string> const& names, std::string const& old_suffix,
+                 std::string const& new_suffix)
 {
     std::vector<LevelPair> pairs;
     pairs.reserve(names.size());
@@ -140,12 +141,12 @@ namespace detail
 {
     // local patch id -> its LevelData index
     template<std::size_t dim>
-    NO_DISCARD std::map<std::uint32_t, std::size_t>
+    MKN_KUL_FN_SIG_RET std::map<std::uint32_t, std::size_t>
     local_indices(std::vector<Patch<dim>> const& local);
 
     // the shifts with the unshifted image first
     template<std::size_t dim>
-    NO_DISCARD std::vector<core::Point<int, dim>>
+    MKN_KUL_FN_SIG_RET std::vector<core::Point<int, dim>>
     with_no_shift(std::vector<core::Point<int, dim>> s);
 } // namespace detail
 
@@ -168,8 +169,9 @@ std::vector<core::Point<int, dim>> detail::with_no_shift(std::vector<core::Point
 
 // the map between level coarse and level coarse + 1, for rank's patches of both
 template<std::size_t dim, typename Lattice>
-NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim, Lattice> const& h, int const coarse,
-                                        int const rank, Topology const& topology, int const reach)
+MKN_KUL_FN_SIG_RET LevelMap<dim> make_level_map(Hierarchy<dim, Lattice> const& h, int const coarse,
+                                                int const rank, Topology const& topology,
+                                                int const reach)
 {
     DAMN_LOG_SCOPE(1, "damn::amr::make_level_map");
     int const fine = coarse + 1;
@@ -248,7 +250,7 @@ NO_DISCARD LevelMap<dim> make_level_map(Hierarchy<dim, Lattice> const& h, int co
 
 // true if both levels still have the patches the map was built on
 template<std::size_t dim, typename Lattice>
-NO_DISCARD bool is_current(LevelMap<dim> const& map, Hierarchy<dim, Lattice> const& h)
+MKN_KUL_FN_SIG_RET bool is_current(LevelMap<dim> const& map, Hierarchy<dim, Lattice> const& h)
 {
     return level_exists(h, map.fine) and h.levels[map.coarse].patches == map.coarse_built_on
            and h.levels[map.fine].patches == map.fine_built_on;

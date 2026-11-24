@@ -79,13 +79,13 @@ struct Box
     }
 
     template<typename T2>
-    NO_DISCARD bool operator==(Box<T2, dim> const& box) const
+    MKN_KUL_FN_SIG_RET bool operator==(Box<T2, dim> const& box) const
     {
         return box.lower == lower && box.upper == upper;
     }
-    NO_DISCARD bool operator!=(Box const& other) const { return !(*this == other); }
+    MKN_KUL_FN_SIG_RET bool operator!=(Box const& other) const { return !(*this == other); }
 
-    NO_DISCARD auto operator*(Box const& other) const
+    MKN_KUL_FN_SIG_RET auto operator*(Box const& other) const
     {
         Box intersection{other};
         for (auto idim = 0u; idim < dim; ++idim)
@@ -99,7 +99,8 @@ struct Box
     }
 
 
-    NO_DISCARD auto unsafe_intersection(Box const& other) const DAMN_ALL // no optional on gpu
+    MKN_KUL_FN_SIG_RET auto
+    unsafe_intersection(Box const& other) const DAMN_ALL // no optional on gpu
     {
         Box intersection{other};
         for (auto idim = 0u; idim < dim; ++idim)
@@ -129,12 +130,15 @@ struct Box
     }
 
 
-    NO_DISCARD auto shape() const DAMN_ALL { return upper - lower + 1; }
-    NO_DISCARD std::size_t size() const DAMN_ALL { return mkn::kul::math::product(shape()); }
+    MKN_KUL_FN_SIG_RET auto shape() const DAMN_ALL { return upper - lower + 1; }
+    MKN_KUL_FN_SIG_RET std::size_t size() const DAMN_ALL
+    {
+        return mkn::kul::math::product(shape());
+    }
 
 
 
-    NO_DISCARD constexpr static std::size_t nbrRemainBoxes()
+    MKN_KUL_FN_SIG_RET constexpr static std::size_t nbrRemainBoxes()
     {
         if constexpr (dim == 1)
         {
@@ -162,7 +166,7 @@ Box(Point<T, s> lower, Point<T, s> upper) -> Box<T, s>;
 
 
 template<template<typename, std::size_t> typename Point, typename Type, std::size_t SIZE>
-NO_DISCARD bool isIn(Point<Type, SIZE> const& point, Box<Type, SIZE> const& box) DAMN_ALL
+MKN_KUL_FN_SIG_RET bool isIn(Point<Type, SIZE> const& point, Box<Type, SIZE> const& box) DAMN_ALL
 {
     for (std::size_t iDim = 0; iDim < SIZE; ++iDim)
         if (point[iDim] < box.lower[iDim] || point[iDim] > box.upper[iDim])
@@ -176,7 +180,7 @@ NO_DISCARD bool isIn(Point<Type, SIZE> const& point, Box<Type, SIZE> const& box)
  * Returns occurs at the first box the point is in.
  */
 template<Spannable Boxes>
-NO_DISCARD bool DAMN_ALL isIn(auto const& point, Boxes const& boxes)
+MKN_KUL_FN_SIG_RET bool DAMN_ALL isIn(auto const& point, Boxes const& boxes)
 {
     for (auto const& box : boxes)
         if (isIn(point, box))
@@ -204,7 +208,7 @@ Box<Type, dim> grow(Box<Type, dim> const& box, OType const& size) DAMN_ALL
 }
 
 template<typename Type, std::size_t dim, typename T2>
-NO_DISCARD Box<Type, dim> shrink(Box<Type, dim> const& box, T2 const& size) DAMN_ALL
+MKN_KUL_FN_SIG_RET Box<Type, dim> shrink(Box<Type, dim> const& box, T2 const& size) DAMN_ALL
 {
     auto copy{box};
     copy.shrink(size);
@@ -213,7 +217,7 @@ NO_DISCARD Box<Type, dim> shrink(Box<Type, dim> const& box, T2 const& size) DAMN
 
 
 template<typename Type, std::size_t dim, typename Shifter>
-NO_DISCARD Box<Type, dim> shift(Box<Type, dim> const& box, Shifter const& offset)
+MKN_KUL_FN_SIG_RET Box<Type, dim> shift(Box<Type, dim> const& box, Shifter const& offset)
 {
     auto copy{box};
     copy.lower += offset;
@@ -224,7 +228,7 @@ NO_DISCARD Box<Type, dim> shift(Box<Type, dim> const& box, Shifter const& offset
 
 
 template<std::uint8_t idx, typename Type, std::size_t dim>
-NO_DISCARD Box<Type, dim> shift_idx(Box<Type, dim> const& box, Type const& offset)
+MKN_KUL_FN_SIG_RET Box<Type, dim> shift_idx(Box<Type, dim> const& box, Type const& offset)
 {
     auto copy{box};
     copy.lower[idx] += offset;
@@ -235,7 +239,7 @@ NO_DISCARD Box<Type, dim> shift_idx(Box<Type, dim> const& box, Type const& offse
 // boxes ordered by their lower corner, then their upper one, direction by direction: a
 //  translation invariant order (shifting both boxes alike keeps it)
 template<typename Type, std::size_t dim>
-NO_DISCARD bool lexicographic_less(Box<Type, dim> const& a, Box<Type, dim> const& b)
+MKN_KUL_FN_SIG_RET bool lexicographic_less(Box<Type, dim> const& a, Box<Type, dim> const& b)
 {
     for (std::size_t i = 0; i < dim; ++i)
         if (a.lower[i] != b.lower[i])
@@ -500,27 +504,27 @@ auto box_from_zero_to_upper_minus_one(Point_t<Type, SIZE> const& upper) DAMN_ALL
 }
 
 template<std::size_t SIZE>
-NO_DISCARD auto as_unsigned(Box<int, SIZE> const& box) DAMN_ALL
+MKN_KUL_FN_SIG_RET auto as_unsigned(Box<int, SIZE> const& box) DAMN_ALL
 {
     return Box<std::uint32_t, SIZE>{box.lower.as_unsigned(), box.upper.as_unsigned()};
 }
 
 template<template<typename, std::size_t> typename Point_t, typename Type, std::size_t SIZE>
-NO_DISCARD auto asBox(Point_t<Type, SIZE> const& point) DAMN_ALL
+MKN_KUL_FN_SIG_RET auto asBox(Point_t<Type, SIZE> const& point) DAMN_ALL
 {
     return Box<Type, SIZE>{point, point};
 }
 
 
 // rounds towards -inf, so cell -1 coarsens to -1 for ratio 2, not 0
-NO_DISCARD constexpr int floor_div(int const a, int const b) DAMN_ALL
+MKN_KUL_FN_SIG_RET constexpr int floor_div(int const a, int const b) DAMN_ALL
 {
     return a / b - ((a % b != 0) and ((a < 0) != (b < 0)));
 }
 
 // per element
 template<std::size_t dim>
-NO_DISCARD constexpr Point<int, dim> floor_div(Point<int, dim> p, int const b) DAMN_ALL
+MKN_KUL_FN_SIG_RET constexpr Point<int, dim> floor_div(Point<int, dim> p, int const b) DAMN_ALL
 {
     for (std::size_t i = 0; i < dim; ++i)
         p[i] = floor_div(p[i], b);
@@ -529,14 +533,14 @@ NO_DISCARD constexpr Point<int, dim> floor_div(Point<int, dim> p, int const b) D
 
 // cells of box, in the index space ratio times finer
 template<std::size_t dim>
-NO_DISCARD Box<int, dim> refine(Box<int, dim> const& box, int const ratio) DAMN_ALL
+MKN_KUL_FN_SIG_RET Box<int, dim> refine(Box<int, dim> const& box, int const ratio) DAMN_ALL
 {
     return Box<int, dim>{box.lower * ratio, (box.upper + 1) * ratio - 1};
 }
 
 // smallest box of the index space ratio times coarser covering box
 template<std::size_t dim>
-NO_DISCARD Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN_ALL
+MKN_KUL_FN_SIG_RET Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN_ALL
 {
     return Box<int, dim>{floor_div(box.lower, ratio), floor_div(box.upper, ratio)};
 }
@@ -545,7 +549,8 @@ NO_DISCARD Box<int, dim> coarsen(Box<int, dim> const& box, int const ratio) DAMN
 //  slab above it, the rest narrowed to the cut along that direction (Box::remove's pieces, in
 //  an order every rank and run agrees on)
 template<std::size_t dim>
-NO_DISCARD std::vector<Box<int, dim>> minus_ordered(Box<int, dim> b, Box<int, dim> const& cut)
+MKN_KUL_FN_SIG_RET std::vector<Box<int, dim>> minus_ordered(Box<int, dim> b,
+                                                            Box<int, dim> const& cut)
 {
     if (!(b * cut))
         return {b};
