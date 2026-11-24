@@ -205,9 +205,11 @@ TEST(VtkHdf, cellDataAndRatioThree)
         for (int r = 0; r < size; ++r)
             for (auto const& p : level.patches)
                 if (p.rank == r)
+                {
                     for (std::size_t k = 0; k < cell_rows_of(p.box); ++k, ++row)
                         for (std::size_t c = 0; c < nc; ++c)
                             ASSERT_EQ(cells[row][c], cell_value(p.id, k, c)) << ln << " " << row;
+                }
         EXPECT_EQ(row, cells.size());
     }
     EXPECT_EQ(file.file()

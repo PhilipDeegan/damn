@@ -384,7 +384,7 @@ namespace detail
                     if (rk[i] < 0)
                         rest.push_back(i);
                 auto const owners = majority(coarsened(subset(patches[0], rest)), below,
-                                                      below_ranks, n_ranks, -1);
+                                             below_ranks, n_ranks, -1);
                 for (std::size_t j = 0; j < rest.size(); ++j)
                     rk[rest[j]] = owners[j];
             };
