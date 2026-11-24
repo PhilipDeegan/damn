@@ -22,6 +22,8 @@ permissions:
 env:
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+  CURL_GET: curl -fL --retry 3 --retry-delay 2
+  PATH_GET: https://github.com/mkn/mkn/releases/latest/download
 
 jobs:
   # CUDA on a simulated NVIDIA H100, clang (the image's nvcc is not used). The simulator needs a
@@ -60,7 +62,7 @@ jobs:
         grep -n "^path:\|cuda.arch" res/mkn/clang_cuda_ci.yaml
         sed -e "s/^super: clang_cuda$/super: clang_cuda_ci/" \
           res/mkn/clang_cuda_mpi.yaml > res/mkn/clang_cuda_mpi_ci.yaml
-        curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o mkn https://github.com/mkn/mkn/releases/latest/download/mkn_nix
+        $CURL_GET -o mkn $PATH_GET/mkn_nix
         chmod +x mkn && mv mkn /usr/local/bin/mkn
     - name: Build/Test core
       run: |
@@ -98,7 +100,7 @@ jobs:
         #  developer's: CI uses mkn's defaults (~/.maiken/repo, https)
         sed -i -e '/^local:/,+2d' -e '/^remote:/,+2d' res/mkn/hip_thrust_ci.yaml
         cat res/mkn/hip_thrust_ci.yaml
-        curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o mkn https://github.com/mkn/mkn/releases/latest/download/mkn_nix
+        $CURL_GET -o mkn $PATH_GET/mkn_nix
         chmod +x mkn && mv mkn /usr/local/bin/mkn
     - name: Build/Test core
       run: |
