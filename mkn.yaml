@@ -57,6 +57,15 @@ profile:
         tst/damn/mpi/test_mpi_clustering.cpp
         tst/damn/mpi/test_mpi_scope_timing.cpp
 
+# work modes on mock fields (etc/bench/mpi/copy_overlap.cpp: whole_patch vs
+#  distance_first_overlaps), built on request: mkn build -p bench_damn_mpi -x res/mkn/mpi -dKO
+- name: bench_damn_mpi
+  inc: .
+  self: damn_mpi
+  mode: none
+  main: etc/bench/mpi/copy_overlap.cpp
+  out: bench_damn_mpi
+
 # HDF5 through HighFive v3.3.0 (header only, fetched), over damn_mpi: needs an MPI compiler and a
 # parallel HDF5 the settings can find, e.g. -x res/mkn/mpi
 - name: damn_hdf5

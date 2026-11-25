@@ -97,6 +97,7 @@ struct Plan
     std::vector<std::byte> buffer{}; // local sums/maxes, kept between copies
     std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept as well
     std::shared_ptr<void> device{}; // device_copy.hpp's pieces table (GPU builds), kept as well
+    std::shared_ptr<void> in_flight{}; // mpi/copy.hpp's per peer schedule (mpi::Copy), kept as well
 
     // per other rank sending me pieces (rank order): their indices in pieces, in plan order
     std::vector<std::pair<int, std::vector<std::size_t>>> from{};

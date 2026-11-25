@@ -9,6 +9,8 @@
 // for timings and hardware counters (which count the calling thread), and simpler debugging
 
 #include "BS_thread_pool.hpp"
+#include "damn/core/memory/scratch.hpp"
+#include "mkn/kul/lang/cpp/compiler/def.hpp"
 
 #include <mutex>
 #include <chrono>
@@ -17,6 +19,7 @@
 #include <cassert>
 #include <utility>
 #include <optional>
+#include <span>
 #include <exception>
 #include <stdexcept>
 #include <type_traits>
@@ -49,6 +52,8 @@ struct ThreadPool
     static inline std::size_t threads_per_pool = 1;
 
     auto static inline const _1ms = std::chrono::milliseconds(1);
+    // patch_exec with hooks: how long a busy pool is waited for before the hooks run again
+    static constexpr std::chrono::microseconds hooks_wait{20};
 
     ThreadPool() { configure(n_pools, threads_per_pool); }
 
@@ -153,6 +158,64 @@ struct ThreadPool
         rethrow_();
     }
 
+    // patch_exec keeping this (calling) thread at work while patches run, e.g. MPI from one thread:
+    //   hooks.order    the dispatch order (indices into [0, n_patches)), empty: 0, 1, ...
+    //   hooks.on_done  on_done(i) on this thread once fn has run for patch i
+    //   hooks.idle     idle() on this thread while it waits for a pool
+    // a patch whose fn throws gets no on_done; the first exception is rethrown on return
+    template<typename OnDone, typename Idle>
+    struct PatchHooks
+    {
+        std::span<std::size_t const> order{};
+        OnDone on_done;
+        Idle idle;
+    };
+
+    template<typename OnDone, typename Idle>
+    void patch_exec(std::size_t const n_patches, auto const& make_view, auto const& fn,
+                    PatchHooks<OnDone, Idle> const& hooks)
+    {
+        using View  = std::remove_cvref_t<decltype(make_view(std::size_t{0}))>;
+        auto& slots = view_slots_<View>();
+        if (!hooks.order.empty() and hooks.order.size() != n_patches)
+            throw std::runtime_error("ThreadPool::patch_exec: an order not of n_patches");
+
+        std::mutex done_mutex;
+        ScratchVector<std::size_t> done, ready; // swapped: the workers append while hooks run
+        auto const drain = [&] {
+            {
+                std::scoped_lock lock{done_mutex};
+                std::swap(*ready, *done);
+            }
+            for (auto const i : ready)
+                hooks.on_done(i);
+            (*ready).clear();
+        };
+        auto const between = [&] {
+            drain();
+            hooks.idle();
+        };
+
+        for (std::size_t k = 0; k < n_patches; ++k)
+        {
+            auto const i        = hooks.order.empty() ? k : hooks.order[k];
+            auto const pool_idx = first_ready_idx(between, hooks_wait);
+            auto& view          = slots[pool_idx].emplace(make_view(i));
+            get_pool(pool_idx).detach_task(guard([&fn, &view, &done_mutex, &done, i] {
+                fn(view);
+                std::scoped_lock lock{done_mutex};
+                done.push_back(i);
+            }));
+        }
+        while (!all_finished(hooks_wait))
+            between();
+        join_();
+        drain();
+        for (auto& slot : slots) // don't keep views of patch data past this call
+            slot.reset();
+        rethrow_();
+    }
+
     // fn(view, t) for every tile t in [0, n_tiles(view)) of every patch i has run on return, the
     // tiles of a patch are tasks on its pool's threads
     void tile_exec(std::size_t const n_patches, auto const& make_view, auto const& n_tiles,
@@ -175,10 +238,10 @@ struct ThreadPool
         rethrow_();
     }
 
-    auto all_finished() const
+    MKN_KUL_FN_SIG_RET bool all_finished(auto const& wait = _1ms) const
     {
         for (std::size_t i = 0; i < n_pools; ++i)
-            if (!thread_pools[i]->wait_for(_1ms))
+            if (!thread_pools[i]->wait_for(wait))
                 return false;
         return true;
     }
@@ -194,16 +257,23 @@ struct ThreadPool
 
     void wait() { sync(); }
 
-    std::size_t first_ready_idx()
+    // poll for first finished pool to reuse: between() after each round over the pools
+    std::size_t first_ready_idx(auto const& between, auto const& wait)
     {
         // round robin from the last pool taken, polling until one is idle
         while (true)
         {
             for (; pool_idx < n_pools; ++pool_idx)
-                if (thread_pools[pool_idx]->wait_for(_1ms))
+                if (thread_pools[pool_idx]->wait_for(wait))
                     return (++pool_idx) - 1;
             pool_idx = 0;
+            between();
         }
+    }
+
+    std::size_t first_ready_idx()
+    {
+        return first_ready_idx([] {}, _1ms);
     }
 
     auto& operator()() { return thread_pools[first_ready_idx()]; }
