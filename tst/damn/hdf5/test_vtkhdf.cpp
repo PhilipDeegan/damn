@@ -54,7 +54,7 @@ namespace
 TEST(VtkHdf, aTimeSeriesOfLevelsReadBack)
 {
     int const rank = mpi::rank(), size = mpi::size();
-    std::string const name = "test_damn_vtkhdf.vtkhdf";
+    std::string const name = "test_damn_vtkhdf_n" + std::to_string(size) + ".vtkhdf";
 
     // level 0: 4 patches over the ranks; level 1: on the last rank only, other boxes at step 2;
     //  level 2: never
@@ -154,7 +154,7 @@ TEST(VtkHdf, aTimeSeriesOfLevelsReadBack)
 TEST(VtkHdf, cellDataAndRatioThree)
 {
     int const rank = mpi::rank(), size = mpi::size();
-    std::string const name   = "test_damn_vtkhdf_cells.vtkhdf";
+    std::string const name   = "test_damn_vtkhdf_cells_n" + std::to_string(size) + ".vtkhdf";
     std::size_t constexpr nc = 2;
 
     std::array const levels

@@ -61,7 +61,7 @@ namespace
 TEST(LevelTable, ownersWriteFromMemoryAnyRankReadsIntoMemory)
 {
     int const rank = mpi::rank(), size = mpi::size();
-    std::string const name = "test_damn_level_table.h5";
+    std::string const name = "test_damn_level_table_n" + std::to_string(size) + ".h5";
 
     // 7 patches round robin, patch k's id k, its rows 3k + 1
     std::vector<core::Box<int, 1>> boxes;
@@ -163,7 +163,7 @@ TEST(LevelTable, aFieldsDomainFromItsGhostBuffer)
     // 2d "fields": a buffer over the ghost box (2 ghosts), the domain written as rows in C order,
     //  read back in place into a fresh buffer, its ghosts untouched
     int const rank = mpi::rank(), size = mpi::size();
-    std::string const name = "test_damn_level_table_fields.h5";
+    std::string const name = "test_damn_level_table_fields_n" + std::to_string(size) + ".h5";
     using Box2             = core::Box<int, 2>;
 
     std::vector<Box2> boxes;
