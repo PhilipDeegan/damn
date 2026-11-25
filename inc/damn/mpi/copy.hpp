@@ -10,7 +10,7 @@
 // pieces' data only, in plan order: one message per peer rank and copy
 //   1. outgoing pieces packed per peer and sent (MPI_Isend)
 //   2. local pieces: ghosts and leaving items copied, sums and maxes read into the buffer
-//   3. per peer with pieces for me: probed (particle messages vary in size), received,
+//   3. per peer with pieces for me: probed (item messages vary in size), received,
 //      unpacked; sums kept in the received buffers
 //   4. local maxes written, sums folded with the received ones in a fixed order
 //      (damn::amr::detail::fold_sums), sends waited for

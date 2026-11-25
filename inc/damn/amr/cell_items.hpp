@@ -1,7 +1,7 @@
-#ifndef DAMN_AMR_PARTICLE_ITEMS_HPP
-#define DAMN_AMR_PARTICLE_ITEMS_HPP
+#ifndef DAMN_AMR_CELL_ITEMS_HPP
+#define DAMN_AMR_CELL_ITEMS_HPP
 
-// moving a ParticleData resource's items between patches: the items whose cell + shift is in a
+// moving a CellItemData resource's items between patches: the items whose cell + shift is in a
 // box, packed to bytes and unpacked (other ranks, regrid transfers), or appended directly (the
 // same rank). A resource can do each its own way, through these optional free functions (ADL),
 // else damn does it item by item (for_each_item, cell, append, the item's bytes):
@@ -37,7 +37,7 @@ template<typename Type, std::size_t dim>
 struct Box;
 } // namespace damn::core
 
-namespace damn::amr::particle_items
+namespace damn::amr::cell_items
 {
 namespace detail
 {
@@ -170,6 +170,6 @@ void appended(R& dst)
         items_appended(dst);
 }
 
-} // namespace damn::amr::particle_items
+} // namespace damn::amr::cell_items
 
-#endif // DAMN_AMR_PARTICLE_ITEMS_HPP
+#endif // DAMN_AMR_CELL_ITEMS_HPP

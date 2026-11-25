@@ -12,7 +12,7 @@
 //                                       with the sum of all patches' values (deposits), the
 //                                       same bits on every patch (see fold_sums)
 //     max_borders     Borders, Max      as sum_borders, with the max
-//     gather_leaving  Leaving, Append   (ParticleData) items a neighbour holds outside its
+//     gather_leaving  Leaving, Append   (CellItemData) items a neighbour holds outside its
 //                                       domain are appended to the domain of the patch owning
 //                                       their cell; the source arrays are not cleared
 //
@@ -34,8 +34,8 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/scratch.hpp"
 #include "damn/amr/box_data.hpp"
-#include "damn/amr/particle_data.hpp"
-#include "damn/amr/particle_items.hpp"
+#include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/cell_items.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
@@ -108,15 +108,15 @@ inline constexpr ByName by_name{};
 
 namespace detail
 {
-    // fn(resource) for the resource called name, BoxData or ParticleData
-    template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+    // fn(resource) for the resource called name, BoxData or CellItemData
+    template<std::size_t dim, bool items, typename PatchData, typename Fn>
     void with_resource_of_kind(PatchData& patch_data, std::string const& name, Fn&& fn);
 
     template<std::size_t dim, typename PatchData, typename Fn>
     void with_box_data(PatchData& patch_data, std::string const& name, Fn&& fn);
 
     template<std::size_t dim, typename PatchData, typename Fn>
-    void with_particle_data(PatchData& patch_data, std::string const& name, Fn&& fn);
+    void with_cell_item_data(PatchData& patch_data, std::string const& name, Fn&& fn);
 
     template<std::size_t dim>
     MKN_KUL_FN_SIG_RET bool contains(core::Box<int, dim> const& outer,
@@ -128,11 +128,10 @@ namespace detail
                      core::Box<int, dim> const& patch_box,
                      core::Box<int, dim> const& resource_ghost_box);
 
-    // the pieces of leaving items (Region::Leaving): ParticleData
+    // the pieces of leaving items (Region::Leaving): CellItemData
     template<std::size_t dim, typename PatchData>
-    MKN_KUL_FN_SIG_RET Plan<dim> particle_plan(Neighbours<dim> const& n,
-                                               LevelData<dim, PatchData>& ld,
-                                               std::vector<ResourcePair> const& pairs);
+    MKN_KUL_FN_SIG_RET Plan<dim> item_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>& ld,
+                                           std::vector<ResourcePair> const& pairs);
 
     // the pieces of ghosts or borders: BoxData; local borders through the plan's buffer
     template<std::size_t dim, typename PatchData>
@@ -180,14 +179,14 @@ namespace detail
 
     // local pieces only, below: pieces from or to other ranks are damn::mpi::copy's
     // fn(a piece's source / destination resource on patch_data), as access reaches it
-    template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+    template<std::size_t dim, bool items, typename PatchData, typename Fn>
     void src_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
-    template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+    template<std::size_t dim, bool items, typename PatchData, typename Fn>
     void dst_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
-    template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+    template<std::size_t dim, bool items, typename Access, typename PatchData, typename Fn>
         requires(!std::is_same_v<Access, ByName>)
     void src_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
-    template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+    template<std::size_t dim, bool items, typename Access, typename PatchData, typename Fn>
         requires(!std::is_same_v<Access, ByName>)
     void dst_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
 
@@ -214,7 +213,7 @@ namespace detail
     template<std::size_t dim, typename Access, typename PatchData>
     void append_items(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    // after a copy appended to them: each destination resource once (particle_items::appended)
+    // after a copy appended to them: each destination resource once (cell_items::appended)
     template<std::size_t dim, typename Access, typename PatchData>
     void appended(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
@@ -276,7 +275,7 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
         DAMN_LOG_SCOPE(2, "damn::amr::plan_for"); // once per region and resources
         found = n.plans
                     .emplace(std::move(key), region == Region::Leaving
-                                                 ? detail::particle_plan(n, ld, pairs)
+                                                 ? detail::item_plan(n, ld, pairs)
                                                  : detail::box_plan(region, n, ld, pairs))
                     .first;
         detail::finish_plan(found->second);
@@ -347,17 +346,17 @@ void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
 
 // ---------------------------------------------------------------- detail
 
-template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+template<std::size_t dim, bool items, typename PatchData, typename Fn>
 void detail::with_resource_of_kind(PatchData& patch_data, std::string const& name, Fn&& fn)
 {
     bool const found = with_resource(patch_data, name, [&](auto& resource) {
         using R = std::decay_t<decltype(resource)>;
-        if constexpr (particles)
+        if constexpr (items)
         {
-            if constexpr (ParticleData<R, dim>)
+            if constexpr (CellItemData<R, dim>)
                 fn(resource);
             else
-                throw std::runtime_error("damn::amr::copy: " + name + " is not ParticleData");
+                throw std::runtime_error("damn::amr::copy: " + name + " is not CellItemData");
         }
         else
         {
@@ -378,24 +377,24 @@ void detail::with_box_data(PatchData& patch_data, std::string const& name, Fn&& 
 }
 
 template<std::size_t dim, typename PatchData, typename Fn>
-void detail::with_particle_data(PatchData& patch_data, std::string const& name, Fn&& fn)
+void detail::with_cell_item_data(PatchData& patch_data, std::string const& name, Fn&& fn)
 {
     with_resource_of_kind<dim, true>(patch_data, name, fn);
 }
 
-template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+template<std::size_t dim, bool items, typename PatchData, typename Fn>
 void detail::src_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
 {
-    with_resource_of_kind<dim, particles>(patch_data, piece.names.src, fn);
+    with_resource_of_kind<dim, items>(patch_data, piece.names.src, fn);
 }
 
-template<std::size_t dim, bool particles, typename PatchData, typename Fn>
+template<std::size_t dim, bool items, typename PatchData, typename Fn>
 void detail::dst_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
 {
-    with_resource_of_kind<dim, particles>(patch_data, piece.names.dst, fn);
+    with_resource_of_kind<dim, items>(patch_data, piece.names.dst, fn);
 }
 
-template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+template<std::size_t dim, bool items, typename Access, typename PatchData, typename Fn>
     requires(!std::is_same_v<Access, ByName>)
 void detail::src_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
 {
@@ -403,14 +402,14 @@ void detail::src_of(Access const& access, PatchData& patch_data, Piece<dim> cons
     using R                 = std::decay_t<decltype(resource)>;
     // as by name: a resource of the other kind throws (the region is a run time choice in
     //  pack_piece / unpack_piece, both kinds' code is compiled)
-    if constexpr (particles ? ParticleData<R, dim> : BoxData<R, dim>)
+    if constexpr (items ? CellItemData<R, dim> : BoxData<R, dim>)
         fn(resource);
     else
         throw std::runtime_error(std::string{"damn::amr::copy: an accessor's resource is not "}
-                                 + (particles ? "ParticleData" : "BoxData"));
+                                 + (items ? "CellItemData" : "BoxData"));
 }
 
-template<std::size_t dim, bool particles, typename Access, typename PatchData, typename Fn>
+template<std::size_t dim, bool items, typename Access, typename PatchData, typename Fn>
     requires(!std::is_same_v<Access, ByName>)
 void detail::dst_of(Access const& access, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn)
 {
@@ -418,11 +417,11 @@ void detail::dst_of(Access const& access, PatchData& patch_data, Piece<dim> cons
     using R                 = std::decay_t<decltype(resource)>;
     // as by name: a resource of the other kind throws (the region is a run time choice in
     //  pack_piece / unpack_piece, both kinds' code is compiled)
-    if constexpr (particles ? ParticleData<R, dim> : BoxData<R, dim>)
+    if constexpr (items ? CellItemData<R, dim> : BoxData<R, dim>)
         fn(resource);
     else
         throw std::runtime_error(std::string{"damn::amr::copy: an accessor's resource is not "}
-                                 + (particles ? "ParticleData" : "BoxData"));
+                                 + (items ? "CellItemData" : "BoxData"));
 }
 
 template<std::size_t dim>
@@ -446,8 +445,8 @@ void detail::check_reach(Neighbours<dim> const& n, std::string const& name,
 // for a destination patch (local, or another rank's for outgoing pieces) and its links, with
 // resources of the destination's kind (res, any patch's: boxes only depend on the patch box)
 template<std::size_t dim, typename PatchData>
-Plan<dim> detail::particle_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>& ld,
-                                std::vector<ResourcePair> const& pairs)
+Plan<dim> detail::item_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>& ld,
+                            std::vector<ResourcePair> const& pairs)
 {
     Plan<dim> plan{Region::Leaving};
     auto const pieces = [&](auto const& res, Patch<dim> const& dst, std::size_t const d,
@@ -464,12 +463,12 @@ Plan<dim> detail::particle_plan(Neighbours<dim> const& n, LevelData<dim, PatchDa
     {
         auto const& pair = pairs[k];
         for (std::size_t d = 0; d < n.local.size(); ++d)
-            with_particle_data<dim>(ld.data[d], pair.dst, [&](auto const& res) {
+            with_cell_item_data<dim>(ld.data[d], pair.dst, [&](auto const& res) {
                 check_reach(n, pair.dst, n.local[d].box, ghost_box(res, n.local[d].box));
                 pieces(res, n.local[d], d, n.of[d], pair, k, plan.pieces);
             });
         if (!n.remote.empty())
-            with_particle_data<dim>(ld.data[0], pair.dst, [&](auto const& res) {
+            with_cell_item_data<dim>(ld.data[0], pair.dst, [&](auto const& res) {
                 for (auto const& [dst, links] : n.remote)
                     pieces(res, dst, not_local, links, pair, k, plan.outgoing);
             });
@@ -794,7 +793,7 @@ void detail::append_items(Plan<dim> const& plan, Access const& access,
         if (is_local(piece))
             src_of<dim, true>(access, ld.data[piece.src.local], piece, [&](auto const& src) {
                 dst_of<dim, true>(access, ld.data[piece.dst], piece, [&](auto& dst) {
-                    particle_items::append_from(dst, src, piece.box, piece.src.shift);
+                    cell_items::append_from(dst, src, piece.box, piece.src.shift);
                 });
             });
 }
@@ -812,7 +811,7 @@ void detail::appended(Plan<dim> const& plan, Access const& access, LevelData<dim
             continue;
         done.push_back(key);
         dst_of<dim, true>(access, ld.data[piece.dst], piece,
-                          [&](auto& dst) { particle_items::appended(dst); });
+                          [&](auto& dst) { cell_items::appended(dst); });
     }
 }
 
@@ -827,7 +826,7 @@ void pack_piece(Region const region, Piece<dim> const& piece, Access const& acce
     if (region == Region::Leaving)
     {
         detail::src_of<dim, true>(access, src_data, piece, [&](auto const& src) {
-            particle_items::pack(src, piece.box, piece.src.shift, out);
+            cell_items::pack(src, piece.box, piece.src.shift, out);
         });
         return;
     }
@@ -861,9 +860,8 @@ void unpack_piece(Region const region, Piece<dim> const& piece, Access const& ac
     auto& dst_data = ld.data[piece.dst];
     if (region == Region::Leaving)
     {
-        detail::dst_of<dim, true>(access, dst_data, piece, [&](auto& dst) {
-            particle_items::unpack(dst, at, piece.src.shift);
-        });
+        detail::dst_of<dim, true>(access, dst_data, piece,
+                                  [&](auto& dst) { cell_items::unpack(dst, at, piece.src.shift); });
         return;
     }
     detail::dst_of<dim, false>(access, dst_data, piece, [&](auto& dst) {

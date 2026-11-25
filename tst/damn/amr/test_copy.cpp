@@ -255,7 +255,7 @@ TEST_P(GhostParticles, leaveThePatchIntoTheDomainOwningTheirCell)
 
 INSTANTIATE_TEST_SUITE_P(Copy, GhostParticles, ::testing::Bool());
 
-TEST(Copy, leavingNeedsParticleData)
+TEST(Copy, leavingNeedsCellItemData)
 {
     auto const h = make_hierarchy({true, true});
     auto ld      = allocate(h.levels[0], 0, make_patch_data);
@@ -519,7 +519,7 @@ TEST(Copy, rejectsUnknownAndNonBoxResources)
 
     EXPECT_THROW(copy(fill_ghosts, n, {"alpha_particles"}, ld), std::runtime_error);
     EXPECT_THROW(copy(fill_ghosts, n, {"rhoo"}, ld), std::runtime_error);
-    EXPECT_THROW(copy(fill_ghosts, n, {"domain"}, ld), std::runtime_error); // ParticleData
+    EXPECT_THROW(copy(fill_ghosts, n, {"domain"}, ld), std::runtime_error); // CellItemData
 }
 
 TEST(Copy, plansAreMadeOnceAndKeptInTheNeighbours)

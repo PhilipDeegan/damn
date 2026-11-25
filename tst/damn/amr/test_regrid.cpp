@@ -276,7 +276,7 @@ TEST(Regrid, validParticleGhostsMoveByCell)
         for (auto const& item : data.patch_ghost.items)
             cells.push_back(Point2{item.cell});
     auto const level = make_level(0, chop(r.h.domain, {2, 2}));
-    auto const map   = r.onto(level, RegridGhosts{.reach = 1, .particles = {"patch_ghost"}});
+    auto const map   = r.onto(level, RegridGhosts{.reach = 1, .items = {"patch_ghost"}});
     auto shifts      = periodic_shifts(r.h, 0);
     shifts.insert(shifts.begin(), Point2{});
     std::size_t kept = 0;

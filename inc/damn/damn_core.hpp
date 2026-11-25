@@ -14,7 +14,7 @@
 #include "damn/amr/level_map.hpp"                      // IWYU pragma: export
 #include "damn/amr/copy.hpp"                           // IWYU pragma: export
 #include "damn/amr/neighbours.hpp"                     // IWYU pragma: export
-#include "damn/amr/particle_data.hpp"                  // IWYU pragma: export
+#include "damn/amr/cell_item_data.hpp"                 // IWYU pragma: export
 #include "damn/amr/topology.hpp"                       // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_base.hpp"     // IWYU pragma: export
 #include "damn/core/data/ndarray/ndarray_mask.hpp"     // IWYU pragma: export
