@@ -123,12 +123,7 @@ template<std::size_t dim>
 MKN_KUL_FN_SIG_RET Partition<dim> cut_partition(CutPartition<dim> const& in);
 
 // the same from CutPartition's members as arguments, in order; missing ones (tol) defaulted
-template<std::size_t dim>
-MKN_KUL_FN_SIG_RET Partition<dim> cut_partition(std::vector<core::Box<int, dim>> const& boxes,
-                                                auto&&... args)
-{
-    return cut_partition(CutPartition<dim>{boxes, std::forward<decltype(args)>(args)...});
-}
+DAMN_DAO_FN(MKN_KUL_FN_SIG_RET, cut_partition, CutPartition)
 
 // n_ranks ranks of the same capacity
 MKN_KUL_FN_SIG_RET inline std::vector<double> equal_capacity(int const n_ranks)

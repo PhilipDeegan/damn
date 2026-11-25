@@ -5,6 +5,9 @@
 
 #include "gtest/gtest.h"
 
+#include <array>
+#include <cstddef>
+
 namespace damn::core
 {
 
@@ -40,6 +43,39 @@ TEST(DamnCore, debug_do_switches)
     DAMN_SUPER_DEBUG_DO(++heavy);
     EXPECT_EQ(light, DAMN_DEBUG);
     EXPECT_EQ(heavy, DAMN_SUPER_DEBUG);
+}
+
+// DAMN_DAO_FN: the DAO's template arguments deduced from the arguments, trailing members
+//  defaulted, and the DAO itself still accepted
+namespace damn::test
+{
+template<std::size_t dim>
+struct Scaled
+{
+    std::array<int, dim> const& values;
+    int factor = 2;
+};
+
+template<std::size_t dim>
+std::array<int, dim> scaled(Scaled<dim> const& in)
+{
+    auto out = in.values;
+    for (auto& v : out)
+        v *= in.factor;
+    return out;
+}
+
+DAMN_DAO_FN(inline, scaled, Scaled)
+} // namespace damn::test
+
+TEST(DamnCore, dao_fn_builds_the_dao_from_arguments)
+{
+    std::array const v{1, 2, 3};
+    EXPECT_EQ(damn::test::scaled(v), (std::array{2, 4, 6}));    // factor defaulted, dim 3
+    EXPECT_EQ(damn::test::scaled(v, 3), (std::array{3, 6, 9})); // factor given
+    EXPECT_EQ(damn::test::scaled(damn::test::Scaled{v, 4}), (std::array{4, 8, 12})); // the DAO
+    std::array const w{5, 6};
+    EXPECT_EQ(damn::test::scaled(w), (std::array{10, 12})); // dim 2 from the same overload
 }
 
 int main(int argc, char** argv)

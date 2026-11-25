@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <type_traits>
+#include <utility> // IWYU pragma: keep (DAMN_DAO_FN: std::forward)
 
 // [[nodiscard]]: mkn.kul's MKN_KUL_FN_SIG_RET (no damn macro)
 
@@ -16,6 +17,26 @@
 //  The DAMN_ names are aliases until their users move to kul's
 #define DAMN_LAMBDA_ALWAYS_INLINE MKN_KUL_LAMBDA_ALWAYS_INLINE
 #define DAMN_ALWAYS_INLINE MKN_KUL_ALWAYS_INLINE
+
+// fn(Dao const&) also callable as fn(args...): the overload builds Dao{args...} (Dao's members
+//  in order, missing trailing ones defaulted) and calls fn with it, so call sites pass plain
+//  arguments and need not know the DAO. Dao's template arguments come from aggregate deduction
+//  (C++20, no deduction guides): each must appear in some member's type. Not used when the first
+//  argument already is a Dao (Dao{dao} is then a copy of the same type). spec: the overload's
+//  specifiers, e.g. MKN_KUL_FN_SIG_RET or DAMN_ALL. A DAO used on device holds views, not
+//  references
+// Dao is a template name deduced from the braces: it cannot be parenthesised
+// NOLINTBEGIN(bugprone-macro-parentheses)
+#define DAMN_DAO_FN(spec, fn, Dao)                                                                 \
+    spec auto fn(auto&& first, auto&&... args)                                                     \
+        requires(not std::is_same_v<std::decay_t<decltype(first)>,                                 \
+                                    decltype(Dao{std::forward<decltype(first)>(first),             \
+                                                 std::forward<decltype(args)>(args)...})>)         \
+    {                                                                                              \
+        return fn(                                                                                 \
+            Dao{std::forward<decltype(first)>(first), std::forward<decltype(args)>(args)...});     \
+    }
+// NOLINTEND(bugprone-macro-parentheses)
 
 #if !defined(NDEBUG) || defined(DAMN_FORCE_DEBUG_DO)
 #define DAMN_DEBUG_DO(...) __VA_ARGS__
