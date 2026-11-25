@@ -22,20 +22,29 @@
 //  in order, missing trailing ones defaulted) and calls fn with it, so call sites pass plain
 //  arguments and need not know the DAO. Dao's template arguments come from aggregate deduction
 //  (C++20, no deduction guides): each must appear in some member's type. Not used when the first
-//  argument already is a Dao (Dao{dao} is then a copy of the same type). spec: the overload's
-//  specifiers, e.g. MKN_KUL_FN_SIG_RET or DAMN_ALL. A DAO used on device holds views, not
-//  references
+//  argument already is a Dao (Dao{dao} is then a copy of the same type). A DAO used on device
+//  holds views, not references. As mkn.kul's MKN_KUL_FN_SIG / _RET:
+//   DAMN_DAO_FN(spec, fn, Dao)      the overload's specifiers spec (e.g. inline, DAMN_ALL)
+//   DAMN_DAO_RET_FN(spec, fn, Dao)  [[nodiscard]] too: fn's result is the point of calling it
+//                                   (fn returning void is refused at compile time)
 // Dao is a template name deduced from the braces: it cannot be parenthesised
 // NOLINTBEGIN(bugprone-macro-parentheses)
-#define DAMN_DAO_FN(spec, fn, Dao)                                                                 \
-    spec auto fn(auto&& first, auto&&... args)                                                     \
+#define DAMN_DAO_FN_IMPL_(attr, spec, fn, Dao, check)                                              \
+    attr spec auto fn(auto&& first, auto&&... args)                                                \
         requires(not std::is_same_v<std::decay_t<decltype(first)>,                                 \
                                     decltype(Dao{std::forward<decltype(first)>(first),             \
                                                  std::forward<decltype(args)>(args)...})>)         \
     {                                                                                              \
+        using Result_t [[maybe_unused]] = decltype(fn(                                             \
+            Dao{std::forward<decltype(first)>(first), std::forward<decltype(args)>(args)...}));    \
+        static_assert(check, #fn ": DAMN_DAO_RET_FN for a function returning void, use "           \
+                                 "DAMN_DAO_FN");                                                   \
         return fn(                                                                                 \
             Dao{std::forward<decltype(first)>(first), std::forward<decltype(args)>(args)...});     \
     }
+#define DAMN_DAO_FN(spec, fn, Dao) DAMN_DAO_FN_IMPL_(, spec, fn, Dao, true)
+#define DAMN_DAO_RET_FN(spec, fn, Dao)                                                             \
+    DAMN_DAO_FN_IMPL_([[nodiscard]], spec, fn, Dao, not std::is_void_v<Result_t>)
 // NOLINTEND(bugprone-macro-parentheses)
 
 #if !defined(NDEBUG) || defined(DAMN_FORCE_DEBUG_DO)

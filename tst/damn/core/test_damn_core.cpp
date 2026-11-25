@@ -66,7 +66,7 @@ std::array<int, dim> scaled(Scaled<dim> const& in)
     return out;
 }
 
-DAMN_DAO_FN(inline, scaled, Scaled)
+DAMN_DAO_RET_FN(inline, scaled, Scaled)
 
 // no return value: the overload returns void too
 template<std::size_t dim>
