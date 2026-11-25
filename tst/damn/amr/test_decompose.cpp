@@ -355,7 +355,7 @@ TEST(Cost, ModelTerms)
     CostModel const m{2., 3., 5., 7., 1};
     // 4 x 2 cells, grown by 1: 6 x 4 = 24, 16 ghost cells
     EXPECT_DOUBLE_EQ(m(box(0, 0, 3, 1), 10.), 2. * 10 + 3. * 8 + 5. * 16 + 7.);
-    EXPECT_DOUBLE_EQ(CostModel{}(box(0, 0, 3, 1), 10.), 10.); // particles alone
+    EXPECT_DOUBLE_EQ(CostModel{}(box(0, 0, 3, 1), 10.), 10.); // the count alone
 }
 
 TEST(Cost, MapProratesBlocks)
@@ -374,7 +374,7 @@ TEST(Cost, MapProratesBlocks)
 TEST(Cost, WeighByModelOverAMap)
 {
     CostMap<2> const map{box(0, 0, 7, 7), {8, 8}, {64.}};
-    auto const weigh = weigh_by<2>(CostModel{1., 1.}, particles_of<2>({map}));
+    auto const weigh = weigh_by<2>(CostModel{1., 1.}, counts_of<2>({map}));
     auto const w     = weigh(0, {box(0, 0, 3, 3), box(4, 0, 7, 7)});
     ASSERT_EQ(w.size(), 2u);
     EXPECT_DOUBLE_EQ(w[0], 16. + 16.);
