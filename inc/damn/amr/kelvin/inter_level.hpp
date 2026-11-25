@@ -13,6 +13,7 @@
 //                                            site's sublattice around the fine site, at c + num / r
 //                                            (num 0: on c); a fine site's bracket is at most one
 //                                            coarse cell from the cell over it
+//   refined_keys(keys, r)                    a domain's sites on the level r times finer
 //
 // what the values do is the model's (damn::amr::refine and coarsen call its operators); these two
 // are the plain ones, on SiteArray of a floating point T, or an array of them:
@@ -23,6 +24,7 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "damn/amr/kelvin/site_data.hpp"
+#include "damn/amr/kelvin/sites.hpp"
 #include "damn/amr/lattice.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 
@@ -62,6 +64,11 @@ coincident_coarse(core::Point<int, dim> const& fine_cell, Site site, int ratio);
 template<std::size_t dim>
 MKN_KUL_FN_SIG_RET Bracket<dim> bracket(core::Point<int, dim> const& fine_cell, Site site,
                                         int ratio);
+
+// keys r times (a key K is the fine key r K, its own sublattice's); a periodic direction's last
+//  cell r cells: its upper key r - 1 more
+template<std::size_t dim>
+MKN_KUL_FN_SIG_RET KeyBox<dim> refined_keys(KeyBox<dim> const& keys, int ratio);
 
 void check_ratio(int ratio); // throws if not odd and positive
 
@@ -133,6 +140,19 @@ Bracket<dim> bracket(core::Point<int, dim> const& fine_cell, Site const site, in
         b.num[d]     = x - ratio * b.lower[d];
     }
     return b;
+}
+
+template<std::size_t dim>
+KeyBox<dim> refined_keys(KeyBox<dim> const& keys, int const ratio)
+{
+    check_ratio(ratio);
+    auto fine = keys;
+    for (std::size_t d = 0; d < dim; ++d)
+    {
+        fine.lower[d] = ratio * keys.lower[d];
+        fine.upper[d] = ratio * keys.upper[d] + (keys.periodic[d] ? ratio - 1 : 0);
+    }
+    return fine;
 }
 
 
