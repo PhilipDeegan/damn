@@ -13,7 +13,12 @@
 //       (the last for the finer levels); under_size: per level the same for the cells under the
 //       next finer level (chopped apart from the rest, so a coarse patch sits under one fine
 //       patch; zeros: none). A refined level's sizes are rounded down to a multiple of the
-//       ratio, at least the ratio: patches of whole coarser cells
+//       ratio, at least the ratio: patches of whole coarser cells; patch_weight: the heaviest
+//       patch (weigh's units), 0: none. A chopped patch weighing more is halved along its widest
+//       direction (in whole coarser cells on a refined level) until it weighs no more or is one
+//       unit wide: where the work is, more patches (a heavily refined region of a level 0 that
+//       the model refines in place: its patches by the work in them, not their cells); one
+//       weigh call per round of halving, every patch of the round in it
 //   decompose_level(h, ln, boxes, in[, finer])
 //       level ln from its boxes, h holding the coarser levels and (partition "keep") the level
 //       being replaced; finer: the next finer level's boxes, if known (under_size):
@@ -62,6 +67,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -89,6 +95,7 @@ struct Decompose
     //  curve with the rest of level 0 (with one thread a rank it stays in level 0's phase:
     //  collectives, dumps; with more it can be background work, placed contiguous)
     int near_band = 0;
+    double patch_weight = 0.; // the heaviest patch, weigh's units; 0: none
 };
 
 namespace detail
@@ -272,6 +279,61 @@ namespace detail
                                              + " patch not in whole coarse cells");
     }
 
+    // box halved along its widest direction in units of `unit` cells from its lower corner (the
+    //  lower half the smaller), none if no direction is two units wide
+    template<std::size_t dim>
+    std::optional<std::array<core::Box<int, dim>, 2>> halve(core::Box<int, dim> const& box,
+                                                            int const unit)
+    {
+        auto const shape   = box.shape();
+        std::size_t widest = 0;
+        for (std::size_t d = 1; d < dim; ++d)
+            if (shape[d] / unit > shape[widest] / unit)
+                widest = d;
+        auto const units = shape[widest] / unit;
+        if (units < 2)
+            return std::nullopt;
+        auto lower = box, upper = box;
+        lower.upper[widest] = box.lower[widest] + units / 2 * unit - 1;
+        upper.lower[widest] = lower.upper[widest] + 1;
+        return std::array{lower, upper};
+    }
+
+    // patches weighing more than in.patch_weight halved (halve) until none does or none can be:
+    //  each round one weigh of all the round's patches, a halved patch's halves in its place
+    template<std::size_t dim>
+    std::vector<core::Box<int, dim>> split_heavy(Decompose<dim> const& in, int const ln,
+                                                 int const unit,
+                                                 std::vector<core::Box<int, dim>> patches)
+    {
+        if (in.patch_weight <= 0.)
+            return patches;
+        while (true)
+        {
+            auto const w = in.weigh(ln, patches);
+            if (w.size() != patches.size())
+                throw std::runtime_error("damn::amr::decompose: one weight per patch");
+            std::vector<core::Box<int, dim>> next;
+            next.reserve(patches.size());
+            bool any = false;
+            for (std::size_t i = 0; i < patches.size(); ++i)
+            {
+                auto const halves = w[i] > in.patch_weight ? halve(patches[i], unit) : std::nullopt;
+                if (!halves)
+                {
+                    next.push_back(patches[i]);
+                    continue;
+                }
+                any = true;
+                next.push_back((*halves)[0]);
+                next.push_back((*halves)[1]);
+            }
+            if (!any)
+                return next;
+            patches = std::move(next);
+        }
+    }
+
     // a level's patches: its boxes chopped; with an under size, the parts under the finer
     // level's boxes first, chopped at it, then the rest
     template<std::size_t dim>
@@ -285,7 +347,7 @@ namespace detail
             for (auto const& box : bs)
                 for (auto const& b : chop_evenly(box, s, ln > 0 ? r : 1))
                     patches.push_back(b);
-            return patches;
+            return split_heavy(in, ln, ln > 0 ? r : 1, std::move(patches));
         };
         if (!finer or under[0] <= 0)
             return chop(boxes, size);

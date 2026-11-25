@@ -1,7 +1,9 @@
 // damn::amr::decompose and cost.hpp: "levels" on one rank is chop_evenly + partition; on several
 // a level of one patch is cut so every rank gets work, refined levels in whole coarser cells;
 // "keep" with the level it replaces keeps every owner; levels decomposed together keep the old
-// finer levels for "keep"; CostModel's terms, CostMap's prorated counts and weigh_by
+// finer levels for "keep"; patch_weight halves the heavy patches only (whole coarser cells on a
+// refined level, kept by "keep" on their owner); CostModel's terms, CostMap's prorated counts and
+// weigh_by
 
 #include "damn/amr/decompose.hpp"
 #include "damn/amr/cost.hpp"
@@ -45,6 +47,49 @@ namespace
     Weigh<2> by_cells()
     {
         return [](int, std::vector<Box2> const& boxes) { return cell_weights(boxes); };
+    }
+
+    // a weight per box: its cells, plus `extra` per cell of `hot` in it (a refined region)
+    Weigh<2> with_hot(Box2 const& hot, double const extra)
+    {
+        return [=](int, std::vector<Box2> const& boxes) {
+            std::vector<double> out;
+            for (auto const& b : boxes)
+            {
+                auto const o = b * hot;
+                out.push_back(static_cast<double>(b.size())
+                              + (o ? extra * static_cast<double>(o->size()) : 0.));
+            }
+            return out;
+        };
+    }
+
+    // the patches cover `cells` once
+    void expect_cover(Level<2> const& level, std::vector<Box2> const& cells)
+    {
+        std::size_t total = 0, in_patches = 0;
+        for (auto const& b : cells)
+            total += b.size();
+        for (std::size_t i = 0; i < level.patches.size(); ++i)
+        {
+            in_patches += level.patches[i].box.size();
+            for (std::size_t j = i + 1; j < level.patches.size(); ++j)
+                EXPECT_FALSE(level.patches[i].box * level.patches[j].box) << i << " " << j;
+        }
+        EXPECT_EQ(in_patches, total);
+    }
+
+    // every patch at most `most` by weigh, or one unit wide (unsplittable)
+    void expect_light(Level<2> const& level, Weigh<2> const& weigh, double const most,
+                      int const unit)
+    {
+        for (auto const& p : level.patches)
+        {
+            auto const w         = weigh(level.number, {p.box}).front();
+            auto const sh        = p.box.shape();
+            bool const unit_wide = sh[0] <= unit and sh[1] <= unit;
+            EXPECT_TRUE(w <= most or unit_wide) << p.box << " " << w;
+        }
     }
 
     std::vector<double> loads(Level<2> const& level, int const n_ranks)
@@ -134,6 +179,86 @@ TEST(Decompose, KeepWithTheReplacedLevelKeepsEveryOwner)
                     EXPECT_EQ(p.rank, q.rank) << "level " << ln;
                 }
     }
+}
+
+TEST(Decompose, PatchWeightHalvesTheHeavyPatchesOnly)
+{
+    auto const h        = hierarchy(box(0, 0, 39, 39));
+    auto const topology = single_node(1);
+    auto const weigh    = with_hot(box(0, 0, 9, 9), 99.); // 100 per hot cell
+    Decompose<2> in{topology, weigh, {20, 20}};
+    auto const plain = decompose_level(h, 0, {h.domain}, in);
+    ASSERT_EQ(plain.patches.size(), 4u);
+    in.patch_weight  = 1000.;
+    auto const level = decompose_level(h, 0, {h.domain}, in);
+    expect_cover(level, {h.domain});
+    expect_light(level, weigh, in.patch_weight, 1);
+    // the patches away from the hot one as they were
+    std::size_t away = 0;
+    for (auto const& p : plain.patches)
+        if (!(p.box * box(0, 0, 9, 9)))
+        {
+            ++away;
+            EXPECT_TRUE(std::any_of(level.patches.begin(), level.patches.end(), [&](auto const& q) {
+                return q.box == p.box;
+            })) << p.box;
+        }
+    EXPECT_EQ(away, 3u);
+    EXPECT_GT(level.patches.size(), 4u + 10u); // 10000 hot over patches of at most 1000
+}
+
+TEST(Decompose, PatchWeightKeepLeavesTheHalvesOnTheOwner)
+{
+    auto h              = hierarchy(box(0, 0, 39, 39));
+    auto const topology = single_node(2);
+    auto const weigh    = with_hot(box(20, 20, 29, 29), 99.);
+    Decompose<2> in{topology, by_cells(), {20, 20}, "levels", -1., 8, false};
+    auto const before = decompose_level(h, 0, {h.domain}, in);
+    set_level(h, before);
+
+    in.weigh         = weigh;
+    in.partition     = "keep";
+    in.patch_weight  = 2000.;
+    auto const after = decompose_level(h, 0, {h.domain}, in);
+    expect_cover(after, {h.domain});
+    expect_light(after, weigh, in.patch_weight, 1);
+    EXPECT_GT(after.patches.size(), before.patches.size());
+    for (auto const& p : after.patches)
+        for (auto const& q : before.patches)
+            if (p.box * q.box)
+            {
+                EXPECT_EQ(p.rank, q.rank) << p.box;
+            }
+}
+
+TEST(Decompose, PatchWeightOnARefinedLevelInWholeCoarseCells)
+{
+    auto h              = hierarchy(box(0, 0, 31, 31)); // ratio 2
+    auto const topology = single_node(1);
+    auto const weigh    = with_hot(box(20, 20, 27, 27), 49.);
+    Decompose<2> in{topology, weigh, {32, 32}};
+    in.patch_weight   = 500.;
+    auto const levels = decompose(h, 0, {{h.domain}, {box(10, 10, 49, 29)}}, in);
+    ASSERT_EQ(levels.size(), 2u);
+    expect_cover(levels[1], {box(10, 10, 49, 29)});
+    expect_light(levels[1], weigh, in.patch_weight, 2);
+    for (auto const& p : levels[1].patches)
+        for (std::size_t d = 0; d < 2; ++d)
+        {
+            EXPECT_EQ(p.box.lower[d] % 2, 0) << p.box;
+            EXPECT_EQ(p.box.shape()[d] % 2, 0) << p.box;
+        }
+}
+
+TEST(Decompose, PatchWeightStopsAtOneUnit)
+{
+    auto const h        = hierarchy(box(0, 0, 7, 7));
+    auto const topology = single_node(1);
+    Decompose<2> in{topology, by_cells(), {8, 8}};
+    in.patch_weight  = 0.5; // below a cell: every patch halved to one cell
+    auto const level = decompose_level(h, 0, {h.domain}, in);
+    expect_cover(level, {h.domain});
+    EXPECT_EQ(level.patches.size(), 64u);
 }
 
 TEST(Decompose, UnknownPartitionThrows)
