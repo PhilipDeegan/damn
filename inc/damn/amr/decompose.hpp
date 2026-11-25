@@ -8,7 +8,7 @@
 //   Decompose{topology, weigh, patch_size, partition, spill, block, cut, level_size,
 //             under_size}
 //       topology: the ranks and where they are; weigh: per level and box what to balance
-//       (cost.hpp: a CostModel over particle counts, or the caller's own); patch_size: the
+//       (cost.hpp: a CostModel over counts, or the caller's own); patch_size: the
 //       largest patch in the level's cells, every level, unless level_size gives one per level
 //       (the last for the finer levels); under_size: per level the same for the cells under the
 //       next finer level (chopped apart from the rest, so a coarse patch sits under one fine
