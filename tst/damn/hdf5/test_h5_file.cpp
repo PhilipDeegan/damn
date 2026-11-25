@@ -19,7 +19,11 @@ using damn::hdf5::h5::HighFiveFile;
 
 namespace
 {
-std::string const file_name = "test_damn_h5_file.h5";
+// per number of ranks: runs on 1 and 2 ranks may be concurrent (tst/.phlop.exec.yaml)
+std::string file_name()
+{
+    return "test_damn_h5_file_n" + std::to_string(mpi::size()) + ".h5";
+}
 
 std::vector<double> values_for(int const rank) // rank r writes r + 1 values
 {
@@ -37,7 +41,8 @@ std::string path_for(int const rank)
 
 TEST(HighFiveFile, serialRoundTripOfFlatAndNestedDatasets)
 {
-    auto const name = "serial_r" + std::to_string(mpi::rank()) + ".h5";
+    auto const name
+        = "serial_n" + std::to_string(mpi::size()) + "_r" + std::to_string(mpi::rank()) + ".h5";
     std::vector<double> const flat{1.5, 2.5, 3.5, 4.5};
     std::vector<std::vector<int>> const nested{{1, 2, 3}, {4, 5, 6}};
     {
@@ -69,7 +74,7 @@ TEST(HighFiveFile, eachRankWritesItsOwnDatasetAndAttribute)
 {
     auto const rank = mpi::rank();
     {
-        HighFiveFile h5{file_name, HiFile::Truncate};
+        HighFiveFile h5{file_name(), HiFile::Truncate};
         auto const values = values_for(rank);
         // every rank creates every rank's dataset, then writes its own
         h5.create_data_set_per_mpi<double>(path_for(rank) + "/v", values.size());
@@ -79,7 +84,7 @@ TEST(HighFiveFile, eachRankWritesItsOwnDatasetAndAttribute)
     }
     mpi::barrier();
     {
-        HighFiveFile h5{file_name, HiFile::ReadOnly};
+        HighFiveFile h5{file_name(), HiFile::ReadOnly};
         EXPECT_EQ(h5.read_attribute<int>("/", "n_ranks"), mpi::size());
         for (int r = 0; r < mpi::size(); ++r)
         {
@@ -89,12 +94,13 @@ TEST(HighFiveFile, eachRankWritesItsOwnDatasetAndAttribute)
     }
     mpi::barrier();
     if (rank == 0)
-        std::remove(file_name.c_str());
+        std::remove(file_name().c_str());
 }
 
 TEST(HighFiveFile, resizableDatasetsStartEmpty)
 {
-    auto const name = "resizable_r" + std::to_string(mpi::rank()) + ".h5";
+    auto const name
+        = "resizable_n" + std::to_string(mpi::size()) + "_r" + std::to_string(mpi::rank()) + ".h5";
     {
         HighFiveFile h5{name, HiFile::Truncate, /*para=*/false};
         auto one = h5.create_resizable_1d_data_set<double>("/g/one", 8);

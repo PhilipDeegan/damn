@@ -141,7 +141,7 @@ namespace
     void round_trip(int const n_patches)
     {
         int const rank = mpi::rank(), size = mpi::size();
-        std::string const name = "test_damn_checkpoint.h5";
+        std::string const name = "test_damn_checkpoint_n" + std::to_string(size) + ".h5";
 
         std::vector<Box2> boxes;
         std::vector<int> owners;
