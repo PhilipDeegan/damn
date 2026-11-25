@@ -57,6 +57,34 @@ TEST(KelvinInterLevel, eachSublatticeNestsInItself)
     EXPECT_THROW(check_ratio(2), std::runtime_error);
 }
 
+// a domain's sites on the finer level: a coarse site's coincident fine site is in it if the coarse
+//  site is; periodic, its cells are the coarse ones refined
+TEST(KelvinInterLevel, refinedKeys)
+{
+    KeyBox<3> const periodic{
+        Key<3>{std::array{-8, -6, 0}}, Key<3>{std::array{7, 5, 3}}, {true, true, true}};
+    KeyBox<3> const bounded{Key<3>{std::array{-7, -6, -5}}, Key<3>{std::array{7, 6, 5}}, {}};
+    for (int const r : {1, 3, 5})
+    {
+        auto const fp = refined_keys(periodic, r);
+        EXPECT_NO_THROW(fp.check());
+        EXPECT_EQ(fp.cells(), core::refine(periodic.cells(), r));
+        for (auto const* keys : {&periodic, &bounded})
+        {
+            auto const fine = refined_keys(*keys, r);
+            for (auto const site : {Site::corner, Site::body})
+                core::for_each_point(core::grow(keys->cells(), 1), [&](auto const& c) {
+                    auto const f = coincident_fine(core::Point<int, 3>{c}, site, r);
+                    EXPECT_EQ(fine.has(f, site), keys->has(c, site)) << c;
+                });
+        }
+    }
+    auto const fb = refined_keys(bounded, 3);
+    EXPECT_EQ(fb.lower, (Key<3>{std::array{-21, -18, -15}}));
+    EXPECT_EQ(fb.upper, (Key<3>{std::array{21, 18, 15}}));
+    EXPECT_THROW((void)refined_keys(bounded, 2), std::runtime_error);
+}
+
 
 namespace
 {
