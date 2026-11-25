@@ -10,7 +10,7 @@
 // every rank plans the same pieces in the same order (fine patches, then their links, in level
 // order), so a message is the pieces' data only: one message per peer rank and transfer
 //   refine:  coarse ranks pack and send (MPI_Isend), local pieces go directly, fine ranks
-//            receive (MPI_Probe: particle messages vary in size) and unpack, then op fills the
+//            receive (MPI_Probe: item messages vary in size) and unpack, then op fills the
 //            fine field points from the gathered coarse values
 //   coarsen: fine ranks compute (op) and send, or assign directly; coarse ranks receive
 

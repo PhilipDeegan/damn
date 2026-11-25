@@ -1,9 +1,9 @@
-#ifndef DAMN_AMR_PARTICLE_DATA_HPP
-#define DAMN_AMR_PARTICLE_DATA_HPP
+#ifndef DAMN_AMR_CELL_ITEM_DATA_HPP
+#define DAMN_AMR_CELL_ITEM_DATA_HPP
 
-// ParticleData: a resource holding items (particles) that each sit in a cell of the level
-// (AMR) index space. damn moves items between patches through the user's free functions,
-// found by ADL:
+// CellItemData: a resource holding items that each sit in a cell of the level (AMR) index space,
+// whatever they are (particles, or anything located by cell): damn never looks inside one. damn
+// moves items between patches through the user's free functions, found by ADL:
 //
 //   Box<int, dim> domain_box(resource, patch_box)     // the cells the patch owns
 //   Box<int, dim> ghost_box(resource, patch_box)      // the cells it may hold items in
@@ -32,7 +32,7 @@ namespace detail
 } // namespace detail
 
 template<typename R, std::size_t dim>
-concept ParticleData = requires(R& r, R const& cr, core::Box<int, dim> const& box,
+concept CellItemData = requires(R& r, R const& cr, core::Box<int, dim> const& box,
                                 core::Point<int, dim> const& shift) {
     { domain_box(cr, box) } -> std::same_as<core::Box<int, dim>>;
     { ghost_box(cr, box) } -> std::same_as<core::Box<int, dim>>;
@@ -44,4 +44,4 @@ concept ParticleData = requires(R& r, R const& cr, core::Box<int, dim> const& bo
 
 } // namespace damn::amr
 
-#endif // DAMN_AMR_PARTICLE_DATA_HPP
+#endif // DAMN_AMR_CELL_ITEM_DATA_HPP

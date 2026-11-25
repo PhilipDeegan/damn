@@ -98,7 +98,7 @@ struct LevelPiece
     std::size_t target = 0;
     Link<dim> coarse{};
     core::Box<int, dim> box{};
-    std::size_t bytes = 0; // fields (0 for particles: their number varies)
+    std::size_t bytes = 0; // fields (0 for items: their number varies)
 };
 
 // what goes where for a region, resources and stencil, from one rank's point of view: every

@@ -14,16 +14,16 @@
 //   BoxData:       the values on the domain points both share: domain_box(resource, box) of
 //                  either, e.g. a primal node on the border of an old patch next to the new one,
 //                  without shared cells
-//   ParticleData:  the items whose cell is in the shared cells: domain items only, ghost items
+//   CellItemData:  the items whose cell is in the shared cells: domain items only, ghost items
 //                  are outside every old domain
 // for every resource of those kinds (for_each_resource); other resources are left as made.
-// Ghosts are not filled: copy fill_ghosts (and the particle ghosts) on the new level after.
+// Ghosts are not filled: copy fill_ghosts (and the item ghosts) on the new level after.
 //
 // Unless the old ghosts are valid (RegridGhosts: e.g. a rebalance after a step, the ghosts as
 // the step left them): a field resource named there also gets its new ghost nodes, from an old
 // domain where one holds the node, else from an old patch's ghosts (level border and physical
-// ghosts: no old domain holds them); a particle resource named there gets its items in the ghost
-// cells of both patches (its own width; level ghost particles: a cell may be in two new patches'
+// ghosts: no old domain holds them); an item resource named there gets its items in the ghost
+// cells of both patches (its own width; level ghost items: a cell may be in two new patches'
 // ghost cells, the caller keeps the copy of the owner). What nothing covers is left as made (NaN in
 // a debug build): what the caller must refine or fill
 //
@@ -41,8 +41,8 @@
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
-#include "damn/amr/particle_data.hpp"
-#include "damn/amr/particle_items.hpp"
+#include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/cell_items.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -63,15 +63,15 @@ struct RegridGhosts
 {
     int reach = 0;
     std::vector<std::string> fields{};    // BoxData resources
-    std::vector<std::string> particles{}; // ParticleData resources
+    std::vector<std::string> items{};     // CellItemData resources
 
     MKN_KUL_FN_SIG_RET bool field(std::string_view const name) const
     {
         return std::find(fields.begin(), fields.end(), name) != fields.end();
     }
-    MKN_KUL_FN_SIG_RET bool particle(std::string_view const name) const
+    MKN_KUL_FN_SIG_RET bool item(std::string_view const name) const
     {
-        return std::find(particles.begin(), particles.end(), name) != particles.end();
+        return std::find(items.begin(), items.end(), name) != items.end();
     }
 };
 
@@ -218,25 +218,25 @@ namespace detail
         return out;
     }
 
-    // the cells a particle resource's items are taken from: those both share, or, its ghosts
+    // the cells an item resource's items are taken from: those both share, or, its ghosts
     //  valid, its ghost cells (the resource's own width) on both sides
     template<std::size_t dim>
     MKN_KUL_FN_SIG_RET std::optional<core::Box<int, dim>>
     transfer_cells(RegridMap<dim> const& map, Transfer<dim> const& t, std::string_view const name,
                    auto const& res)
     {
-        if (!map.ghosts.particle(name))
+        if (!map.ghosts.item(name))
             return t.cells;
         return ghost_box(res, core::shift(t.from.box, t.shift)) * ghost_box(res, t.to.box);
     }
 
-    // fn(name, resource) for data's resources damn can regrid: BoxData and ParticleData
+    // fn(name, resource) for data's resources damn can regrid: BoxData and CellItemData
     template<std::size_t dim, typename PatchData>
     void for_each_regridded(PatchData& data, auto&& fn)
     {
         for_each_resource(data, [&](std::string_view const name, auto& resource) {
             using R = std::decay_t<decltype(resource)>;
-            if constexpr (BoxData<R, dim> or ParticleData<R, dim>)
+            if constexpr (BoxData<R, dim> or CellItemData<R, dim>)
                 fn(name, resource);
         });
     }
@@ -249,10 +249,10 @@ namespace detail
     {
         for_each_regridded<dim>(src, [&](std::string_view const name, auto const& res) {
             using R = std::decay_t<decltype(res)>;
-            if constexpr (ParticleData<R, dim>)
+            if constexpr (CellItemData<R, dim>)
             {
                 if (auto const cells = transfer_cells(map, t, name, res))
-                    particle_items::pack(res, *cells, t.shift, out);
+                    cell_items::pack(res, *cells, t.shift, out);
                 else // no cells: a zero count, damn's (both sides have the transfer)
                     write(out, std::uint64_t{0});
             }
@@ -275,10 +275,10 @@ namespace detail
     {
         for_each_regridded<dim>(dst, [&](std::string_view const name, auto& res) {
             using R = std::decay_t<decltype(res)>;
-            if constexpr (ParticleData<R, dim>)
+            if constexpr (CellItemData<R, dim>)
             {
                 if (transfer_cells(map, t, name, res))
-                    particle_items::unpack(res, at, t.shift);
+                    cell_items::unpack(res, at, t.shift);
                 else
                     (void)read<std::uint64_t>(at);
             }
@@ -302,10 +302,10 @@ namespace detail
             bool const found = with_resource(src, name, [&](auto const& s) {
                 if constexpr (std::is_same_v<std::decay_t<decltype(s)>, R>)
                 {
-                    if constexpr (ParticleData<R, dim>)
+                    if constexpr (CellItemData<R, dim>)
                     {
                         if (auto const cells = transfer_cells(map, t, name, d))
-                            particle_items::append_from(d, s, *cells, t.shift);
+                            cell_items::append_from(d, s, *cells, t.shift);
                     }
                     else
                         for (auto const& box : transfer_points(map, t, name, d))
@@ -394,8 +394,8 @@ namespace detail
         {
             auto& made = make_new(d); // made, if nothing reached it
             for_each_regridded<dim>(made, [](std::string_view, auto& res) {
-                if constexpr (ParticleData<std::decay_t<decltype(res)>, dim>)
-                    particle_items::appended(res); // items in from every transfer
+                if constexpr (CellItemData<std::decay_t<decltype(res)>, dim>)
+                    cell_items::appended(res); // items in from every transfer
             });
             out.data.emplace_back(std::move(made));
         }

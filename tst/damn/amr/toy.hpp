@@ -68,7 +68,7 @@ struct Population
 {
     std::string name;
     Field density;
-    std::vector<int> particles; // neither BoxData nor ParticleData
+    std::vector<int> particles; // neither BoxData nor CellItemData
 };
 
 // a particle: its cell and where it started, for checks
@@ -191,8 +191,8 @@ namespace damn::amr
 {
 static_assert(BoxData<toy::Field, 2>);
 static_assert(not BoxData<std::vector<int>, 2>);
-static_assert(ParticleData<toy::Particles, 2>);
-static_assert(not ParticleData<std::vector<int>, 2>);
+static_assert(CellItemData<toy::Particles, 2>);
+static_assert(not CellItemData<std::vector<int>, 2>);
 static_assert(not BoxData<toy::Particles, 2>);
 
 namespace

@@ -16,7 +16,7 @@
 //       filled from the level below it, so a level only ever reads the next coarser one), then
 //       BoxData:      op(fine_resource, fine_patch_box, box, BoxValues<T const> coarse)
 //                     fills the fine points of box from the coarse values
-//       ParticleData: op(fine_resource, fine_patch_box, box, std::span<Item const> coarse,
+//       CellItemData: op(fine_resource, fine_patch_box, box, std::span<Item const> coarse,
 //                        shift)
 //                     per coarse patch image: appends the fine items (e.g. split coarse ones)
 //                     whose cell is in box; coarse items' cells are at cell(item) + shift in
@@ -52,11 +52,11 @@
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/copy.hpp"
-#include "damn/amr/particle_data.hpp"
+#include "damn/amr/cell_item_data.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
-#include "damn/amr/particle_items.hpp"
+#include "damn/amr/cell_items.hpp"
 
 #include <algorithm>
 #include <array>
@@ -123,7 +123,7 @@ namespace detail
     bool with_side(Access const& access, Data& data, LevelPair const& pair, std::size_t i, Fn&& fn);
 
     // fn(resource) for the first patch data of either level holding name, of the kind wanted
-    template<std::size_t dim, bool particles, typename CoarseLD, typename FineLD, typename Fn>
+    template<std::size_t dim, bool items, typename CoarseLD, typename FineLD, typename Fn>
     void with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name, Fn&& fn);
 
     // the fine target boxes of a fine patch for a region
@@ -202,8 +202,8 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
     bool found
         = detail::with_side<Side::coarse>(access, coarse_data, pair, pi, [&](auto const& src) {
               using R = std::decay_t<decltype(src)>;
-              if constexpr (ParticleData<R, dim>)
-                  particle_items::pack(src, piece.box, shift, out);
+              if constexpr (CellItemData<R, dim>)
+                  cell_items::pack(src, piece.box, shift, out);
               else if constexpr (BoxData<R, dim>)
               {
                   using T = box_data_value_t<R, dim>;
@@ -241,7 +241,7 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
               }
               else
                   throw std::runtime_error("damn::amr::refine: " + pair.coarse
-                                           + " is neither BoxData nor ParticleData");
+                                           + " is neither BoxData nor CellItemData");
           });
     if (!found)
         throw std::runtime_error("damn::amr::refine: no resource " + pair.coarse);
@@ -260,10 +260,10 @@ void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Acc
     bool found = detail::with_side<
         detail::Side::fine>(access, fine_data, pair, target.pair, [&](auto& dst) {
         using R = std::decay_t<decltype(dst)>;
-        if constexpr (ParticleData<R, dim>)
+        if constexpr (CellItemData<R, dim>)
         {
             using Item       = typename R::value_type;
-            auto const items = particle_items::read(dst, at); // the coarse items
+            auto const items = cell_items::read(dst, at); // the coarse items
             if constexpr (std::invocable<decltype(op)&, R&, core::Box<int, dim> const&,
                                          core::Box<int, dim> const&, std::span<Item const>,
                                          core::Point<int, dim> const&>)
@@ -539,7 +539,7 @@ bool detail::with_side(Access const& access, Data& data, LevelPair const&, std::
     return true;
 }
 
-template<std::size_t dim, bool particles, typename CoarseLD, typename FineLD, typename Fn>
+template<std::size_t dim, bool items, typename CoarseLD, typename FineLD, typename Fn>
 void detail::with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name,
                                Fn&& fn)
 {
@@ -551,13 +551,13 @@ void detail::with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string
             return false;
         return with_resource(*any, name, [&](auto const& r) {
             using R = std::decay_t<decltype(r)>;
-            if constexpr (particles)
+            if constexpr (items)
             {
-                if constexpr (ParticleData<R, dim>)
+                if constexpr (CellItemData<R, dim>)
                     fn(r);
                 else
                     throw std::runtime_error("damn::amr::inter_level: " + name
-                                             + " is not ParticleData");
+                                             + " is not CellItemData");
             }
             else if constexpr (BoxData<R, dim>)
                 fn(r);
@@ -676,19 +676,19 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
     for (std::size_t pi = 0; pi < pairs.size(); ++pi)
     {
         auto const& pair     = pairs[pi];
-        bool const particles = [&] {
+        bool const items     = [&] {
             bool is          = false;
             auto const probe = [&](auto& ld) {
                 auto* const any = any_patch_data(ld);
                 return any and with_resource(*any, pair.fine, [&](auto const& r) {
-                           is = ParticleData<std::decay_t<decltype(r)>, dim>;
+                           is = CellItemData<std::decay_t<decltype(r)>, dim>;
                        });
             };
             if (!probe(fine_ld) and !probe(coarse_ld))
                 throw std::runtime_error("damn::amr::inter_level: no resource " + pair.fine);
             return is;
         }();
-        if (particles and region == LevelRegion::Coarsened)
+        if (items and region == LevelRegion::Coarsened)
             throw std::runtime_error("damn::amr::coarsen: " + pair.fine + " is not BoxData");
 
         auto const plan_pair = [&](auto const& fres, auto const& cres) {
@@ -734,7 +734,7 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
                             + std::to_string(map.reach));
 
                     std::size_t offset = 0;
-                    if (!particles and fine_local != not_local)
+                    if (!items and fine_local != not_local)
                     {
                         offset = scratch;
                         scratch += aligned<dim>(coarse_box.size() * value_size);
@@ -747,7 +747,7 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
                             plan->pieces.push_back({plan->targets.size() - 1, link, *overlap,
                                                     overlap->size() * value_size});
                     }
-                    if (!particles)
+                    if (!items)
                         for (auto const& [link, overlap] :
                              coarse_ghost_sources(map, f, cres, coarse_box, *links))
                             plan->pieces.push_back({plan->targets.size() - 1, link, overlap,
@@ -756,7 +756,7 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
             }
         };
 
-        if (particles)
+        if (items)
             with_any_resource<dim, true>(coarse_ld, fine_ld, pair.fine, [&](auto const& fres) {
                 with_any_resource<dim, true>(coarse_ld, fine_ld, pair.coarse,
                                              [&](auto const& cres) { plan_pair(fres, cres); });

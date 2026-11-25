@@ -44,7 +44,7 @@ struct Link
 };
 
 // what moves between patches for a resource: from src's resource to dst's (the same name for
-// fields, e.g. a patch ghost particle array to a domain one for particles)
+// fields, e.g. a patch ghost item resource to a domain one)
 struct ResourcePair
 {
     std::string src{};
@@ -79,7 +79,7 @@ struct Piece
     ResourcePair names{};
     core::Box<int, dim> box{}; // dst points (or cells), level index space
     std::size_t offset = 0;    // into the plan's buffer, if it goes through one (bytes)
-    std::size_t bytes  = 0;    // field values (0 for particles: their number varies)
+    std::size_t bytes  = 0;    // field values (0 for items: their number varies)
     int dst_rank       = 0;
     std::uint32_t pair = 0; // its resources' index in the copy's pairs (and accessors)
 };
