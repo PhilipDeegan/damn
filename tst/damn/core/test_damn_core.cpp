@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <type_traits>
 
 namespace damn::core
 {
@@ -66,6 +67,25 @@ std::array<int, dim> scaled(Scaled<dim> const& in)
 }
 
 DAMN_DAO_FN(inline, scaled, Scaled)
+
+// no return value: the overload returns void too
+template<std::size_t dim>
+void scale(Scaled<dim> const& in, std::array<int, dim>& out)
+{
+    out = scaled(in);
+}
+template<std::size_t dim>
+struct ScaleInto
+{
+    Scaled<dim> in;
+    std::array<int, dim>& out;
+};
+template<std::size_t dim>
+void scale_into(ScaleInto<dim> const& s)
+{
+    scale(s.in, s.out);
+}
+DAMN_DAO_FN(inline, scale_into, ScaleInto)
 } // namespace damn::test
 
 TEST(DamnCore, dao_fn_builds_the_dao_from_arguments)
@@ -76,6 +96,11 @@ TEST(DamnCore, dao_fn_builds_the_dao_from_arguments)
     EXPECT_EQ(damn::test::scaled(damn::test::Scaled{v, 4}), (std::array{4, 8, 12})); // the DAO
     std::array const w{5, 6};
     EXPECT_EQ(damn::test::scaled(w), (std::array{10, 12})); // dim 2 from the same overload
+
+    std::array<int, 3> out{};
+    static_assert(std::is_void_v<decltype(damn::test::scale_into(damn::test::Scaled{v}, out))>);
+    damn::test::scale_into(damn::test::Scaled{v, 5}, out);
+    EXPECT_EQ(out, (std::array{5, 10, 15}));
 }
 
 int main(int argc, char** argv)
