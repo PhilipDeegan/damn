@@ -1,54 +1,8 @@
 #ifndef DAMN_AMR_DECOMPOSE_HPP
 #define DAMN_AMR_DECOMPOSE_HPP
 
-// a hierarchy's decomposition: each level's boxes (its cells, from clustering or given) chopped
-// into patches and the patches given ranks. The one code path for a run and for decompositions
-// made without one (plamn's bindings), so both give the same patches and owners
-//
-//   Decompose{topology, weigh, patch_size, partition, spill, block, cut, level_size,
-//             under_size}
-//       topology: the ranks and where they are; weigh: per level and box what to balance
-//       (cost.hpp: a CostModel over counts, or the caller's own); patch_size: the
-//       largest patch in the level's cells, every level, unless level_size gives one per level
-//       (the last for the finer levels); under_size: per level the same for the cells under the
-//       next finer level (chopped apart from the rest, so a coarse patch sits under one fine
-//       patch; zeros: none). A refined level's sizes are rounded down to a multiple of the
-//       ratio, at least the ratio: patches of whole coarser cells
-//   decompose_level(h, ln, boxes, in[, finer])
-//       level ln from its boxes, h holding the coarser levels and (partition "keep") the level
-//       being replaced; finer: the next finer level's boxes, if known (under_size):
-//       "levels"  boxes chopped evenly (chop_evenly), on one rank partitioned whole along the
-//                 curve; on several cut where a rank's share ends inside a patch (cut_partition,
-//                 blocks of `block` cells, refined levels' in whole coarser cells), so every
-//                 rank gets work whatever the patch size (cut false: partitioned whole)
-//       "keep"    the cells where the replaced level held them to their owner, else to the owner
-//                 of the coarser patch under them, the rest chopped and partitioned along the
-//                 curve (keep_partition.hpp); each rank's pieces coalesced and chopped; then, with
-//                 spill >= 0, spill(tol = spill)
-//   decompose(h, from, boxes, in)
-//       levels from, from + 1, ... from boxes[0], boxes[1], ...; "levels" and "keep" level by
-//       level, each made on the ones before it; and, knowing every level:
-//       "finest"  cut on several ranks (cut true): each level, finest to coarsest, in pieces,
-//                 the cells under the finer level to the owners of the finer patches above,
-//                 else to the fixed coarser level's owners under them (from > 0), the rest cut
-//                 where a rank's share ends; each rank's pieces coalesced and chopped, spilled.
-//                 Whole patches (cut false, one rank):
-//                 the finest level partitioned whole along the curve; each coarser one, finer to
-//                 coarser, a patch to the owner of most of the fine cells above it, the patches
-//                 with none above along the curve among themselves; then spill (spill >= 0).
-//                 A fine patch and the coarse cells under it on one rank: refining and
-//                 synchronizing without messages
-//                 from > 0 (a regrid of the finer levels, `from - 1` fixed): the coarsest new
-//                 level's patches with nothing above them (the finest alone: all of them) to the
-//                 owner of most of the fixed cells under them
-//       "aligned" level `from` along the curve (from > 0: on the fixed level under it); each
-//                 finer one, coarser to finer, a patch to the owner of most of the coarse cells
-//                 under it; then spill (spill >= 0)
-//       decompose_level with "finest" / "aligned" (a level alone, the finer unknown): to the
-//                 owners of the coarser cells under it, spilled; level 0 as "levels"
-//
-// Deterministic: every rank computes the same levels from the same weights (weigh may be
-// collective: it is called in the same order on every rank)
+// patches and owners for a hierarchy's levels: doc/amr/decompose.md
+// weigh may be collective: every rank calls it in the same order
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
@@ -83,17 +37,12 @@ struct Decompose
     bool cut              = true;      // levels: cut patches on several ranks; false: whole
     std::vector<std::array<int, dim>> level_size{}; // per level, else patch_size
     std::vector<std::array<int, dim>> under_size{}; // per level, under the finer level; 0: none
-    // finest in pieces: level 0's near region, its cells within near_band of level 1 (what
-    //  level 1's coarse step reads: where its level ghosts split from), to level 1's owners;
-    //  level 0 beyond it (far, detached: needed only by the coarse step's end) cut along the
-    //  curve with the rest of level 0 (with one thread a rank it stays in level 0's phase:
-    //  collectives, dumps; with more it can be background work, placed contiguous)
-    int near_band = 0;
+    int near_band = 0;                              // finest in pieces: doc/amr/decompose.md
 };
 
 namespace detail
 {
-    // the level's chop sizes from in: (size, under size), refined levels' in whole coarse cells
+    // (size, under size), refined levels' in whole coarse cells
     template<std::size_t dim>
     std::pair<std::array<int, dim>, std::array<int, dim>> chop_sizes(Decompose<dim> const& in,
                                                                      int const ln, int const r)
@@ -372,9 +321,6 @@ namespace detail
         std::vector<std::vector<int>> ranks(n);
         if (in.partition == "finest")
         {
-            // the fixed level under `from` (a regrid of the finer levels only): the coarsest new
-            //  level's patches with nothing above them (all of them, the finest alone) to the
-            //  owner of most of the fixed cells under them
             auto const [below, below_ranks] = fixed_coarser();
             auto const under_fixed          = [&](std::vector<int>& rk) {
                 if (below.empty())
@@ -429,12 +375,7 @@ namespace detail
 
 namespace detail
 {
-    // "finest" on several ranks, patches cut (in.cut): each level, finest to coarsest, in
-    //  pieces: the cells under the finer level to the owners of the finer patches above them,
-    //  else (the coarsest new level, from > 0) to the owners of the fixed coarser cells under
-    //  them, the rest chopped and cut where a rank's share ends (cut_partition: every rank gets
-    //  work whatever the patch size); each rank's pieces coalesced, chopped, then spilled. A
-    //  coarse patch is never given whole to one rank for the fine cells above part of it
+    // a coarse patch is never given whole to one rank for the fine cells above part of it
     template<std::size_t dim, typename Lattice>
     std::vector<Level<dim>>
     finest_in_pieces(Hierarchy<dim, Lattice> const& h, int const from,
@@ -468,11 +409,8 @@ namespace detail
                     owned.push_back({cut.boxes[i], cut.ranks[i]});
                 return owned;
             };
-            // the finer level's patches in this level's cells: the owners of the cells above;
-            //  on a refined level rounded out to whole coarser cells, so every piece is, made
-            //  disjoint (a cell to the first: keep takes disjoint owners); then each one's near
-            //  band, the cells within near_band of it not under any finer patch nor in an
-            //  earlier band
+            // rounded out to whole coarser cells on a refined level, so every piece is; made
+            //  disjoint because keep takes disjoint owners (a cell goes to the first)
             std::vector<Patch<dim>> above;
             auto const claim = [&](Box_t const& box, Patch<dim> const& p) {
                 std::vector<Box_t> parts{box};
@@ -504,8 +442,8 @@ namespace detail
                 = k == 0 and below ? *below : std::vector<Patch<dim>>{};
             auto const pieces = keep(boxes[k], above, fixed, h.ratio, fresh);
 
-            // each rank's pieces coalesced; with spill, balanced on blocks first (the closest
-            //  rank with room takes one: near pieces stay near their owner), then coalesced again
+            // spill on blocks: the closest rank with room takes one, so near pieces stay near
+            //  their owner
             auto per_rank = owned_boxes(pieces, n_ranks);
             if (in.spill >= 0)
             {
@@ -546,8 +484,6 @@ decompose_level(Hierarchy<dim, Lattice> const& h, int const ln,
                 std::vector<core::Box<int, dim>> const* finer = nullptr)
 {
     using Box_t = core::Box<int, dim>;
-    // "finest" / "aligned", one level (the coarser ones fixed, the finer unknown): to the owners
-    //  of the coarser cells under it, spilled; level 0 as "levels"
     if (in.partition == "finest" or in.partition == "aligned")
     {
         if (ln > 0 and static_cast<std::size_t>(ln - 1) < h.levels.size())
@@ -565,8 +501,7 @@ decompose_level(Hierarchy<dim, Lattice> const& h, int const ln,
     auto const n_ranks = static_cast<int>(in.topology.ranks.size());
     auto const r       = static_cast<int>(h.ratio);
 
-    // the cells shared evenly (no patch left with a few cells); refined levels: patches of
-    // whole coarser cells, the size a multiple of the ratio
+    // evenly: no patch left with a few cells
     auto const chop = [&](std::vector<Box_t> const& bs) {
         return detail::chop_level<dim>(in, ln, r, bs, finer);
     };
@@ -587,9 +522,8 @@ decompose_level(Hierarchy<dim, Lattice> const& h, int const ln,
         whole_coarse(patches);
         if (n_ranks == 1 or !in.cut)
             return make_level(ln, patches, curve(patches));
-        // several ranks: patches cut where a rank's share ends inside one, so every rank gets
-        //  work even when the largest patch size is the domain; refined levels in blocks of
-        //  whole coarser cells (from a patch's lower corner, itself one)
+        // cut so every rank gets work even when the largest patch is the domain; refined
+        //  levels' blocks are whole coarser cells from a patch's lower corner (itself one)
         auto const b     = ln > 0 ? std::max(r, in.block / r * r) : in.block;
         auto const block = mkn::kul::ConstArray<int, dim>(b);
         auto const cut
