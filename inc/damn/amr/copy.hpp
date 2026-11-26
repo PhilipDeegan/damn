@@ -454,9 +454,13 @@ Plan<dim> detail::item_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>&
                             auto& out) {
         auto const dst_domain = domain_box(res, dst.box);
         for (auto const& link : links)
+        {
+            if (d == not_local and link.local == not_local)
+                continue; // another rank's patch to another rank's: not mine to send
             if (auto const overlap
                 = dst_domain * core::shift(ghost_box(res, link.patch.box), link.shift))
                 out.push_back({d, link, pair, *overlap, 0, 0, dst.rank, k});
+        }
     };
 
     for (std::uint32_t k = 0; k < pairs.size(); ++k)
@@ -489,6 +493,10 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
         using T               = box_data_value_t<decltype(res), dim>;
         auto const dst_ghost  = ghost_box(res, dst.box);
         auto const dst_domain = domain_box(res, dst.box);
+        // Ghosts: a primal node on a patch border is a domain point of each patch sharing it
+        //  (and of its periodic image); the first link covering a ghost point fills it, so one
+        //  piece writes it, and every rank plans the same one (links are in level order)
+        std::vector<core::Box<int, dim>> covered;
 
         for (auto const& link : links)
         {
@@ -497,6 +505,7 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
             auto const overlap = dst_ghost * core::shift(src_box, link.shift);
             if (!overlap)
                 continue;
+            bool const mine = d != not_local or link.local != not_local;
 
             auto const add = [&](auto const& box) {
                 auto const bytes = static_cast<std::size_t>(box.size()) * sizeof(T);
@@ -507,10 +516,23 @@ Plan<dim> detail::box_plan(Region const region, Neighbours<dim> const& n,
                     buffered += bytes;
                 }
             };
-            if (region == Region::Ghosts) // never into dst's own domain
-                for (auto const& box : overlap->remove(dst_domain))
-                    add(box);
-            else
+            if (region == Region::Ghosts) // never into dst's own domain, nor twice
+            {
+                auto boxes = overlap->remove(dst_domain);
+                for (auto const& earlier : covered)
+                {
+                    std::vector<core::Box<int, dim>> left;
+                    for (auto const& box : boxes)
+                        for (auto const& rest : box.remove(earlier))
+                            left.push_back(rest);
+                    boxes = std::move(left);
+                }
+                covered.push_back(*overlap);
+                if (mine)
+                    for (auto const& box : boxes)
+                        add(box);
+            }
+            else if (mine)
                 add(*overlap);
         }
     };

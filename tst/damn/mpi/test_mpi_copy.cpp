@@ -108,6 +108,49 @@ TEST_P(MpiGhostFill, ghostsGetTheNeighboursDomainValues)
     EXPECT_GT(sum_over_ranks(n_filled), 0u);
 }
 
+// each patch's copy of a shared node different: the ghosts are those of one rank holding every
+//  patch (each ghost point filled by the same image whatever the ranks)
+TEST_P(MpiGhostFill, theRanksDoNotMatter)
+{
+    auto const& [name, periodic] = GetParam();
+    auto const set               = [&](auto const& h, auto& ld) {
+        for_each_patch(ld, [&](auto const& patch, auto& data) {
+            auto& f = field(data, name);
+            core::for_each_point(domain_box(f, patch.box), [&](auto const& p) {
+                value(f, patch.box, p) = f_of(h, p) + 1e-3 * (patch.id + 1);
+            });
+        });
+    };
+
+    World s{periodic};
+    set(s.h, s.ld);
+    mpi::copy(fill_ghosts, s.n, {name}, s.ld);
+
+    auto const h1 = make_hierarchy({periodic, periodic}); // every patch on this rank
+    auto one      = allocate(h1.levels[0], 0, make_patch_data);
+    auto n1       = neighbours_of(h1);
+    set(h1, one);
+    copy(fill_ghosts, n1, {name}, one);
+
+    for (std::size_t i = 0; i < size(s.ld); ++i)
+    {
+        auto const& patch = s.ld.patches[i];
+        auto const j      = static_cast<std::size_t>(
+            std::find_if(one.patches.begin(), one.patches.end(),
+                         [&](auto const& p) { return p.box == patch.box; })
+            - one.patches.begin());
+        ASSERT_LT(j, size(one)) << "patch " << patch.id;
+        auto& f  = field(s.ld.data[i], name);
+        auto& f1 = field(one.data[j], name);
+        core::for_each_point(ghost_box(f, patch.box), [&](auto const& p) {
+            auto const x = value(f, patch.box, p), y = value(f1, patch.box, p);
+            EXPECT_TRUE(std::bit_cast<std::uint64_t>(x) == std::bit_cast<std::uint64_t>(y)
+                        or (std::isnan(x) and std::isnan(y)))
+                << name << " patch " << patch.id << " " << p << " " << x << " vs " << y;
+        });
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(Mpi, MpiGhostFill,
                          ::testing::Combine(::testing::Values("Bx", "rho", "Ez", "alpha_density"),
                                             ::testing::Bool()));

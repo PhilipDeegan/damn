@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <algorithm>
 #include <vector>
 
 namespace damn::amr
@@ -129,8 +130,8 @@ struct Neighbours
     std::vector<Patch<dim>> built_on{};     // the level's patches when built
     std::vector<Patch<dim>> local{};        // this rank's, in LevelData order
     std::vector<std::vector<Link<dim>>> of; // of[i]: links of local[i]
-    // other ranks' patches near mine, in level order, with their links to my patches: what I
-    // send them
+    // other ranks' patches near mine, in level order, with all their links: I send them what
+    // the links to my patches give, the others decide which image of a point fills a ghost
     std::vector<std::pair<Patch<dim>, std::vector<Link<dim>>>> remote{};
     std::map<PlanKey, Plan<dim>> plans{}; // copy.hpp's, by region and resources
 };
@@ -188,7 +189,9 @@ MKN_KUL_FN_SIG_RET Neighbours<dim> make_neighbours(Hierarchy<dim, Lattice> const
     if (!n.local.empty())
         for (auto const& dst : level.patches)
             if (dst.rank != rank)
-                if (auto links = links_of(dst, true); !links.empty())
+                if (auto links = links_of(dst, false);
+                    std::any_of(links.begin(), links.end(),
+                                [](auto const& l) { return l.local != not_local; }))
                     n.remote.emplace_back(dst, std::move(links));
 
     return n;
