@@ -27,7 +27,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - run: |
-        apt update && apt install -y curl
+        apt update && apt install -y curl ccache
         $CURL_GET -o mkn $PATH_GET/mkn_nix
         chmod +x mkn
         # build builds the test executables (bin/<profile>/test), phlop runs them below

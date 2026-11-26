@@ -14,6 +14,12 @@ step() { echo; echo "== $*"; }
 #  (unused parameters, variables), and strict aliasing a warning only (third party sources)
 W=(-W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing")
 
+# every build output (dependencies' too) from this run: no library left from an older build, as a
+#  .so an -lname would pick over the .a just built. ccache keeps the rebuild cheap
+step "clean"
+mkn clean -dp test_damn_core -x res/mkn/thrust
+mkn clean -dp test_damn_hdf5 -x res/mkn/mpi
+
 step "core tests"
 mkn build test -p test_damn_core -dKO -t "$J" "${W[@]}" -x res/mkn/thrust
 

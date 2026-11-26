@@ -57,7 +57,7 @@ jobs:
     - run: |  # git before checkout, so the checkout is a repository
         apt-get update
         apt-get install -y --no-install-recommends ca-certificates curl git \
-          g++ openmpi-bin libopenmpi-dev iwyu
+          g++ ccache openmpi-bin libopenmpi-dev iwyu
 
     - uses: actions/checkout@v4
 
@@ -84,7 +84,7 @@ jobs:
     - run: |  # git before checkout, so the checkout is a repository
         apt-get update
         apt-get install -y --no-install-recommends ca-certificates curl git g++ python3 \
-          clang-tidy-22 openmpi-bin libopenmpi-dev libhdf5-openmpi-dev # mpicxx: MPI's flags
+          clang-tidy-22 ccache openmpi-bin libopenmpi-dev libhdf5-openmpi-dev # mpicxx: MPI's flags
         clang-tidy-22 --version
 
     - uses: actions/checkout@v4
