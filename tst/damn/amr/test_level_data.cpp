@@ -1,5 +1,4 @@
-// damn::amr::LevelData with a toy patch struct shaped like a hybrid patch:
-// fixed fields plus a runtime list of populations
+// a toy patch shaped like a hybrid one: fixed fields plus a runtime list of populations
 
 #include "damn/amr/level_data.hpp"
 

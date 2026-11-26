@@ -1,7 +1,3 @@
-// damn::bon: (path, value) pairs as a tree of maps, a node found by its path, a leaf read as T
-// (fallback when missing or not a T), the same over the flat table; damn::bootstrap's facts
-// through it (with or without a bootstrap: whatever entries has, get finds)
-
 #include "damn/core/bon.hpp"
 #include "damn/core/def/bootstrap.hpp"
 

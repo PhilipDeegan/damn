@@ -1,6 +1,4 @@
-// damn::amr::kelvin's LinearRefine / InjectCoarsen through damn::mpi::refine and coarsen, the fine
-// patches on other ranks than the coarse ones under them (kelvin_inter_level_tests.hpp); any
-// number of ranks: mpirun -n 3 ./bin/test_damn_mpi/test_mpi_kelvin_inter_level
+// the fine patches on other ranks than the coarse ones under them; any number of ranks
 
 #include "damn/mpi/inter_level.hpp"
 #include "damn/mpi/mpi_utils.hpp"

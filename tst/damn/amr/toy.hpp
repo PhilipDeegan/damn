@@ -1,8 +1,8 @@
 #ifndef DAMN_TST_AMR_TOY_HPP
 #define DAMN_TST_AMR_TOY_HPP
 
-// a toy field (primal or dual per direction, gw ghosts), toy particles and patch data for
-// damn::amr's copy tests, serial and MPI, and their brute force helpers
+// a toy field (primal or dual per direction, gw ghosts), toy particles and patch data, and
+// their brute force helpers
 
 #include "damn/amr/copy.hpp"
 #include "damn/amr/hierarchy.hpp"

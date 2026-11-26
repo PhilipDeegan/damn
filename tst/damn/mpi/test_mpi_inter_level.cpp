@@ -1,6 +1,4 @@
-// damn::mpi::refine and coarsen: the serial tests' brute force expectations, the fine patches
-// on other ranks than the coarse ones under them (inter_level_tests.hpp). Any number of ranks:
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_inter_level
+// the fine patches on other ranks than the coarse ones under them; any number of ranks
 
 #include "damn/mpi/inter_level.hpp"
 #include "damn/mpi/topology.hpp"

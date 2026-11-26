@@ -1,6 +1,3 @@
-// damn::amr same level copies on a toy field: ghost fills (periodic or not), border sum and
-// max, leaving particles; the Neighbours' links and distances, plans kept and dropped, and
-// the LevelMap between two levels
 // expected values come from brute force over every patch and periodic image
 
 #include "damn/amr/level_map.hpp"
@@ -172,7 +169,7 @@ TEST_P(BorderOps, sumCountsEveryPatchImageCoveringAPoint)
 
 // values whose sums depend on the order they are added in: every patch holding a point ends
 //  with the same bits, those of the contributions added from 0 in the lexicographic order of
-//  their patch images' boxes (PHAREHUB/PHARE#1581)
+//  their patch images' boxes
 TEST_P(BorderOps, sumIsTheSameBitsOnEveryPatchHoldingAPoint)
 {
     auto const h = make_hierarchy({GetParam(), GetParam()});

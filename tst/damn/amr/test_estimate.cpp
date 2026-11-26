@@ -1,8 +1,3 @@
-// damn::amr::estimate: one rank exchanges for free and its step is its compute times each
-// level's substeps; two ranks of a node pay the Node distance's latency and cells for the
-// overlap within reach, the same on two nodes Remote's; threads share a rank's tiles;
-// choose keeps the cheapest candidate; exchange_costs is relative to Node
-
 #include "damn/amr/estimate.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/topology.hpp"

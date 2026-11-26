@@ -1,10 +1,3 @@
-// damn::amr::partition: the Hilbert curve visits every point once through face neighbours,
-// partitions are contiguous runs of the curve within one box of the even share, keep neighbours
-// together better than lexicographic strips, and follow the weights (PHARE's load balancing
-// test: a row of cells with no particles of one population); cut_partition cuts the boxes a
-// rank's share ends in on their blocks: the pieces cover each box once, and the ranks end within
-// a block of the share where whole boxes do not
-
 #include "damn/amr/partition.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/topology.hpp"

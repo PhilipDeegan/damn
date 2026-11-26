@@ -1,5 +1,4 @@
-// damn::hdf5::h5::HighFiveFile: datasets and attributes written then read back, serially and
-// across ranks; run with any number of ranks, e.g. mpirun -n 3 bin/test_damn_hdf5/test/...
+// any number of ranks
 
 #include "damn/hdf5/damn_hdf5.hpp"
 

@@ -1,6 +1,3 @@
-// damn::amr::cluster: tiles from tagged cells, the tag buffer, periodic wrapping, the domain's
-// clip, proper nesting in the tagged level, coalescing
-
 #include "damn/amr/clustering.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box.hpp"
