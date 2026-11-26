@@ -468,40 +468,39 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
     {
         if (!detail::is_local(piece))
             return false;
-        if (std::find(pairs->begin(), pairs->end(), piece.pair) == pairs->end())
-            pairs->push_back(piece.pair);
+        if (std::find(pairs.begin(), pairs.end(), piece.pair) == pairs.end())
+            pairs.push_back(piece.pair);
     }
-    if (pairs->empty())
+    if (pairs.empty())
         return false; // nothing to do: the host path is as cheap
 
-    detail::AppendSlots const slots{pairs->size()};
+    detail::AppendSlots const slots{pairs.size()};
     core::ScratchVector<detail::AppendRun> runs;
-    runs->resize(pairs->size());
-    for (std::size_t k = 0; k < pairs->size(); ++k)
+    runs.resize(pairs.size());
+    for (std::size_t k = 0; k < pairs.size(); ++k)
     {
-        auto const pair   = (*pairs)[k];
+        auto const pair   = pairs[k];
         auto const& first = *std::find_if(plan.pieces.begin(), plan.pieces.end(),
                                           [&](auto const& p) { return p.pair == pair; });
         bool ok           = false;
         detail::src_of<dim, true>(access, ld.data[first.src.local], first, [&](auto const& src0) {
             detail::dst_of<dim, true>(access, ld.data[first.dst], first, [&](auto& dst0) {
-                ok = detail::append_run<dim>(
-                    src0, dst0, slots.base + k, (*runs)[k], [&](auto&& add) {
-                        for (auto const& piece : plan.pieces)
-                            if (piece.pair == pair)
-                                detail::src_of<dim, true>(
-                                    access, ld.data[piece.src.local], piece, [&](auto const& src) {
-                                        detail::dst_of<dim, true>(
-                                            access, ld.data[piece.dst], piece,
-                                            [&](auto& dst) { add(src, dst, piece); });
-                                    });
-                    });
+                ok = detail::append_run<dim>(src0, dst0, slots.base + k, runs[k], [&](auto&& add) {
+                    for (auto const& piece : plan.pieces)
+                        if (piece.pair == pair)
+                            detail::src_of<dim, true>(
+                                access, ld.data[piece.src.local], piece, [&](auto const& src) {
+                                    detail::dst_of<dim, true>(
+                                        access, ld.data[piece.dst], piece,
+                                        [&](auto& dst) { add(src, dst, piece); });
+                                });
+                });
             });
         });
         if (!ok)
             return false;
     }
-    for (auto const& run : *runs)
+    for (auto const& run : runs)
         run.run(run.pieces);
     return true;
 }

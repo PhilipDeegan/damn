@@ -71,11 +71,11 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
             pack_piece(region, piece, access, ld, plan.sent[piece.dst_rank]);
         }
 
-        sends->resize(plan.sent.size());
+        sends.resize(plan.sent.size());
         std::size_t at = 0;
         for (auto& [peer, buffer] : plan.sent)
             MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, copy_tag, comm,
-                      &(*sends)[at++]);
+                      &sends[at++]);
     }
 
     // 2. local
@@ -140,7 +140,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
             amr::detail::appended(plan, access, ld);
     }
     DAMN_LOG_SCOPE(2, "damn::mpi::copy::sends"); // until the peers have received them
-    MPI_Waitall(static_cast<int>(sends->size()), sends->data(), MPI_STATUSES_IGNORE);
+    MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
 }
 
 template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename PatchData>

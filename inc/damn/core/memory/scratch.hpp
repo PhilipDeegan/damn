@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <deque>
 #include <span>
+#include <utility>
 
 namespace damn::core
 {
@@ -62,6 +63,8 @@ public:
 
     auto data() { return kept().data(); }
     auto size() const { return kept.size(); }
+    auto begin() { return kept().begin(); }
+    auto end() { return kept().end(); }
     auto& operator[](std::size_t const i) { return kept[i]; }
     std::span<T> span() { return {kept().data(), kept.size()}; }
 
@@ -90,8 +93,19 @@ public:
         Slots::mine().give();
     }
 
-    auto& operator*() { return kept(); }
-    auto* operator->() { return &kept(); }
+    auto data() { return kept().data(); }
+    auto size() const { return kept.size(); }
+    bool empty() const { return kept.size() == 0; }
+    auto begin() { return kept().begin(); }
+    auto end() { return kept().end(); }
+    auto& operator[](std::size_t const i) { return kept[i]; }
+    void resize(std::size_t const n) { kept().resize(n); }
+    void push_back(T const& t) { kept().push_back(t); }
+    auto& emplace_back(auto&&... args)
+    {
+        return kept().emplace_back(std::forward<decltype(args)>(args)...);
+    }
+    auto& vec() { return kept(); } // for what takes the vector itself, e.g. a hook appending to it
 
 private:
     Kept& kept;

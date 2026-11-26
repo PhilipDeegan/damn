@@ -137,8 +137,8 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
     else if constexpr (detail::Packs<R, dim> and detail::Packs<S, dim>)
     {
         core::ScratchVector<std::byte> bytes; // packed first: appending to src itself is safe
-        pack_items(src, box, shift, *bytes);
-        std::byte const* at = bytes->data();
+        pack_items(src, box, shift, bytes.vec());
+        std::byte const* at = bytes.data();
         unpack_items(dst, at, shift);
     }
     else
@@ -157,9 +157,9 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
         core::ScratchVector<Item> items;
         for_each_item(src, [&](auto const& item) {
             if (selected(item))
-                items->push_back(item);
+                items.push_back(item);
         });
-        for (auto const& item : *items)
+        for (auto const& item : items)
             append(dst, item, shift);
     }
 }
