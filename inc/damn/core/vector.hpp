@@ -264,49 +264,39 @@ struct MinimizingVector
     template<bool copy_old = true>
     auto& get(std::size_t const& s)
     {
-        if (s < v.capacity() * percentile)
-            ++_c;
-        else
-            _c = 0;
-
-        if (_c == period)
-        {
-            vector_t r;
-            r.reserve(v.capacity() * realloc_to);
-            if constexpr (copy_old)
-                r = v;
-            v  = std::move(r);
-            _c = 0;
-        }
-
+        fit<copy_old>(s);
         v.resize(s);
         return v;
     }
 
 
+    // s values, all T{}: the old ones not kept, so a shrink does not copy them
     auto& zero(std::size_t const& s)
     {
-        clear();
-
-        if (s < size())
-        {
-            if (s < v.capacity() * percentile)
-                ++_c;
-            else
-                _c = 0;
-
-            if (_c == period)
-            {
-                vector_t r;
-                r.reserve(v.capacity() * realloc_to);
-                v  = std::move(r);
-                _c = 0;
-            }
-        }
-        else
-            v.reserve(s);
-
+        fit<false>(s);
+        v.clear();
+        v.resize(s);
         return v;
+    }
+
+    // s: the size needed this use; after `period` uses in a row under percentile of capacity,
+    //  capacity drops to realloc_to of itself. Public for users that know s only after the use
+    //  (ScratchVector)
+    template<bool copy_old = true>
+    void fit(std::size_t const s)
+    {
+        if (s < v.capacity() * percentile)
+            ++_c;
+        else
+            _c = 0;
+        if (_c != period)
+            return;
+        vector_t r;
+        r.reserve(v.capacity() * realloc_to);
+        if constexpr (copy_old)
+            r = v;
+        v  = std::move(r);
+        _c = 0;
     }
 
 

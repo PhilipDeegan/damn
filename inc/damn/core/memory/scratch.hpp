@@ -10,12 +10,14 @@
 // its values are left from earlier uses (not zeroed). T: trivially copyable, at most
 // max_align_t aligned (the storage's alignment)
 
+#include "damn/core/vector.hpp"
+#include "damn/core/def/damn_config.hpp"
+
 #include <cstddef>
+#include <deque>
 #include <new>
 #include <span>
 #include <type_traits>
-#include <utility>
-#include <vector>
 
 namespace damn::core
 {
@@ -58,34 +60,48 @@ std::span<T> scratch(std::size_t const n)
     return {reinterpret_cast<T*>(buffer.at_least(n * sizeof(T))), n};
 }
 
-// a per thread std::vector<T>, empty, its capacity kept from earlier uses: for buffers grown by
-//  push_back (e.g. an ADL hook appending to a std::vector&). Taken out of the thread's slot
-//  while alive, so a nested use on the same thread (recursion, a hook calling back) gets another
-//  one, never this one
-template<typename T>
+// a per thread vector, empty, its capacity kept between uses (a MinimizingVector: it shrinks
+//  after a run of uses well under it): for buffers grown by push_back, e.g. an ADL hook appending
+//  to a std::vector&. A nested use on the same thread (recursion, a hook calling back) takes the
+//  next slot, never one still in use
+template<typename T, auto alloc_mode = AllocatorMode::CPU>
 class ScratchVector
 {
+    using Kept = MinimizingVector<T, alloc_mode>;
+
 public:
     ScratchVector()
-        : vec{std::move(slot())}
+        : kept{take()}
     {
-        vec.clear();
+        kept.clear();
     }
     ScratchVector(ScratchVector const&)            = delete;
     ScratchVector& operator=(ScratchVector const&) = delete;
-    ~ScratchVector() { slot() = std::move(vec); }
-
-    std::vector<T>& operator*() { return vec; }
-    std::vector<T>* operator->() { return &vec; }
-
-private:
-    static std::vector<T>& slot()
+    ~ScratchVector()
     {
-        thread_local std::vector<T> kept;
-        return kept;
+        kept.template fit<false>(kept.size());
+        kept.clear();
+        --depth();
     }
 
-    std::vector<T> vec;
+    auto& operator*() { return kept(); }
+    auto* operator->() { return &kept(); }
+
+private:
+    static std::size_t& depth()
+    {
+        thread_local std::size_t d = 0;
+        return d;
+    }
+    static Kept& take()
+    {
+        thread_local std::deque<Kept> slots; // a deque: a slot stays put as nested ones are added
+        if (slots.size() <= depth())
+            slots.emplace_back();
+        return slots[depth()++];
+    }
+
+    Kept& kept;
 };
 
 } // namespace damn::core
