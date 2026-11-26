@@ -20,11 +20,11 @@ auto get_some_boxes(std::size_t const size = 5)
 {
     mkn::kul::abort_if(size < 3);
 
-    using T                                 = int;
-    std::size_t constexpr static dim        = 3;
+    using T                                                  = int;
+    std::size_t constexpr static dim                         = 3;
     [[maybe_unused]] auto constexpr static extra_ghost_cells = extra_ghost_cells_;
-    using box_t                             = Box<T, dim>;
-    using point_t                           = Point<T, dim>;
+    using box_t                                              = Box<T, dim>;
+    using point_t                                            = Point<T, dim>;
 
     T sn1 = size - 1;
     T l   = size;
