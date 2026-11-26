@@ -52,7 +52,7 @@ struct ThreadPool
 
     ThreadPool() { configure(n_pools, threads_per_pool); }
 
-    // (re)builds the pools, only while no task is in flight (e.g. Simulator::setup)
+    // (re)builds the pools, only while no task is in flight
     void configure(std::size_t const pools, std::size_t const threads)
     {
         if (pools == 0 or threads == 0)
@@ -132,9 +132,8 @@ struct ThreadPool
     // patch_exec / tile_exec: view = make_view(i) is built once per patch into the slot of the
     // idle pool the patch goes to (a pool works one patch at a time, so its slot is free again
     // once it is idle). Views are only ever built and destroyed on this (calling) thread: they
-    // may copy python callables (e.g. Electromag's initializer) whose copy/destruction takes the
-    // GIL, which this thread holds while waiting in sync() -> deadlock if done in a task.
-    // The slots are allocated once per call site, not per call.
+    // may copy python callables whose copy/destruction takes the GIL, which this thread holds
+    // while waiting in sync() -> deadlock if done in a task
 
     // fn(view) for every patch i in [0, n_patches) has run on return, a task per patch
     void patch_exec(std::size_t const n_patches, auto const& make_view, auto const& fn)
@@ -197,14 +196,12 @@ struct ThreadPool
 
     std::size_t first_ready_idx()
     {
-        // poll for first finished pool to reuse
-        // this is used if you want a sync point for all
-        // threads in a pool to be finished what they're doing before moving on
+        // round robin from the last pool taken, polling until one is idle
         while (true)
         {
             for (; pool_idx < n_pools; ++pool_idx)
                 if (thread_pools[pool_idx]->wait_for(_1ms))
-                    return (++pool_idx) - 1; // :)
+                    return (++pool_idx) - 1;
             pool_idx = 0;
         }
     }

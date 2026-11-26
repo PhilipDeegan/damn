@@ -58,13 +58,9 @@ constexpr static std::uint8_t LOG_LEVEL = DAMN_LOG_LEVEL;
 
 namespace damn
 {
-// owns log_out and redirects std::cout to it for this object's lifetime, restoring
-// the original streambuf on destruction. Ownership of the stream lives here (rather
-// than in a separate member this class merely references) so the redirected buffer
-// can never outlive the object that installed it. Declared as a class member (not
-// left to a destructor body) so restoration still happens if a later member throws
-// mid-construction - a throwing constructor never runs the class's own destructor,
-// only already-constructed members' destructors.
+// std::cout to log_out for this object's lifetime. It owns the stream, so the redirected buffer
+// never outlives the object that installed it. Hold it as a member, not as a destructor body's
+// job: a throwing constructor runs only its built members' destructors, not its own
 class CoutRedirect
 {
 public:

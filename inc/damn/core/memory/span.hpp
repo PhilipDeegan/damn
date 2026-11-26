@@ -1,5 +1,3 @@
-// to #include "damn/core/memory/span.hpp"
-
 // C++11 version of https://en.cppreference.com/w/cpp/container/span
 #ifndef DAMN_CORE_MEMORY_SPAN_HPP
 #define DAMN_CORE_MEMORY_SPAN_HPP
@@ -313,7 +311,7 @@ struct ViewSpan // represent vector of T as Span of V
     MKN_KUL_FN_SIG_RET auto data() DAMN_ALL { return ptr; }
     MKN_KUL_FN_SIG_RET SIZE const& size() const DAMN_ALL { return s; }
 
-    // DO NOT USE ON GPU! // USE operator[]!!!!
+    // host only: on the GPU use operator[]
     MKN_KUL_FN_SIG_RET auto begin() DAMN_HST { return as<T*>(ptr); }
     MKN_KUL_FN_SIG_RET auto begin() const DAMN_HST { return as<T const*>(ptr); }
     MKN_KUL_FN_SIG_RET auto end() DAMN_HST { return as<T*>(ptr) + s; }

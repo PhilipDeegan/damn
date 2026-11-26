@@ -40,9 +40,6 @@ namespace
     }
 } // namespace
 
-/** Represents a 1D, 2D or 3D box of integer or floating point
- * points.
- */
 template<typename Type, std::size_t dim>
 struct Box
 {
@@ -175,10 +172,7 @@ MKN_KUL_FN_SIG_RET bool isIn(Point<Type, SIZE> const& point, Box<Type, SIZE> con
 }
 
 
-/** this overload of isIn takes a Point and a Container of boxes
- * and returns true if the Point is at least in one of the boxes.
- * Returns occurs at the first box the point is in.
- */
+// point in any of boxes
 template<Spannable Boxes>
 MKN_KUL_FN_SIG_RET bool DAMN_ALL isIn(auto const& point, Boxes const& boxes)
 {

@@ -255,13 +255,8 @@ public:
         }
         else if constexpr (dimension == 3)
         {
-            // links[0] = {0, 0, 1};
-            // links[1] = {0, 1, 0};
-            // links[2] = {0, 1, 1};
-            // links[3] = {1, 0, 0};
-            // links[4] = {1, 0, 1};
-            // links[5] = {1, 1, 0};
-            // links[6] = {1, 1, 1};
+            // links' slots: {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0},
+            //  {1, 1, 1}
 
             for (auto xi = 0u; xi < box_shape[0];)
             {
@@ -381,12 +376,11 @@ protected:
         tile_set_make_tiles(*this, tiling, args...);
     }
 
-    //! store the pointer to the tile associated with each cell
+    // each cell's tile
     void tag_cells_()
     {
-        for (auto& tile : tiles_)         // need to substract box lower to get
-            for_each_point(tile, [&](auto const& cell) { // the local index of that cell in the NdArray
-                cells_(cell - box_.lower) = &tile; });
+        for (auto& tile : tiles_)
+            for_each_point(tile, [&](auto const& cell) { cells_(cell - box_.lower) = &tile; });
     }
 
     Box_t box_;
