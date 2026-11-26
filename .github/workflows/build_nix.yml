@@ -11,6 +11,8 @@ on:
 
 # the containers run as root: Open MPI refuses unless allowed, for every mpirun
 env:
+  # the MPI profiles compile through ccache for local builds; CI keeps no cache between runs
+  CCACHE_DISABLE: 1
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
   CURL_GET: curl -fL --retry 3 --retry-delay 2
