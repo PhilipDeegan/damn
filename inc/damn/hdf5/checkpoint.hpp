@@ -1,30 +1,9 @@
 #ifndef DAMN_HDF5_CHECKPOINT_HPP
 #define DAMN_HDF5_CHECKPOINT_HPP
 
-// a level's resources, by name, in one HDF5 group, through level tables (level_table.hpp):
-//
-//   write_checkpoint(file, group, level, data, names)   collective
-//   read_checkpoint(file, group, level, data, names)    into data, the same patches as written
-//                                                       (same ranks and decomposition)
-//   (each also takes a LevelCheckpoint{file, group, level, data, names})
-//
-// group/level: the level's boxes, ids, owners; group/<name>/offsets and its datasets:
-//
-//   BoxData (fields)    group/<name>/values: each patch's values on its checkpoint box, in C
-//                       order (the last direction fastest): domain_box, unless the resource has
-//                       checkpoint_box(resource, patch_box) (e.g. its ghost box, for ghosts that
-//                       cannot be rebuilt). Written and read in place when the resource has
-//                       box_span(resource, patch_box) -> core::BoxSpan over its ghost box (a C
-//                       ordered buffer), else through value() per point
-//   columns             group/<name>/<column>: a resource with
-//                         for_each_column(resource, fn(name, mkn::kul::StridedSpan<T>))
-//                         resize_columns(resource, n)
-//                       (e.g. a particle array's components: each one a column, a row per item),
-//                       written and read in place through the spans
-//
-// damn knows nothing of what the resources are: the user's ADL functions say. Every rank calls
-// every collective, patches or not: a rank without patches learns each resource's kind and
-// columns from the others
+// a level's resources, by name, in one HDF5 group, through level tables: doc/hdf5/checkpoint.md
+// every rank calls every collective, patches or not: a rank without patches learns each
+// resource's kind and columns from the others
 
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/level_data.hpp"

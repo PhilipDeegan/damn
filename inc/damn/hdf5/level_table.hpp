@@ -1,29 +1,10 @@
 #ifndef DAMN_HDF5_LEVEL_TABLE_HPP
 #define DAMN_HDF5_LEVEL_TABLE_HPP
 
-// a level's patches' rows in one dataset, as VTKHDF does: the patches one after another in the
-// level's patch order (every rank's), patch k's rows from offsets[k] to offsets[k + 1]
-//
-//   level_rows(level, rank, local_rows)       collective: LevelRows{level, rank, table}, the
-//                                             table from the row count of each of this rank's
-//                                             patches (in level order): every patch's offsets,
-//                                             the same on every rank
-//   write_level(file, group, rows)            the level's boxes, ids, owners and the offsets
-//   read_level<dim>(file, group, number)      them back, on any rank (any number of ranks)
-//   write_boxes(file, path, boxes)            a list of boxes the same on every rank (e.g. what
-//   read_boxes<dim>(file, path)               a level was clustered to), and back
-//   write_rows(file, path, rows, spans)       collective: the dataset is created at the total,
-//                                             then each rank writes its patches' rows straight
-//                                             from their memory, one span per local patch:
-//                                             a StridedSpan (a member of an AoS, a column ...) or
-//                                             a BoxRegion (a field's values on its domain, in C
-//                                             order)
-//   read_rows(file, path, offset, span)       span.size() rows from offset into memory, in place
-//
-// No staging copy: a StridedSpan's stride, or a BoxRegion's sub box, is the memory side's
-// hyperslab. Rows and offsets
-// are 64 bit (a 3d run's particles overflow 32 bits, as VTKHDF's offsets). Writes are
-// independent (each rank its own rows); every rank creates every dataset, as HDF5 needs
+// a level's patches' rows in one dataset, patch k's from offsets[k], as VTKHDF does:
+// doc/hdf5/level_table.md
+// no staging copy: a StridedSpan's stride, or a BoxRegion's sub box, is the memory side's
+// hyperslab. Rows and offsets are 64 bit: a 3d run's particles overflow 32 bits
 
 #include "damn/amr/hierarchy.hpp"
 #include "damn/core/def.hpp"
