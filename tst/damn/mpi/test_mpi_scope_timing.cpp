@@ -49,7 +49,8 @@ TEST(MpiScopeTiming, aFilePerRankWithTheCopies)
     if (!DAMN_HAVE_PHLOP)
         GTEST_SKIP() << "built without phlop";
 
-    auto const dir = std::filesystem::path{"damn_test_scope_timing"};
+    // per rank count, as the hdf5 tests' files: the variants run at once from one directory
+    auto const dir = std::filesystem::path{"damn_test_scope_timing_n" + std::to_string(mpi_size())};
     if (mpi_rank() == 0)
     {
         std::filesystem::remove_all(dir);
