@@ -105,7 +105,10 @@ public:
     {
         return kept().emplace_back(std::forward<decltype(args)>(args)...);
     }
-    auto& vec() { return kept(); } // for what takes the vector itself, e.g. a hook appending to it
+    // the vector itself, e.g. for a hook appending to a std::vector&: a hook's parameter must be
+    //  that type, a deduced one (auto&) gets the ScratchVector
+    auto& operator*() { return kept(); }
+    operator typename Kept::vector_t&() { return kept(); }
 
 private:
     Kept& kept;
