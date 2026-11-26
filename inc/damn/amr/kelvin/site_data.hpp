@@ -1,16 +1,8 @@
 #ifndef DAMN_AMR_KELVIN_SITE_DATA_HPP
 #define DAMN_AMR_KELVIN_SITE_DATA_HPP
 
-// values on a Kelvin lattice's sites, as damn BoxData: what a model keeps per site (a scalar, a
-// value per face, any trivially copyable T), ghosts included, moved by damn like any field
-//
-//   SiteArray<T, dim>   one sublattice (corner or body) of a patch: a T per cell over the patch's
-//                       cells grown by ghost_width, C order (box_span: copies go by rows)
-//   SiteField<T, dim>   both sublattices
-//   for_each_site_resource(name, field, fn)   fn(name + ".corner", field.corner),
-//                       fn(name + ".body", field.body): a PatchData's for_each_resource
-//   site_names({names})  every name's two, for copy(fill_ghosts, neighbours, names, ld)
-//
+// values on a Kelvin lattice's sites as damn BoxData, one array per sublattice:
+// doc/amr/kelvin/site_data.md
 // a site absent from the domain (KeyBox::has, a bounded edge) still has a slot: models leave it be
 
 #include "damn/core/def.hpp"
@@ -45,7 +37,6 @@ struct SiteArray
     int ghost_width = 1;
     std::vector<T> v{};
 
-    // storage for the patch of cells, every value init
     void allocate(core::Box<int, dim> const& cells, T const& init = T{});
 };
 

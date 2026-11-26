@@ -1,19 +1,9 @@
 #ifndef DAMN_AMR_CLUSTERING_HPP
 #define DAMN_AMR_CLUSTERING_HPP
 
-// the boxes of a new level ln + 1 from the cells of level ln tagged for refinement, by tiles
-// (as SAMRAI's TileClustering):
-//
-//   1. each tagged cell is grown by tag_buffer cells
-//   2. the tiles of the grown cells: the level's cells cut in tile_size boxes from cell 0,
-//      periodic images wrapped into the domain, clipped to it
-//   3. each tile keeps its cells properly nested in level ln: nesting_buffer cells inside level
-//      ln's patches (or a physical, non periodic, domain boundary)
-//   4. the tiles left are coalesced: two boxes whose union is a box become one, until none do
-//   5. refined into level ln + 1's index space
-//
-// tagged_tiles (1, 2) is per rank; cluster (3, 4, 5) works on every rank's tiles, so every rank
-// gets the same boxes: damn/mpi/clustering.hpp gathers them over the ranks
+// a new level's boxes from tagged cells, by tiles as SAMRAI's TileClustering:
+// doc/amr/clustering.md
+// tagged_tiles is per rank; cluster works on every rank's tiles, so every rank gets the same boxes
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
@@ -142,7 +132,7 @@ cluster(Hierarchy<dim, Lattice> const& h, int const ln, std::set<Tile<dim>> cons
     if (!level_exists(h, ln))
         throw std::runtime_error("damn::amr::cluster: no level " + std::to_string(ln));
 
-    // the nested part of each tile, as boxes: per tile, its nested cells
+    // a tile whole if all of it is nested, else its nested cells, coalesced after
     std::vector<core::Box<int, dim>> boxes;
     for (auto const& tile : tiles)
     {

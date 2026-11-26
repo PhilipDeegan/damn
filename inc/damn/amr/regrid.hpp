@@ -1,35 +1,8 @@
 #ifndef DAMN_AMR_REGRID_HPP
 #define DAMN_AMR_REGRID_HPP
 
-// regridding a level: its data moved from one decomposition (boxes and owners) to another of the
-// same cells, e.g. a rebalance (new owners), or the same cells chopped differently
-//
-//   auto map = make_regrid_map(h.levels[ln], new_level, rank);
-//   ld       = regrid(map, std::move(ld), make_patch_data);   // damn::mpi::regrid over ranks
-//   set_level(h, new_level);  n = make_neighbours(...);       // then refill ghosts
-//
-// a new patch with the same box and owner as an old one takes its data as is (moved, ghosts
-// included). Otherwise new patches are made (make(patch)) and get their domain from the old
-// patches overlapping or touching it, periodic images included (make_regrid_map's shifts):
-//   BoxData:       the values on the domain points both share: domain_box(resource, box) of
-//                  either, e.g. a primal node on the border of an old patch next to the new one,
-//                  without shared cells
-//   CellItemData:  the items whose cell is in the shared cells: domain items only, ghost items
-//                  are outside every old domain
-// for every resource of those kinds (for_each_resource); other resources are left as made.
-// Ghosts are not filled: copy fill_ghosts (and the item ghosts) on the new level after.
-//
-// Unless the old ghosts are valid (RegridGhosts: e.g. a rebalance after a step, the ghosts as
-// the step left them): a field resource named there also gets its new ghost nodes, from an old
-// domain where one holds the node, else from an old patch's ghosts (level border and physical
-// ghosts: no old domain holds them); an item resource named there gets its items in the ghost
-// cells of both patches (its own width; level ghost items: a cell may be in two new patches'
-// ghost cells, the caller keeps the copy of the owner). What nothing covers is left as made (NaN in
-// a debug build): what the caller must refine or fill
-//
-// memory: the old data is consumed. Old patches are visited in level order (along the curve the
-// partition follows), each freed once its data is copied or packed; a new patch is made when its
-// first data arrives. The peak is about the old level, not the old and the new together
+// a level's data moved to another decomposition of the same cells: doc/amr/regrid.md
+// the old data is consumed, each old patch freed once done: the peak is about the old level
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -57,8 +30,7 @@
 
 namespace damn::amr
 {
-// the resources whose old ghost values are valid, moved with the data (see above); reach: the
-//  widest ghost width among them, in cells
+// resources whose old ghosts are valid, moved with the data; reach: their widest ghost width
 struct RegridGhosts
 {
     int reach = 0;
@@ -84,14 +56,12 @@ struct Transfer
     std::optional<core::Box<int, dim>> cells{}; // (from.box + shift) * to.box, if they share any
     std::size_t src = not_local;                // old LevelData index, if this rank holds from
     std::size_t dst = not_local;                // new LevelData index, if this rank holds to
-    // RegridGhosts: the old images (periodic ones included) near the new patch, whose domains
-    //  hold its ghost nodes rather than an old ghost
+    // RegridGhosts: their domains hold the new patch's ghost nodes rather than an old ghost
     std::vector<core::Box<int, dim>> near_old{};
 };
 
-// what moves where in a regrid, from one rank's point of view. Both ranks of a pair list the
-// transfers between them in the same order (old level order, then new level order): messages
-// need no description of their content
+// both ranks of a pair list the transfers between them in the same order (old level order,
+// then new level order): messages need no description of their content
 template<std::size_t dim>
 struct RegridMap
 {
@@ -105,8 +75,7 @@ struct RegridMap
 };
 
 
-// shifts: the level's periodic images (periodic_shifts, the domain itself excluded); ghosts:
-//  the resources whose old ghosts are valid
+// shifts: periodic_shifts, the domain itself excluded
 template<std::size_t dim>
 MKN_KUL_FN_SIG_RET RegridMap<dim>
 make_regrid_map(Level<dim> const& old_level, Level<dim> const& new_level, int const rank,
@@ -183,9 +152,9 @@ make_regrid_map(Level<dim> const& old_level, Level<dim> const& new_level, int co
 
 namespace detail
 {
-    // the points of a field resource a transfer copies, in an order both sides agree on: the
-    //  domain points both share; with valid ghosts, the new ghost nodes the old domain holds,
-    //  then those the old patch's ghosts hold and no old domain does
+    // in an order both sides agree on: the domain points both share; with valid ghosts, the new
+    //  ghost nodes the old domain holds, then those the old patch's ghosts hold and no old
+    //  domain does
     template<std::size_t dim>
     MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
     transfer_points(RegridMap<dim> const& map, Transfer<dim> const& t, std::string_view const name,
@@ -218,8 +187,7 @@ namespace detail
         return out;
     }
 
-    // the cells an item resource's items are taken from: those both share, or, its ghosts
-    //  valid, its ghost cells (the resource's own width) on both sides
+    // the shared cells, or, its ghosts valid, its ghost cells (own width) on both sides
     template<std::size_t dim>
     MKN_KUL_FN_SIG_RET std::optional<core::Box<int, dim>>
     transfer_cells(RegridMap<dim> const& map, Transfer<dim> const& t, std::string_view const name,
@@ -230,7 +198,6 @@ namespace detail
         return ghost_box(res, core::shift(t.from.box, t.shift)) * ghost_box(res, t.to.box);
     }
 
-    // fn(name, resource) for data's resources damn can regrid: BoxData and CellItemData
     template<std::size_t dim, typename PatchData>
     void for_each_regridded(PatchData& data, auto&& fn)
     {
@@ -241,8 +208,8 @@ namespace detail
         });
     }
 
-    // a transfer's data from its (local) source, appended to out, resource by resource:
-    // field values in the box's point order, or the number of items then the items
+    // resource by resource: field values in the box's point order, or the number of items then
+    //  the items
     template<std::size_t dim, typename PatchData>
     void pack_transfer(RegridMap<dim> const& map, Transfer<dim> const& t, PatchData& src,
                        std::vector<std::byte>& out)
@@ -268,7 +235,7 @@ namespace detail
         });
     }
 
-    // a transfer's data, packed by pack_transfer, into its (local) destination; at moves past it
+    // at moves past it
     template<std::size_t dim, typename PatchData>
     void unpack_transfer(RegridMap<dim> const& map, Transfer<dim> const& t, PatchData& dst,
                          std::byte const*& at)
@@ -292,7 +259,6 @@ namespace detail
         });
     }
 
-    // a transfer between two local patches, directly
     template<std::size_t dim, typename PatchData>
     void copy_transfer(RegridMap<dim> const& map, Transfer<dim> const& t, PatchData& src,
                        PatchData& dst)
@@ -323,10 +289,9 @@ namespace detail
         });
     }
 
-    // the regrid of one rank's data: old patches visited in order, each freed once done.
-    // send(transfer, old data, new_data) takes the transfers to other ranks' patches (packs
-    // them); finish(new_data) receives the rest of what other ranks send. new_data(d) is new
-    // local patch d's data, made on first use
+    // send(transfer, old data, new_data) packs the transfers to other ranks' patches;
+    //  finish(new_data) receives the rest. new_data(d): new local patch d's data, made on first
+    //  use
     template<std::size_t dim, typename PatchData, typename Make, typename Send, typename Finish>
     LevelData<dim, PatchData> regrid(RegridMap<dim> const& map, LevelData<dim, PatchData>&& old,
                                      Make&& make, Send&& send, Finish&& finish)
@@ -355,7 +320,6 @@ namespace detail
                 olds[map.kept[d]].reset();
             }
 
-        // transfers from each old local patch, in map order
         std::vector<std::vector<Transfer<dim> const*>> from(olds.size());
         for (auto const& t : map.transfers)
             if (t.src != not_local)
@@ -417,7 +381,6 @@ MKN_KUL_FN_SIG_RET LevelData<dim, PatchData> regrid(RegridMap<dim> const& map,
         map, std::move(old), make, [](auto const&, auto&, auto&) {}, [](auto&) {});
 }
 
-// true if the levels are the same decomposition: nothing to regrid
 template<std::size_t dim>
 MKN_KUL_FN_SIG_RET bool same_decomposition(Level<dim> const& a, Level<dim> const& b)
 {
