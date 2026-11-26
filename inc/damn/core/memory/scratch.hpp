@@ -14,6 +14,8 @@
 #include <new>
 #include <span>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace damn::core
 {
@@ -55,6 +57,36 @@ std::span<T> scratch(std::size_t const n)
     // operator new's storage: T, an implicit lifetime type, is created in it as used
     return {reinterpret_cast<T*>(buffer.at_least(n * sizeof(T))), n};
 }
+
+// a per thread std::vector<T>, empty, its capacity kept from earlier uses: for buffers grown by
+//  push_back (e.g. an ADL hook appending to a std::vector&). Taken out of the thread's slot
+//  while alive, so a nested use on the same thread (recursion, a hook calling back) gets another
+//  one, never this one
+template<typename T>
+class ScratchVector
+{
+public:
+    ScratchVector()
+        : vec{std::move(slot())}
+    {
+        vec.clear();
+    }
+    ScratchVector(ScratchVector const&)            = delete;
+    ScratchVector& operator=(ScratchVector const&) = delete;
+    ~ScratchVector() { slot() = std::move(vec); }
+
+    std::vector<T>& operator*() { return vec; }
+    std::vector<T>* operator->() { return &vec; }
+
+private:
+    static std::vector<T>& slot()
+    {
+        thread_local std::vector<T> kept;
+        return kept;
+    }
+
+    std::vector<T> vec;
+};
 
 } // namespace damn::core
 
