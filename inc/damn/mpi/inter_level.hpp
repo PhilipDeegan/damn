@@ -26,7 +26,6 @@
 #include <cstddef>
 #include <limits>
 #include <map>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -44,19 +43,14 @@ namespace detail
         return static_cast<int>(bytes);
     }
 
-    struct InterLevelSends; // core::scratch tag: a transfer's send requests
-
-    // the plan's per peer buffers sent, the requests returned (this thread's scratch, until the
-    //  next transfer on it)
-    MKN_KUL_FN_SIG_RET inline std::span<MPI_Request>
-    send_all(std::map<int, std::vector<std::byte>>& sent, MPI_Comm const comm)
+    // the plan's per peer buffers sent, into sends (one request per peer)
+    inline void send_all(std::map<int, std::vector<std::byte>>& sent, MPI_Comm const comm,
+                         core::Scratch<MPI_Request>& sends)
     {
-        auto const sends = core::scratch<MPI_Request, InterLevelSends>(sent.size());
-        std::size_t at   = 0;
+        std::size_t at = 0;
         for (auto& [peer, buffer] : sent)
             MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, inter_level_tag, comm,
                       &sends[at++]);
-        return sends;
     }
 
     // per peer (the plan's from): its message received, then unpack(piece, at) for its pieces in
@@ -112,7 +106,8 @@ void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
     for (auto const& piece : plan.pieces)
         if (amr::detail::coarse_is_local(piece) and !amr::detail::fine_is_local(plan, piece))
             pack_coarse_piece(plan, piece, access, coarse_ld, alpha, plan.sent[fine_rank(piece)]);
-    auto sends = detail::send_all(plan.sent, comm);
+    core::Scratch<MPI_Request> sends{plan.sent.size()}; // until the sends are waited for
+    detail::send_all(plan.sent, comm, sends);
 
     // local
     for (auto const& piece : plan.pieces)
@@ -171,7 +166,8 @@ void coarsen(auto op, amr::LevelMap<dim>& map, std::vector<amr::LevelPair> const
         std::byte const* at = plan.local.data();
         unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
-    auto sends = detail::send_all(plan.sent, comm);
+    core::Scratch<MPI_Request> sends{plan.sent.size()}; // until the sends are waited for
+    detail::send_all(plan.sent, comm, sends);
 
     detail::receive_all(plan, comm, [&](auto const& piece, auto& at) {
         unpack_coarsened(plan, piece, access, coarse_ld, at);

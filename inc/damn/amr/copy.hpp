@@ -235,7 +235,6 @@ namespace detail
     template<std::size_t dim>
     void local_sources(Plan<dim>& plan);
 
-    struct FoldOwn; // fold_sums' scratch (core::scratch tag)
 
     // the sums, in the same order on every patch holding a point (PHAREHUB/PHARE#1581): per
     //  destination and resource, the summed points are zeroed, then the contributions added in
@@ -774,7 +773,7 @@ void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<di
             };
 
             // the summed points: the destination's own values kept, then zeroed
-            auto const own = core::scratch<T, FoldOwn>(group.points);
+            core::Scratch<T> own{group.points};
             std::size_t o  = 0;
             for (auto const& box : group.covered)
                 each(box, [&](T* const v, std::uint32_t const n) {

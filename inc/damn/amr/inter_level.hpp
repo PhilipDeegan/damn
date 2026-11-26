@@ -163,9 +163,6 @@ namespace detail
     template<std::size_t dim>
     void plan_from(LevelPlan<dim>& plan);
 
-    // pack_coarsened's scratch (core::scratch tag): live while op runs, an op coarsening again on
-    //  the same thread would overwrite it
-    struct CoarsenValues;
 } // namespace detail
 
 
@@ -373,9 +370,8 @@ void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
                 auto const at = out.size();
                 out.resize(at + target.coarse_box.size() * sizeof(T));
                 // value initialized as a vector's, whatever op leaves unwritten
-                auto const values = core::scratch<T, detail::CoarsenValues>(
-                    static_cast<std::size_t>(target.coarse_box.size()));
-                std::fill(values.begin(), values.end(), T{});
+                core::Scratch<T> values{static_cast<std::size_t>(target.coarse_box.size())};
+                std::fill_n(values.data(), values.size(), T{});
                 if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
                                              BoxValues<T, dim> const&>)
                     op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
