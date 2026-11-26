@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <tuple>
@@ -113,12 +114,16 @@ struct LevelPlan
     std::vector<LevelPiece<dim>> pieces{};
     std::vector<std::max_align_t> scratch{}; // coarse values of fine local field targets
     std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept
+    std::vector<std::byte> local{}; // a local piece's bytes, kept: a plan is one copy's at a time
+    // per other rank sending me pieces (rank order): their indices in pieces, in plan order
+    std::vector<std::pair<int, std::vector<std::size_t>>> from{};
 };
 
 template<std::size_t dim>
 struct LevelMap
 {
-    using PlanKey = std::tuple<LevelRegion, std::vector<LevelPair>, int>; // and the stencil
+    // and the stencil; found by a tuple of references (std::less<>), not copied per transfer
+    using PlanKey = std::tuple<LevelRegion, std::vector<LevelPair>, int>;
 
     int coarse = 0; // level numbers, fine == coarse + 1
     int fine   = 1;
@@ -133,7 +138,7 @@ struct LevelMap
     std::vector<core::Point<int, dim>> fine_shifts{};   // the fine level's periodic images, and
                                                         //  no shift first
     std::vector<core::Point<int, dim>> coarse_shifts{}; // the coarse level's, likewise
-    std::map<PlanKey, std::unique_ptr<LevelPlan<dim>>> plans{};
+    std::map<PlanKey, std::unique_ptr<LevelPlan<dim>>, std::less<>> plans{};
 };
 
 

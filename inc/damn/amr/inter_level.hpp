@@ -57,6 +57,7 @@
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/cell_items.hpp"
+#include "damn/core/memory/scratch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -65,10 +66,12 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 #include <utility>
@@ -154,6 +157,15 @@ namespace detail
 
     template<std::size_t dim>
     void check_local(LevelPlan<dim> const& plan);
+
+    // plan.from: refine, my fine targets' pieces of other ranks' coarse patches; coarsen, my
+    //  coarse patches' pieces of other ranks' fine patches
+    template<std::size_t dim>
+    void plan_from(LevelPlan<dim>& plan);
+
+    // pack_coarsened's scratch (core::scratch tag): live while op runs, an op coarsening again on
+    //  the same thread would overwrite it
+    struct CoarsenValues;
 } // namespace detail
 
 
@@ -168,13 +180,12 @@ LevelPlan<dim>& level_plan_for(LevelRegion const region, int const stencil, Leve
         throw std::runtime_error("damn::amr::inter_level: the level map is not the level data's"
                                  " (rebuild it after a regrid)");
 
-    typename LevelMap<dim>::PlanKey key{region, pairs, stencil};
-    auto found = map.plans.find(key);
+    auto found = map.plans.find(std::forward_as_tuple(region, pairs, stencil));
     if (found == map.plans.end())
     {
         DAMN_LOG_SCOPE(2, "damn::amr::level_plan_for"); // once per region and resources
         found = map.plans
-                    .emplace(std::move(key),
+                    .emplace(typename LevelMap<dim>::PlanKey{region, pairs, stencil},
                              detail::level_plan(region, stencil, map, coarse_ld, fine_ld, pairs))
                     .first;
     }
@@ -361,7 +372,10 @@ void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
                 using T       = box_data_value_t<R, dim>;
                 auto const at = out.size();
                 out.resize(at + target.coarse_box.size() * sizeof(T));
-                std::vector<T> values(target.coarse_box.size());
+                // value initialized as a vector's, whatever op leaves unwritten
+                auto const values = core::scratch<T, detail::CoarsenValues>(
+                    static_cast<std::size_t>(target.coarse_box.size()));
+                std::fill(values.begin(), values.end(), T{});
                 if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
                                              BoxValues<T, dim> const&>)
                     op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
@@ -431,12 +445,11 @@ void refine(auto op, LevelRegion const region, LevelMap<dim>& map,
     detail::check_local(plan);
     clear_scratch(plan, access, fine_ld);
 
-    std::vector<std::byte> bytes;
     for (auto const& piece : plan.pieces)
     {
-        bytes.clear();
-        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, bytes);
-        std::byte const* at = bytes.data();
+        plan.local.clear();
+        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     }
     refine_fields(plan, access, fine_ld, op);
@@ -461,12 +474,11 @@ void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, A
     auto& plan = level_plan_for(LevelRegion::Coarsened, 0, map, pairs, coarse_ld, fine_ld);
     detail::check_local(plan);
 
-    std::vector<std::byte> bytes;
     for (auto const& piece : plan.pieces) // one per target
     {
-        bytes.clear();
-        pack_coarsened(plan, plan.targets[piece.target], access, fine_ld, op, bytes);
-        std::byte const* at = bytes.data();
+        plan.local.clear();
+        pack_coarsened(plan, plan.targets[piece.target], access, fine_ld, op, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
 }
@@ -769,7 +781,26 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
     }
 
     plan->scratch.resize(scratch / sizeof(std::max_align_t));
+    plan_from(*plan);
     return plan;
+}
+
+template<std::size_t dim>
+void detail::plan_from(LevelPlan<dim>& plan)
+{
+    std::map<int, std::vector<std::size_t>> from;
+    for (std::size_t i = 0; i < plan.pieces.size(); ++i)
+    {
+        auto const& piece = plan.pieces[i];
+        if (plan.region == LevelRegion::Coarsened)
+        {
+            if (!fine_is_local(plan, piece) and coarse_is_local(piece))
+                from[plan.targets[piece.target].fine.rank].push_back(i);
+        }
+        else if (fine_is_local(plan, piece) and !coarse_is_local(piece))
+            from[piece.coarse.patch.rank].push_back(i);
+    }
+    plan.from.assign(from.begin(), from.end());
 }
 
 template<std::size_t dim>

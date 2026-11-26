@@ -21,10 +21,12 @@
 #include "damn/amr/neighbours.hpp"
 #include "damn/core/def.hpp"
 #include "damn/amr/copy.hpp"
+#include "damn/core/memory/scratch.hpp"
 
 #include <cstddef>
 #include <limits>
 #include <map>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -42,25 +44,27 @@ namespace detail
         return static_cast<int>(bytes);
     }
 
-    // the plan's per peer buffers sent, the requests returned
-    MKN_KUL_FN_SIG_RET inline std::vector<MPI_Request>
+    struct InterLevelSends; // core::scratch tag: a transfer's send requests
+
+    // the plan's per peer buffers sent, the requests returned (this thread's scratch, until the
+    //  next transfer on it)
+    MKN_KUL_FN_SIG_RET inline std::span<MPI_Request>
     send_all(std::map<int, std::vector<std::byte>>& sent, MPI_Comm const comm)
     {
-        std::vector<MPI_Request> sends;
-        sends.reserve(sent.size());
+        auto const sends = core::scratch<MPI_Request, InterLevelSends>(sent.size());
+        std::size_t at   = 0;
         for (auto& [peer, buffer] : sent)
             MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, inter_level_tag, comm,
-                      &sends.emplace_back());
+                      &sends[at++]);
         return sends;
     }
 
-    // per peer: its message received, then unpack(piece, at) for its pieces in plan order
-    template<typename Piece>
-    void receive_all(std::map<int, std::vector<Piece const*>> const& from,
-                     std::map<int, std::vector<std::byte>>& received, MPI_Comm const comm,
-                     auto&& unpack)
+    // per peer (the plan's from): its message received, then unpack(piece, at) for its pieces in
+    //  plan order
+    template<std::size_t dim>
+    void receive_all(amr::LevelPlan<dim>& plan, MPI_Comm const comm, auto&& unpack)
     {
-        for (auto const& [peer, pieces] : from)
+        for (auto const& [peer, indices] : plan.from)
         {
             MPI_Status status;
             {
@@ -69,14 +73,14 @@ namespace detail
             }
             int bytes = 0;
             MPI_Get_count(&status, MPI_BYTE, &bytes);
-            auto& buffer = received[peer];
+            auto& buffer = plan.received[peer];
             buffer.resize(static_cast<std::size_t>(bytes));
             MPI_Recv(buffer.data(), bytes, MPI_BYTE, peer, inter_level_tag, comm,
                      MPI_STATUS_IGNORE);
 
             std::byte const* at = buffer.data();
-            for (auto const* piece : pieces)
-                unpack(*piece, at);
+            for (auto const i : indices)
+                unpack(plan.pieces[i], at);
             if (at != buffer.data() + buffer.size())
                 throw std::runtime_error("damn::mpi::inter_level: rank " + std::to_string(peer)
                                          + "'s message does not match this rank's plan");
@@ -111,24 +115,17 @@ void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,
     auto sends = detail::send_all(plan.sent, comm);
 
     // local
-    std::vector<std::byte> bytes;
-    std::map<int, std::vector<LevelPiece<dim> const*>> from;
     for (auto const& piece : plan.pieces)
     {
-        if (!amr::detail::fine_is_local(plan, piece))
-            continue;
-        if (!amr::detail::coarse_is_local(piece))
-        {
-            from[piece.coarse.patch.rank].push_back(&piece);
-            continue;
-        }
-        bytes.clear();
-        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, bytes);
-        std::byte const* at = bytes.data();
+        if (!amr::detail::fine_is_local(plan, piece) or !amr::detail::coarse_is_local(piece))
+            continue; // the latter received below (plan.from)
+        plan.local.clear();
+        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     }
 
-    detail::receive_all(from, plan.received, comm, [&](auto const& piece, auto& at) {
+    detail::receive_all(plan, comm, [&](auto const& piece, auto& at) {
         unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     });
 
@@ -159,30 +156,24 @@ void coarsen(auto op, amr::LevelMap<dim>& map, std::vector<amr::LevelPair> const
     // computed on my fine patches: assigned, or sent to the coarse patch's rank
     for (auto& [_, buffer] : plan.sent)
         buffer.clear();
-    std::vector<std::byte> bytes;
-    std::map<int, std::vector<LevelPiece<dim> const*>> from;
     for (auto const& piece : plan.pieces) // one per target
     {
         auto const& target = plan.targets[piece.target];
         if (target.fine_local == not_local)
-        {
-            if (amr::detail::coarse_is_local(piece))
-                from[target.fine.rank].push_back(&piece);
-            continue;
-        }
+            continue; // received below (plan.from), if the coarse patch is mine
         if (!amr::detail::coarse_is_local(piece))
         {
             pack_coarsened(plan, target, access, fine_ld, op, plan.sent[piece.coarse.patch.rank]);
             continue;
         }
-        bytes.clear();
-        pack_coarsened(plan, target, access, fine_ld, op, bytes);
-        std::byte const* at = bytes.data();
+        plan.local.clear();
+        pack_coarsened(plan, target, access, fine_ld, op, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
     auto sends = detail::send_all(plan.sent, comm);
 
-    detail::receive_all(from, plan.received, comm, [&](auto const& piece, auto& at) {
+    detail::receive_all(plan, comm, [&](auto const& piece, auto& at) {
         unpack_coarsened(plan, piece, access, coarse_ld, at);
     });
     MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
