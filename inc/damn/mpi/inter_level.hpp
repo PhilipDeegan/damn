@@ -1,18 +1,7 @@
 #ifndef DAMN_MPI_INTER_LEVEL_HPP
 #define DAMN_MPI_INTER_LEVEL_HPP
 
-// damn::amr::refine and coarsen over MPI: the same transfers as damn/amr/inter_level.hpp's,
-// between patches of any rank, collective over the ranks holding either level's patches
-//
-//   damn::mpi::refine(op, LevelRegion::LevelGhosts, map, pairs, coarse_ld, fine_ld, alpha)
-//   damn::mpi::coarsen(op, map, pairs, fine_ld, coarse_ld)
-//
-// every rank plans the same pieces in the same order (fine patches, then their links, in level
-// order), so a message is the pieces' data only: one message per peer rank and transfer
-//   refine:  coarse ranks pack and send (MPI_Isend), local pieces go directly, fine ranks
-//            receive (MPI_Probe: item messages vary in size) and unpack, then op fills the
-//            fine field points from the gathered coarse values
-//   coarsen: fine ranks compute (op) and send, or assign directly; coarse ranks receive
+// damn::amr::refine and coarsen between patches of any rank, collective: doc/mpi/inter_level.md
 
 #include "damn/core/logger.hpp"
 #include "damn/amr/inter_level.hpp"
@@ -85,7 +74,7 @@ namespace detail
 } // namespace detail
 
 
-// access: as damn::amr::refine's (amr::by_name, or accessors one per pair)
+// access: amr::by_name, or accessors one per pair
 template<std::size_t dim, typename Access, typename CoarseLD, typename FineLD>
     requires amr::LevelDataLike<FineLD>
 void refine(auto op, amr::LevelRegion const region, amr::LevelMap<dim>& map,

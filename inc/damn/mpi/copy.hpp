@@ -1,19 +1,7 @@
 #ifndef DAMN_MPI_COPY_HPP
 #define DAMN_MPI_COPY_HPP
 
-// damn::amr copies over MPI: the same copies as damn/amr/copy.hpp's, between patches of any
-// rank, collective over the ranks holding the level's patches
-//
-//   damn::mpi::copy(damn::amr::fill_ghosts, neighbours, {"Bx"}, level_data)
-//
-// every rank plans the same pieces from the same global patch list, so a message is the
-// pieces' data only, in plan order: one message per peer rank and copy
-//   1. outgoing pieces packed per peer and sent (MPI_Isend)
-//   2. local pieces: ghosts and leaving items copied, sums and maxes read into the buffer
-//   3. per peer with pieces for me: probed (item messages vary in size), received,
-//      unpacked; sums kept in the received buffers
-//   4. local maxes written, sums folded with the received ones in a fixed order
-//      (damn::amr::detail::fold_sums), sends waited for
+// damn::amr copies between patches of any rank, collective: doc/mpi/copy.md
 // every source is read (1, 2) before anything is written (3, 4), so sums and maxes use the
 // values from before the copy
 
@@ -42,8 +30,7 @@ inline constexpr int copy_tag = 0xda;
 
 struct CopySends; // core::scratch tag: a copy's send requests
 
-// access: how the pieces' resources are reached (amr::by_name, or accessors one per pair, as
-//  damn::amr::copy)
+// access: amr::by_name, or accessors one per pair
 template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename Access,
          typename PatchData>
 void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
@@ -131,7 +118,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
                                      + "'s message does not match this rank's plan");
     }
 
-    // 4.
+    // 4. finish
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
         if constexpr (arrival == Arrival::Sum)
