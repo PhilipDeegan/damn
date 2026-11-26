@@ -13,11 +13,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <algorithm>
 #include <vector>
@@ -103,12 +105,15 @@ struct Plan
     std::vector<std::size_t> fold_order{};
     std::vector<FoldGroup<dim>> fold_groups{};
     std::vector<std::byte const*> sources{}; // per piece, its values for fold_sums (per copy)
+    // Leaving: per destination resource, its first piece (cell_items::appended once each)
+    std::vector<std::size_t> appended{};
 };
 
 template<std::size_t dim>
 struct Neighbours
 {
-    using PlanKey = std::pair<Region, std::vector<ResourcePair>>;
+    // a tuple: found by a tuple of references (std::less<>), the pairs not copied per copy
+    using PlanKey = std::tuple<Region, std::vector<ResourcePair>>;
 
     int level = 0;
     int rank  = 0;
@@ -119,7 +124,7 @@ struct Neighbours
     // other ranks' patches near mine, in level order, with all their links: I send them what
     // the links to my patches give, the others decide which image of a point fills a ghost
     std::vector<std::pair<Patch<dim>, std::vector<Link<dim>>>> remote{};
-    std::map<PlanKey, Plan<dim>> plans{}; // copy.hpp's, by region and resources
+    std::map<PlanKey, Plan<dim>, std::less<>> plans{}; // copy.hpp's, by region and resources
 };
 
 

@@ -13,7 +13,6 @@
 
 #include <cstddef>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -28,7 +27,6 @@ namespace damn::mpi
 {
 inline constexpr int copy_tag = 0xda;
 
-struct CopySends; // core::scratch tag: a copy's send requests
 
 // access: amr::by_name, or accessors one per pair
 template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename Access,
@@ -49,7 +47,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     };
 
     // 1. send
-    std::span<MPI_Request> sends;
+    core::ScratchVector<MPI_Request> sends; // until the sends are waited for, step 4
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::pack_send");
         for (auto& [_, buffer] : plan.sent)
@@ -60,7 +58,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
             pack_piece(region, piece, access, ld, plan.sent[piece.dst_rank]);
         }
 
-        sends          = core::scratch<MPI_Request, CopySends>(plan.sent.size());
+        sends.resize(plan.sent.size());
         std::size_t at = 0;
         for (auto& [peer, buffer] : plan.sent)
             MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, copy_tag, comm,

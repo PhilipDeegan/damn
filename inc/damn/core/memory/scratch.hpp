@@ -1,60 +1,115 @@
 #ifndef DAMN_CORE_MEMORY_SCRATCH_HPP
 #define DAMN_CORE_MEMORY_SCRATCH_HPP
 
-// per thread scratch: hot paths take a span of one of these instead of allocating
+// per thread scratch for hot paths instead of allocating: a holder takes a buffer from its
+//  thread's slots for its scope. A nested use on the same thread (recursion, a hook calling back)
+//  takes the next slot, never one still in use, so uses need no names and cannot overwrite each
+//  other. The buffers are MinimizingVectors: capacity is kept between uses (no allocation once
+//  warm) and shrinks after a run of uses well under it
 //
-//   auto own = damn::core::scratch<double, struct fold_own>(n); // std::span<double>, n values
-//
-// one buffer per thread and (T, Tag), thread_local: pool threads never share one, uses alive at
-// the same time on a thread take different tags. A buffer only grows (no allocation once warm),
-// its values are left from earlier uses (not zeroed). T: trivially copyable, at most
-// max_align_t aligned (the storage's alignment)
+//   Scratch<T> s{n};       n values, left from earlier uses (not zeroed)
+//   ScratchVector<T> v;    an empty std::vector, for buffers grown by push_back
+
+#include "damn/core/vector.hpp"
+#include "damn/core/def/damn_config.hpp"
 
 #include <cstddef>
-#include <new>
+#include <deque>
 #include <span>
-#include <type_traits>
+#include <utility>
 
 namespace damn::core
 {
 namespace detail
 {
-    struct ScratchBuffer
+    // a thread's buffers of one type, a stack: a holder takes the next, gives it back on scope
+    //  exit (a deque: a slot stays put as nested ones are added)
+    template<typename Kept>
+    struct ScratchSlots
     {
-        static constexpr std::align_val_t align{alignof(std::max_align_t)};
+        std::deque<Kept> slots;
+        std::size_t depth = 0;
 
-        std::byte* data   = nullptr;
-        std::size_t bytes = 0;
-
-        ScratchBuffer()                                = default;
-        ScratchBuffer(ScratchBuffer const&)            = delete;
-        ScratchBuffer& operator=(ScratchBuffer const&) = delete;
-        ~ScratchBuffer() { ::operator delete(data, align); }
-
-        std::byte* at_least(std::size_t const n)
+        static ScratchSlots& mine()
         {
-            if (n > bytes)
-            {
-                ::operator delete(data, align);
-                data  = nullptr; // if the allocation below throws
-                bytes = 0;
-                data  = static_cast<std::byte*>(::operator new(n, align));
-                bytes = n;
-            }
-            return data;
+            thread_local ScratchSlots s;
+            return s;
         }
+        Kept& take()
+        {
+            if (slots.size() <= depth)
+                slots.emplace_back();
+            return slots[depth++];
+        }
+        void give() { --depth; }
     };
 } // namespace detail
 
-template<typename T, typename Tag = void>
-std::span<T> scratch(std::size_t const n)
+template<typename T, auto alloc_mode = AllocatorMode::CPU>
+class Scratch
 {
-    static_assert(std::is_trivially_copyable_v<T>);
-    static_assert(alignof(T) <= alignof(std::max_align_t));
-    thread_local detail::ScratchBuffer buffer;
-    // operator new's storage: T, an implicit lifetime type, is created in it as used
-    return {reinterpret_cast<T*>(buffer.at_least(n * sizeof(T))), n};
-}
+    using Kept  = MinimizingVector<T, alloc_mode>;
+    using Slots = detail::ScratchSlots<Kept>;
+
+public:
+    explicit Scratch(std::size_t const n)
+        : kept{Slots::mine().take()}
+    {
+        kept.template get<false>(n);
+    }
+    Scratch(Scratch const&)            = delete;
+    Scratch& operator=(Scratch const&) = delete;
+    ~Scratch() { Slots::mine().give(); }
+
+    auto data() { return kept().data(); }
+    auto size() const { return kept.size(); }
+    auto begin() { return kept().begin(); }
+    auto end() { return kept().end(); }
+    auto& operator[](std::size_t const i) { return kept[i]; }
+    std::span<T> span() { return {kept().data(), kept.size()}; }
+
+private:
+    Kept& kept;
+};
+
+template<typename T, auto alloc_mode = AllocatorMode::CPU>
+class ScratchVector
+{
+    using Kept  = MinimizingVector<T, alloc_mode>;
+    using Slots = detail::ScratchSlots<Kept>;
+
+public:
+    ScratchVector()
+        : kept{Slots::mine().take()}
+    {
+        kept.clear();
+    }
+    ScratchVector(ScratchVector const&)            = delete;
+    ScratchVector& operator=(ScratchVector const&) = delete;
+    ~ScratchVector()
+    {
+        kept.template fit<false>(kept.size());
+        kept.clear();
+        Slots::mine().give();
+    }
+
+    auto data() { return kept().data(); }
+    auto size() const { return kept.size(); }
+    bool empty() const { return kept.size() == 0; }
+    auto begin() { return kept().begin(); }
+    auto end() { return kept().end(); }
+    auto& operator[](std::size_t const i) { return kept[i]; }
+    void resize(std::size_t const n) { kept().resize(n); }
+    void push_back(T const& t) { kept().push_back(t); }
+    auto& emplace_back(auto&&... args)
+    {
+        return kept().emplace_back(std::forward<decltype(args)>(args)...);
+    }
+    auto& vec() { return kept(); } // for what takes the vector itself, e.g. a hook appending to it
+
+private:
+    Kept& kept;
+};
 
 } // namespace damn::core
 

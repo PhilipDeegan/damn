@@ -26,6 +26,7 @@
 #include <string>
 #include <utility>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 #include <iterator>
@@ -192,7 +193,8 @@ namespace detail
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
     void unpack_local(Plan<dim>& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    // what follows from a new plan's pieces alone (Plan's from, fold_order, fold_groups)
+    // what follows from a new plan's pieces alone (Plan's from, appended, fold_order,
+    //  fold_groups)
     template<std::size_t dim>
     void finish_plan(Plan<dim>& plan);
 
@@ -201,7 +203,6 @@ namespace detail
     template<std::size_t dim>
     void local_sources(Plan<dim>& plan);
 
-    struct FoldOwn; // fold_sums' scratch (core::scratch tag)
 
     // the same bits on every patch holding a point: contributions added in the lexicographic
     //  order of their patch's image, translation invariant: doc/amr/copy.md
@@ -232,15 +233,14 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
         throw std::runtime_error("damn::amr::copy: the neighbours are not the level data's"
                                  " (rebuild them after a regrid)");
 
-    typename Neighbours<dim>::PlanKey key{region, pairs};
-    auto found = n.plans.find(key);
+    auto found = n.plans.find(std::forward_as_tuple(region, pairs));
     if (found == n.plans.end())
     {
         DAMN_LOG_SCOPE(2, "damn::amr::plan_for"); // once per region and resources
         found = n.plans
-                    .emplace(std::move(key), region == Region::Leaving
-                                                 ? detail::item_plan(n, ld, pairs)
-                                                 : detail::box_plan(region, n, ld, pairs))
+                    .emplace(typename Neighbours<dim>::PlanKey{region, pairs},
+                             region == Region::Leaving ? detail::item_plan(n, ld, pairs)
+                                                       : detail::box_plan(region, n, ld, pairs))
                     .first;
         detail::finish_plan(found->second);
     }
@@ -642,6 +642,14 @@ void detail::finish_plan(Plan<dim>& plan)
             from[pieces[i].src.patch.rank].push_back(i);
     plan.from.assign(from.begin(), from.end());
 
+    if (plan.region == Region::Leaving)
+        for (std::size_t i = 0; i < pieces.size(); ++i)
+            if (std::none_of(plan.appended.begin(), plan.appended.end(), [&](auto const j) {
+                    return pieces[j].dst == pieces[i].dst
+                           and pieces[j].names.dst == pieces[i].names.dst;
+                }))
+                plan.appended.push_back(i);
+
     if (plan.region != Region::Borders)
         return;
     auto const image = [&](std::size_t const i) {
@@ -726,7 +734,7 @@ void detail::fold_sums(Plan<dim> const& plan, Access const& access, LevelData<di
             };
 
             // the summed points: the destination's own values kept, then zeroed
-            auto const own = core::scratch<T, FoldOwn>(group.points);
+            core::Scratch<T> own{group.points};
             std::size_t o  = 0;
             for (auto const& box : group.covered)
                 each(box, [&](T* const v, std::uint32_t const n) {
@@ -784,15 +792,9 @@ void detail::append_items(Plan<dim> const& plan, Access const& access,
 template<std::size_t dim, typename Access, typename PatchData>
 void detail::appended(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
-    std::vector<std::pair<std::size_t, std::string const*>> done;
-    for (auto const& piece : plan.pieces)
+    for (auto const i : plan.appended)
     {
-        auto const key = std::pair{piece.dst, &piece.names.dst};
-        if (std::any_of(done.begin(), done.end(), [&](auto const& d) {
-                return d.first == key.first and *d.second == *key.second;
-            }))
-            continue;
-        done.push_back(key);
+        auto const& piece = plan.pieces[i];
         dst_of<dim, true>(access, ld.data[piece.dst], piece,
                           [&](auto& dst) { cell_items::appended(dst); });
     }

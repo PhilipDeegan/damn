@@ -4,6 +4,8 @@
 // moving a CellItemData resource's items between patches, item by item unless the resource
 // gives its own hooks (ADL): doc/amr/cell_items.md
 
+#include "damn/core/memory/scratch.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -115,9 +117,9 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
         append_items_from(dst, src, box, shift);
     else if constexpr (detail::Packs<R, dim> and detail::Packs<S, dim>)
     {
-        std::vector<std::byte> scratch; // packed first: appending to src itself is safe
-        pack_items(src, box, shift, scratch);
-        std::byte const* at = scratch.data();
+        core::ScratchVector<std::byte> bytes; // packed first: appending to src itself is safe
+        pack_items(src, box, shift, bytes.vec());
+        std::byte const* at = bytes.data();
         unpack_items(dst, at, shift);
     }
     else
@@ -133,7 +135,7 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
             return;
         }
         // the same array: collect first, appending invalidates it
-        std::vector<Item> items;
+        core::ScratchVector<Item> items;
         for_each_item(src, [&](auto const& item) {
             if (selected(item))
                 items.push_back(item);

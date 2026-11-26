@@ -14,12 +14,13 @@
 #include "damn/core/exec/kernels.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/memory/scratch.hpp"
 
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <deque>
 #include <memory>
 #include <vector>
 #include <type_traits>
@@ -264,26 +265,74 @@ namespace detail
         return false;
     }
 
+    // a pair's run: its resource type's device hook on its pieces
+    struct AppendRun
+    {
+        void (*run)(void*);
+        void* pieces;
+    };
+
+    // per thread: the pairs' piece slots in use by append_on_device calls, a nested call (from a
+    //  hook) takes the slots after its caller's, whose pieces are still to run
+    struct AppendSlots
+    {
+        explicit AppendSlots(std::size_t const n)
+            : base{used()}
+        {
+            used() += n;
+        }
+        AppendSlots(AppendSlots const&)            = delete;
+        AppendSlots& operator=(AppendSlots const&) = delete;
+        ~AppendSlots() { used() = base; }
+
+        static std::size_t& used()
+        {
+            thread_local std::size_t n = 0;
+            return n;
+        }
+
+        std::size_t const base;
+    };
+
+    // per thread and resource pair type, a slot's pieces, empty: kept between copies, and until
+    //  every pair of a copy is known to run (a deque: a slot stays put as later ones are added)
+    template<typename Pieces>
+    Pieces& append_pieces(std::size_t const slot)
+    {
+        thread_local std::deque<Pieces> kept;
+        while (kept.size() <= slot)
+            kept.emplace_back();
+        auto& pieces = kept[slot];
+        pieces.clear();
+        return pieces;
+    }
+
     // the pair's pieces (for_each_piece(add): add(src, dst, piece) for each) handed at once to its
     //  resource type's device hooks: a run, if every piece is of the pair's types and they can
     template<std::size_t dim, typename S, typename D>
         requires DeviceAppendable<std::vector<AppendPiece<D, S, dim>>>
-    bool append_run(S const&, D&, std::vector<std::function<void()>>& runs, auto&& for_each_piece)
+    bool append_run(S const&, D&, std::size_t const slot, AppendRun& run, auto&& for_each_piece)
     {
-        auto pieces = std::make_shared<std::vector<AppendPiece<D, S, dim>>>();
-        bool same   = true;
+        using Pieces = std::vector<AppendPiece<D, S, dim>>;
+        auto& pieces = append_pieces<Pieces>(slot);
+        bool same    = true;
         for_each_piece([&](auto const& src, auto& dst, auto const& piece) {
-            same = append_piece(*pieces, src, dst, piece) and same;
+            same = append_piece(pieces, src, dst, piece) and same;
         });
-        if (!same or !can_append_items_on_device(*pieces))
+        if (!same or !can_append_items_on_device(pieces))
             return false;
-        runs.emplace_back([pieces]() { append_items_on_device(*pieces); });
+        run = {[](void* const p) {
+                   auto& ran = *static_cast<Pieces*>(p);
+                   append_items_on_device(ran);
+                   ran.clear(); // the handles not held past the copy
+               },
+               &pieces};
         return true;
     }
 
     // a resource type without device append hooks: the host path
     template<std::size_t dim, typename S, typename D>
-    bool append_run(S const&, D&, std::vector<std::function<void()>>&, auto&&)
+    bool append_run(S const&, D&, std::size_t, AppendRun&, auto&&)
     {
         return false;
     }
@@ -388,7 +437,7 @@ bool sum_on_device(Plan<dim>& plan, Access const& access, LevelData<dim, PatchDa
 template<std::size_t dim, typename Access, typename PatchData>
 bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld)
 {
-    std::vector<std::uint32_t> pairs;
+    core::ScratchVector<std::uint32_t> pairs;
     for (auto const& piece : plan.pieces)
     {
         if (!detail::is_local(piece))
@@ -399,15 +448,18 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
     if (pairs.empty())
         return false; // nothing to do: the host path is as cheap
 
-    std::vector<std::function<void()>> runs;
-    for (auto const pair : pairs)
+    detail::AppendSlots const slots{pairs.size()};
+    core::ScratchVector<detail::AppendRun> runs;
+    runs.resize(pairs.size());
+    for (std::size_t k = 0; k < pairs.size(); ++k)
     {
+        auto const pair   = pairs[k];
         auto const& first = *std::find_if(plan.pieces.begin(), plan.pieces.end(),
                                           [&](auto const& p) { return p.pair == pair; });
         bool ok           = false;
         detail::src_of<dim, true>(access, ld.data[first.src.local], first, [&](auto const& src0) {
             detail::dst_of<dim, true>(access, ld.data[first.dst], first, [&](auto& dst0) {
-                ok = detail::append_run<dim>(src0, dst0, runs, [&](auto&& add) {
+                ok = detail::append_run<dim>(src0, dst0, slots.base + k, runs[k], [&](auto&& add) {
                     for (auto const& piece : plan.pieces)
                         if (piece.pair == pair)
                             detail::src_of<dim, true>(
@@ -423,7 +475,7 @@ bool append_on_device(Plan<dim> const& plan, Access const& access, LevelData<dim
             return false;
     }
     for (auto const& run : runs)
-        run();
+        run.run(run.pieces);
     return true;
 }
 
