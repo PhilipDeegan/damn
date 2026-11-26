@@ -1,31 +1,8 @@
 #ifndef DAMN_AMR_DEVICE_COPY_HPP
 #define DAMN_AMR_DEVICE_COPY_HPP
 
-// a copy's same rank pieces on the device (GPU builds), for resources in unified memory: their
-//  values never touched by the host. A resource qualifies (DeviceBoxSpan) when its type says it
-//  is on the device (on_device) and it gives a box_span(resource, patch box): its data and the
-//  box of its points (C order). Every local piece of the plan must qualify (else the copy's
-//  host path runs), values double
-//
-//   assign_on_device(plan, access, ld)  Assign: every piece's points in one launch, a thread per
-//                                       point (its piece found by binary search over their first
-//                                       points), dst(p) = src(p - shift)
-//   sum_on_device(plan, access, ld)     Sum: every piece's source values snapshot into a device
-//                                       buffer (one launch), then a thread per summed destination
-//                                       point adds the contributions in fold_sums' order (from 0,
-//                                       the destination's own value at its place among the
-//                                       pieces' images): the host path's bits
-//
-//   append_on_device(plan, access, ld)  Append (items): per resource pair, every piece handed at
-//                                       once to the resource type's device hooks (found by ADL):
-//                                         can_append_items_on_device(pieces) -> bool
-//                                         append_items_on_device(pieces)
-//                                       pieces: std::vector<AppendPiece<Dst, Src, dim>>, in plan
-//                                       order (a destination's items in the host path's order).
-//                                       Nothing done unless every pair can
-//
-// The pieces' table is built on the plan's first device copy and kept with it (plans live with
-//  their level's neighbours: a new decomposition makes new plans, new tables)
+// a copy's same rank pieces on the device, for resources in unified memory the host never
+//  touches: doc/amr/device_copy.md. Every local piece must qualify, else the host path runs
 
 #include "damn/core/def/damn_config.hpp"
 
@@ -58,8 +35,7 @@ concept DeviceBoxSpan
           { box_span(r, box).box };
       };
 
-// an Append piece for a resource type's device hook: the resources (copies: handles), the
-//  piece's (destination) box and its source's shift, its destination patch (LevelData index)
+// resources are copies: handles; dst_patch: a LevelData index
 template<typename Dst, typename Src, std::size_t dim>
 struct AppendPiece
 {
@@ -149,7 +125,6 @@ namespace detail
               requires std::same_as<decltype(box_span(r, box).ptr), double*>;
           };
 
-    // a piece the kernels copy: into the table
     template<std::size_t dim, typename S, typename D>
         requires DeviceSource<S, dim> and DeviceDestination<D, dim>
     bool table_piece(DeviceTable<dim>& table, S const& src, D& dst, auto const& piece,
@@ -274,7 +249,6 @@ namespace detail
         append_items_on_device(v);
     };
 
-    // a piece of the pair's resource types: into the pair's pieces
     template<typename D, typename S, std::size_t dim>
     bool append_piece(std::vector<AppendPiece<D, S, dim>>& pieces, S const& src, D& dst,
                       auto const& piece)

@@ -15,8 +15,7 @@
 #include <algorithm>
 
 // every rank sends values made from its rank, so the checks cover both the content and the
-// order of what is gathered; run with any number of ranks, e.g.
-//   mpirun -n 3 bin/test_damn_mpi/test_mpi_utils
+// order of what is gathered; any number of ranks
 
 using namespace damn;
 

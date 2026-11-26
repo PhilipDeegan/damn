@@ -1,23 +1,8 @@
 #ifndef DAMN_CORE_EXEC_EXECUTION_MODEL_HPP
 #define DAMN_CORE_EXEC_EXECUTION_MODEL_HPP
 
-// ExecutionModel: what one rank runs on, and the threads in use from it
-//
-//   mpi_ranks        0: MPI not initialised (one process, no messages); else the run's ranks
-//   usable_threads   the process's threads, per rank when mpi_ranks > 0 (each rank its own
-//                    model): 1, the default, is the main thread only
-//   max_scheduled    threads in use at once at most this times usable_threads, at least 1: some
-//                    oversubscription hides waits, more only contends. 1.2 by default; what suits
-//                    depends on the work and the machine
-//   threads_used     in use now: the main thread (1) and every lease's
-//
-// mpi(): ranks exchange messages; threaded(): more than the main thread; mpi_only(): ranks of one
-// thread each
-//
-// use_threads(n) leases up to n more threads, what is free (possibly none: the caller runs the
-// work itself), until the lease is destroyed. Pools anywhere downstream size themselves from their
-// lease, so pools in different contexts share the one budget. damn/mpi/execution_model.hpp sets
-// mpi_ranks from MPI
+// what one rank runs on, and the threads in use from it: doc/core/exec/execution_model.md
+// pools size themselves from a lease, so pools in different contexts share one budget
 
 #include "damn/core/def.hpp"
 

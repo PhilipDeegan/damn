@@ -1,8 +1,7 @@
 #ifndef DAMN_TST_CORE_EXEC_THREAD_POOL_TESTS_HPP
 #define DAMN_TST_CORE_EXEC_THREAD_POOL_TESTS_HPP
 
-// ThreadPool's tests, built threaded (test_thread_pool.cpp) and synchronous
-// (test_thread_pool_sync.cpp, DAMN_THREAD_POOL_SYNC): the same results either way
+// built threaded and synchronous (DAMN_THREAD_POOL_SYNC): the same results either way
 
 #include "damn/core/exec/thread_pool.hpp"
 

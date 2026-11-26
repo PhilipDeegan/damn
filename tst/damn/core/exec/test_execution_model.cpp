@@ -1,5 +1,3 @@
-// damn::core::ExecutionModel: defaults, leases under the cap, given back, from many threads at once
-
 #include "damn/core/exec/execution_model.hpp"
 #include "damn/core/exec/leased_pool.hpp"
 

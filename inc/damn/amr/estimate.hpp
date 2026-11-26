@@ -1,41 +1,8 @@
 #ifndef DAMN_AMR_ESTIMATE_HPP
 #define DAMN_AMR_ESTIMATE_HPP
 
-// a decomposition's step time, estimated without data, to choose between decompositions
-// (decompose.hpp's partitions, spill tolerances, patch sizes) by what a run would take:
-//
-//   estimate(h, topology, reach, weights, costs[, threads])
-//       per level and rank: compute, its patches' weights (seconds: cost.hpp's CostModel), and
-//       exchange, per Distance a latency per message (a patch pair overlapping: another
-//       patch's cells, or its periodic image's, within reach of a patch; the coarser level's
-//       patches under a patch grown by reach, coarsened) and a cost per cell overlapped; a level
-//       takes its slowest rank's compute + exchange, and level l runs ratio^l times a coarse
-//       step:  step = sum_l ratio^l max_r (compute[r] + exchange[r])
-//   ExchangeCosts{latency, per_cell}, per Distance, seconds
-//   exchange_costs(node_latency, node_s_per_byte, bytes_per_cell)
-//       the Node distance's from a measurement, the others relative to it (Self, Local 0;
-//       Numa 0.3; Socket 2; Remote 10): placeholders until measured
-//   Threads{per_rank, main_busy, efficiency}
-//       a rank's threads: its patches' tiles (TileSet, a patch's cost shared by its tiles' cells),
-//       largest first, each to the least loaded thread (the main one has 1 - main_busy of its
-//       time for tiles), a rank's compute its busiest thread's over efficiency; one thread: its
-//       patches' sum over 1 - main_busy. Fewer ranks with more threads: fewer exchanges, the
-//       imbalance of whole patches within a rank gone, at the threads' efficiency
-//   bootstrapped_exchange_costs(bytes_per_cell)
-//       from this machine's bootstrap (etc/bootstrap/mpi/exchange_*: Node, Socket where
-//       measured), else defaults; bytes_per_cell: what a model exchanges per ghost cell
-//
-//   Detached{near_band}: Estimate::detached, the step with level 0's far patches (beyond
-//       near_band cells of level 1, needed only by the end of the coarse step) as background
-//       work on a rank's spare threads: max over ranks of the larger of its far part and the
-//       rest. Only with threads (per_rank > 1): with one thread a rank, far level 0 stays in
-//       level 0's phase (collectives, dumps need every rank there), Estimate::step
-//   choose(h, from, boxes, candidates, reach, costs[, threads])
-//       each candidate (a Decompose: partition, spill, sizes, ...) decomposes the levels, each
-//       decomposition estimated, the cheapest kept (ties: the first)
-//
-// An estimate, not a prediction: no overlap of compute and exchange, every exchange of a step
-// folded into bytes_per_cell; good enough to rank decompositions
+// a decomposition's step time without data, to rank decompositions: doc/amr/estimate.md
+// no overlap of compute and exchange: an estimate, not a prediction
 
 #include "damn/core/def.hpp"
 #include "damn/core/def/bootstrap.hpp"
@@ -65,7 +32,7 @@ struct ExchangeCosts
     std::array<double, n_distances> per_cell{}; // seconds a cell, per Distance
 };
 
-// the Node distance's costs measured, the others relative to them
+// the others relative to Node: placeholders until measured
 MKN_KUL_FN_SIG_RET inline ExchangeCosts
 exchange_costs(double const node_latency, double const node_s_per_byte, double const bytes_per_cell)
 {
@@ -80,8 +47,7 @@ exchange_costs(double const node_latency, double const node_s_per_byte, double c
     return c;
 }
 
-// this machine's, from its bootstrap (Node, and Socket where measured), else defaults (a
-// shared memory exchange of ~1 us latency, 1e-10 s a byte)
+// defaults: a shared memory exchange of ~1 us latency, 1e-10 s a byte
 MKN_KUL_FN_SIG_RET inline ExchangeCosts bootstrapped_exchange_costs(double const bytes_per_cell)
 {
     auto c = exchange_costs(bootstrap::get<double>("mpi/exchange_node/latency_s", 1e-6),
@@ -102,9 +68,7 @@ struct Threads
     double efficiency = 1.; // the threads' parallel efficiency (shared bandwidth), > 1 thread
 };
 
-// level 0's detached (far) part: its patches beyond near_band cells of level 1, needed only by
-//  the end of the coarse step, run beside the rest on a rank's spare threads; near_band < 0:
-//  not modelled
+// level 0's far patches on spare threads: doc/amr/estimate.md; near_band < 0: not modelled
 struct Detached
 {
     int near_band = -1;
@@ -127,7 +91,6 @@ struct Estimate
 
 namespace detail
 {
-    // per rank, its patches' compute over its threads (Threads)
     template<std::size_t dim>
     std::vector<double> compute_times(std::vector<Patch<dim>> const& patches,
                                       std::vector<double> const& w, std::size_t const n_ranks,
@@ -317,8 +280,7 @@ struct Choice
     std::vector<double> steps{};      // every candidate's estimated step
 };
 
-// levels from, from + 1, ... decomposed by each candidate (decompose), each estimated (its own
-// weigh on its patches, h's levels under `from` kept), the cheapest kept
+// each candidate weighed by its own weigh; h's levels under `from` kept
 template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET Choice<dim> choose(Hierarchy<dim, Lattice> const& h, int const from,
                                       std::vector<std::vector<core::Box<int, dim>>> const& boxes,

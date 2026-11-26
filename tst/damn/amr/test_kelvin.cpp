@@ -1,6 +1,3 @@
-// damn::amr::kelvin: keys, cells and sites; faces (2D and 3D); KeyBox; SiteArray ghosts filled by
-// copy on a Kelvin hierarchy, periodic and bounded, a scalar and a value per face
-
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"
 #include "damn/amr/copy.hpp"

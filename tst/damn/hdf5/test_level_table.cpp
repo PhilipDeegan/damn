@@ -2,7 +2,7 @@
 // strided spans, and a contiguous column) written by their owners straight from memory, the
 // level (boxes, ids, owners, offsets) with them, then read back by any rank, its own patches or
 // another's, into memory in place; fields' domains from their ghost buffers (n dimensional
-// memory selections), in C order; run with any number of ranks, e.g. mpirun -n 3
+// memory selections), in C order; any number of ranks
 
 #include "damn/hdf5/level_table.hpp"
 #include "damn/amr/hierarchy.hpp"

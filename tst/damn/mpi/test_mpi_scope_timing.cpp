@@ -1,6 +1,4 @@
-// damn::mpi::start_scope_timing / stop_scope_timing: one phlop timer file per rank, with the
-// copies' scopes. Run with any number of ranks:
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_scope_timing
+// any number of ranks
 
 #include "damn/core/def/phlop.hpp"
 #include "damn/amr/copy.hpp"

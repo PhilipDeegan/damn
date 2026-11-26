@@ -201,7 +201,7 @@ public:
 };
 
 // one block per field tile of a patch, block threads stride the points of a box of that tile
-//  no sync by default: launch on the patch's stream, the consumer waits (see .gpu_todo)
+//  no sync by default: launch on the patch's stream, the consumer waits
 template<bool sync = false>
 class TileLauncher : public DeviceLauncher<mkn::gpu::Fixed, sync>
 {

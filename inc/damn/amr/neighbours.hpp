@@ -1,17 +1,8 @@
 #ifndef DAMN_AMR_NEIGHBOURS_HPP
 #define DAMN_AMR_NEIGHBOURS_HPP
 
-// Neighbours: the patches of a level near each of a rank's patches, periodic images included
-//
-//   Link:        another patch (or a periodic image of the same one), the shift to its image
-//                and how far its data is (Distance)
-//   Neighbours:  per local patch, in LevelData order, every patch whose box grown by reach
-//                meets the local patch's box grown by reach: reach is the most cells any
-//                resource reaches outside its patch (ghosts, plus one for primal nodes)
-//
-// purely geometric: built once per regrid (make_neighbours), then damn/amr/copy.hpp copies
-// data along the links; what moves where for a given set of resources is planned on first
-// use and kept here (plans), so a regrid, which builds new Neighbours, drops them
+// the patches of a level near each of a rank's patches, periodic images included:
+// doc/amr/neighbours.md. Geometric; plans kept here, so a regrid drops them
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -64,7 +55,6 @@ same_names(std::vector<std::string> const& names)
     return pairs;
 }
 
-// what goes where, see copy.hpp
 enum class Region : std::uint8_t {
     Ghosts,  // neighbours' domain points -> my ghost points
     Borders, // neighbours' ghost points -> the same points of mine (ghost boxes overlap)
@@ -94,12 +84,8 @@ struct FoldGroup
     std::size_t points = 0;                     // in covered
 };
 
-// what goes where for a region and set of resources, from one rank's point of view
-//   pieces:   into my patches, from mine or another rank's
-//   outgoing: from my patches into another rank's
-// both ranks of a transfer make the same pieces in the same order, from the same global patch
-// list: messages need no description of their content. What follows from the pieces alone is
-// made with the plan (copy.hpp's plan_for), so a copy only moves values
+// from one rank's point of view; both ranks of a transfer make the same pieces in the same
+// order, so messages need no description of their content
 template<std::size_t dim>
 struct Plan
 {

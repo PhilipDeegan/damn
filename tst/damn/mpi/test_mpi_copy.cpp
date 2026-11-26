@@ -1,7 +1,5 @@
-// damn::mpi::copy: the serial copy tests' brute force expectations with the patches spread over
-// the ranks (round robin, uniform_level_0). Run with any number of ranks:
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_copy
-// one rank checks the MPI path against the serial copies
+// the serial copy tests' brute force expectations with the patches spread over the ranks (round
+// robin, uniform_level_0); any number of ranks, one checks the MPI path against the serial copies
 
 #include "damn/mpi/copy.hpp"
 #include "damn/mpi/topology.hpp"

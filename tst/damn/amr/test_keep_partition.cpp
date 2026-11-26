@@ -1,7 +1,3 @@
-// damn::amr::keep, owned_boxes, spill: a new level's boxes owned where the old level held the
-// cells, else by the coarser patch under them, else fresh; the pieces cover each box once; spill
-// brings every rank within its share's tolerance, its node first, and keeps a rank's last patch
-
 #include "damn/amr/keep_partition.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/topology.hpp"

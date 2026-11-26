@@ -205,7 +205,6 @@ private:
 
 // Like NdArrayView but steps by sizeof(T) rather than sizeof(V) when indexing.
 // V must be at offset 0 within T (i.e. V is the first base of T).
-// This mirrors the ViewSpan::hax pattern used in GridTileSet.
 template<std::size_t dim, typename V, typename T, bool c_ordering = true>
 class NdArrayViewSpan
 {

@@ -5,12 +5,9 @@
 // counters per log level, see damn/core/def/phlop.hpp), one file per rank, read with phlop's
 // python tools (python3 -m phlop.timing.scope_timer times|perf|variance ...)
 //
-//   start_scope_timing(".phare/timings/rank.")  // after MPI_Init, every rank: rank.<r>.txt
-//   ...
-//   stop_scope_timing()                         // before MPI_Finalize, every rank: written
-//
-// both are collective (they synchronise the ranks' clocks, so phlop can compare when scopes
-// start across ranks). Without phlop they do nothing
+// start after MPI_Init, stop before MPI_Finalize: both are collective (they synchronise the
+// ranks' clocks, so phlop can compare when scopes start across ranks). Without phlop they do
+// nothing
 
 #include "damn/core/def.hpp"
 #include "damn/core/def/phlop.hpp"

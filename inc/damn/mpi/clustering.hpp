@@ -3,8 +3,6 @@
 
 // damn::amr::cluster over MPI: every rank's tagged tiles gathered on every rank, then clustered
 // there, so every rank gets the same boxes (collective)
-//
-//   damn::mpi::cluster(h, ln, my_tagged_cells, options)
 
 #include "damn/amr/clustering.hpp"
 #include "damn/mpi/damn_mpi.hpp"

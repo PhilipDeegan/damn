@@ -4,8 +4,6 @@
 // damn::amr regrids over MPI (damn/amr/regrid.hpp): the same regrid, with patches moving
 // between ranks; collective over the ranks holding either level's patches
 //
-//   ld = damn::mpi::regrid(map, std::move(ld), make_patch_data);
-//
 // memory: transfers to another rank are packed into that peer's buffer as each old patch is
 // visited (then freed), and sent once the buffer reaches chunk bytes. While more than
 // max_in_flight bytes are being sent, the rank receives what has arrived (and frees completed

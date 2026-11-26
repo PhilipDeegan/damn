@@ -1,18 +1,10 @@
 #ifndef DAMN_AMR_KELVIN_SITES_HPP
 #define DAMN_AMR_KELVIN_SITES_HPP
 
-// a Kelvin (body centred) lattice's sites on damn's cells, and their faces, any dimension
-//
-//   key        a site in h units: every component even (a corner site) or every one odd (a body
-//              site); cell c holds corner key 2 c and body key 2 c + 1
-//   faces      2^dim diagonal faces (to the other sublattice, delta +-1 per direction, in
-//              lexicographic order of the signs: (-,-,-) first) then 2 dim axial faces (to the
-//              same sublattice, delta +-2 along one direction: -x, +x, -y, +y, ...). In 3D the 8
-//              hexagons and 6 squares of a truncated octahedron
-//   neighbour  the cell and site across face k: never more than one cell away
-//   KeyBox     a domain's sites: keys lower..upper per direction, periodic or bounded. A periodic
-//              direction's keys are whole cells; a bounded one's need not be (keys -N..N: one
-//              sublattice a layer more than the other), its cells are those holding a site
+// a Kelvin (body centred) lattice's sites on damn's cells, keys in h units, and their faces:
+// doc/amr/kelvin/sites.md
+// face order: 2^dim diagonal faces, signs lexicographic from (-,-,-), then 2 dim axial faces
+//  -x, +x, -y, +y, ...
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"

@@ -100,7 +100,7 @@ auto all_get_from(int const& rank_, Fn&& fn, Args&&... args)
         var = fn(args...);
     void* data = &var;
 
-    int count = 1; // default
+    int count = 1;
     MPI_Datatype sendtype;
     if constexpr (std::is_same_v<std::string, Data> or mkn::kul::IsStdVector<Data>)
     {
@@ -113,13 +113,7 @@ auto all_get_from(int const& rank_, Fn&& fn, Args&&... args)
     else
         sendtype = mpi_type_for<Data>();
 
-    MPI_Bcast(         // MPI_Bcast
-        data,          //   void *buffer
-        count,         //   int count
-        sendtype,      //   MPI_Datatype sendtype
-        rank_,         //   int root
-        MPI_COMM_WORLD //   MPI_Comm comm
-    );
+    MPI_Bcast(data, count, sendtype, rank_, MPI_COMM_WORLD);
     return var;
 }
 
@@ -137,15 +131,8 @@ void _collect(Data const* const sendbuf, std::vector<Data>& rcvBuff,
 {
     auto mpi_type = mpi_type_for<Data>();
 
-    MPI_Allgather(      // MPI_Allgather
-        sendbuf,        //   void         *sendbuf,
-        sendcount,      //   int          sendcount,
-        mpi_type,       //   MPI_Datatype sendtype,
-        rcvBuff.data(), //   void         *recvbuf,
-        recvcount,      //   int          recvcount,
-        mpi_type,       //   MPI_Datatype recvtype,
-        MPI_COMM_WORLD  //   MPI_Comm     comm
-    );
+    MPI_Allgather(sendbuf, sendcount, mpi_type, rcvBuff.data(), recvcount, mpi_type,
+                  MPI_COMM_WORLD);
 }
 
 
@@ -158,16 +145,8 @@ void _collect_vector(SendBuff const& sendBuff, RcvBuff& rcvBuff, std::vector<int
 
     assert(recvcounts.size() == displs.size() and static_cast<int>(displs.size()) == mpi_size);
 
-    MPI_Allgatherv(        // MPI_Allgatherv
-        sendBuff.data(),   //   void         *sendbuf,
-        sendBuff.size(),   //   int          sendcount,
-        mpi_type,          //   MPI_Datatype sendtype,
-        rcvBuff.data(),    //   void         *recvbuf,
-        recvcounts.data(), //   int          *recvcounts,
-        displs.data(),     //   int          *displs,
-        mpi_type,          //   MPI_Datatype recvtype,
-        MPI_COMM_WORLD     //   MPI_Comm     comm
-    );
+    MPI_Allgatherv(sendBuff.data(), sendBuff.size(), mpi_type, rcvBuff.data(), recvcounts.data(),
+                   displs.data(), mpi_type, MPI_COMM_WORLD);
 }
 
 template<typename Vector>

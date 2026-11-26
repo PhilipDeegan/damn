@@ -1,15 +1,8 @@
 #ifndef DAMN_AMR_HIERARCHY_HPP
 #define DAMN_AMR_HIERARCHY_HPP
 
-// a patch hierarchy as data, and free functions over it
-//
-//   Hierarchy: level 0 domain, mesh size, origin, periodicity, refinement ratio, levels; its
-//              Lattice (damn/amr/lattice.hpp) a tag: Cartesian by default, or Kelvin
-//   Level:     every patch of the level, whichever rank owns it (same on every rank)
-//   Patch:     a cell box in its level's index space, owner rank, id unique on the level
-//
-// level ln's index space is level 0's refined by ratio^ln; boxes are cell boxes
-// nothing here communicates: ranks are only numbers, see damn/mpi for that
+// a patch hierarchy as data, and free functions over it: doc/amr/hierarchy.md
+// nothing here communicates: ranks are only numbers
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
@@ -232,7 +225,6 @@ MKN_KUL_FN_SIG_RET Level<dim> make_level(int const ln,
 
 // ---------------------------------------------------------------- patches
 
-// fn(patch) for the patches of level owned by rank
 template<std::size_t dim>
 void for_each_local_patch(Level<dim> const& level, int const rank, auto&& fn)
 {
@@ -301,13 +293,8 @@ MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> chop(core::Box<int, dim> con
 // how far past chop_evenly's size a box may go: size is a hint, not a bound
 double constexpr chop_size_slack = 1.25;
 
-// box cut per direction into the count of boxes nearest width / size, more only if a box would be
-// wider than chop_size_slack * size, the cells shared evenly between them in units of
-// `granularity` cells from the box's lower corner (e.g. the refinement ratio: refined boxes of
-// whole coarser cells; size and its slack are rounded to whole units), the leftover units one
-// each to the first boxes (SAMRAI's chop on one rank), so no box is left with a few cells.
-// Size 20: 100 cells: 20 x 5; 45: 23, 22 (chop: 20, 20, 5); 24: 24; 26: 13, 13. Size 60,
-// granularity 2: 122 cells: 62, 60 (chop: 60, 60, 2)
+// cells shared evenly in units of `granularity`, so no box is left with a few cells:
+// doc/amr/hierarchy.md
 template<std::size_t dim>
 MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, dim> const& box,
                                                                 std::array<int, dim> const& size,
@@ -355,8 +342,7 @@ MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>> chop_evenly(core::Box<int, d
     return boxes;
 }
 
-// level 0 as the domain chopped into patches of `size`, partitioned over n_ranks by cells along
-// the Hilbert curve (partition.hpp; for other weights: make_level(0, boxes, partition(...)))
+// partitioned by cells along the Hilbert curve
 template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET Level<dim> uniform_level_0(Hierarchy<dim, Lattice> const& h,
                                               std::array<int, dim> const& size,
@@ -413,14 +399,8 @@ covered_by_level(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, 
     return covered;
 }
 
-// the cells of box grown by width (a patch's ghost box, level ln index space) another patch of
-//  level ln owns, periodic images included. A cell's owner is, of the patch images holding it
-//  in their box grown by width, the nearest to it (the L1 distance from the cell to the image's
-//  box), the first in box order (core::lexicographic_less) on a tie: every holder agrees (both
-//  are translation invariant, the same on every rank). A level ghost particle held by its
-//  cell's owner only (PHAREHUB/PHARE#1580's owner, nearest rather than first): it stays in its
-//  holder's ghost box the longest, e.g. a cell diagonal to one patch's corner and next to
-//  another's side is the latter's. As boxes of cells, along the last direction
+// the cells of box grown by width another patch of level ln owns, periodic images included, as
+//  boxes along the last direction; nearest owner, then box order: doc/amr/hierarchy.md
 template<std::size_t dim, typename Lattice>
 MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
 owned_elsewhere(Hierarchy<dim, Lattice> const& h, int const ln, core::Box<int, dim> const& box,

@@ -1,8 +1,8 @@
 #ifndef DAMN_TST_AMR_INTER_LEVEL_TESTS_HPP
 #define DAMN_TST_AMR_INTER_LEVEL_TESTS_HPP
 
-// refine and coarsen's tests with brute force expectations, serial (test_inter_level.cpp) and
-// over MPI (test_mpi_inter_level.cpp). The including file defines, before including this:
+// brute force expectations, serial or over MPI: the including file defines, before including
+// this:
 //   int test_rank(); int test_ranks(); int test_ratio();
 //   void do_refine(op, region, map, pairs, coarse_ld, fine_ld, alpha);
 //   void do_coarsen(op, map, pairs, fine_ld, coarse_ld);

@@ -1,12 +1,9 @@
 #ifndef DAMN_HDF5_H5_FILE_HPP
 #define DAMN_HDF5_H5_FILE_HPP
 
-// HighFiveFile: an HDF5 file through HighFive, from PHARE's hdf5/detail/h5/h5_file.hpp
-//
-// opens serially or in parallel (MPI-IO, MPI_COMM_WORLD), reads and writes datasets
-// (flat, nested vectors, chunked, resizable) and attributes. HDF5 needs every rank to
-// create every dataset and attribute: the *_per_mpi functions gather paths, sizes and
-// values with damn::mpi so each rank creates all of them, then writes only its own
+// an HDF5 file through HighFive, serial or MPI-IO: doc/hdf5/h5_file.md
+// HDF5 needs every rank to create every dataset and attribute: the *_per_mpi functions gather
+// paths, sizes and values so each rank creates all of them, then writes only its own
 
 #include "damn/core/def.hpp"
 #include "mkn/kul/meta.hpp"
@@ -39,13 +36,8 @@ MKN_KUL_FN_SIG_RET auto vector_for_dim()
         return std::vector<std::vector<std::vector<Data>>>();
 }
 
-// HDF5's subfiling VFD for parallel files, as PHAREHUB/PHARE#1177: DAMN_H5_SUB_FILES=<n> (0 or
-// unset: MPI-IO) subfiles per file, n the stripe count, the rest HDF5's defaults (one I/O
-// concentrator per node, H5FD_SUBFILING_STRIPE_SIZE, H5FD_SUBFILING_IOC_PER_NODE,
-// H5FD_IOC_THREAD_POOL_SIZE adjust them). Its concentrators are threads calling MPI: MPI at
-// MPI_THREAD_MULTIPLE (mpi_thread_multiple_required, for whoever starts MPI). Asked for and not
-// possible (HDF5 without it, MPI below MPI_THREAD_MULTIPLE): opening throws, saying why. Subfiled
-// files are read through the same driver, or merged first (HDF5's h5fuse)
+// HDF5's subfiling VFD, DAMN_H5_SUB_FILES=<n> subfiles per file (0 or unset: MPI-IO):
+// doc/hdf5/h5_file.md. Its concentrators are threads calling MPI: MPI_THREAD_MULTIPLE needed
 MKN_KUL_FN_SIG_RET inline int sub_files()
 {
     static int const n = [] {
@@ -202,13 +194,8 @@ public:
     }
 
 
-    /*
-     * Communicate all dataset paths and sizes to all MPI process to allow each to create all
-     * datasets independently. This is a requirement of HDF5.
-     * in the case of a disparate number of datasets per MPI process, dataSetSize may be 0
-     * such that the current process creates datasets for all other processes with non-zero
-     * sizes. Recommended to use similar sized paths, if possible.
-     */
+    // every rank's dataset created on every rank, as HDF5 needs; dataSetSize 0: this rank has
+    //  none but still creates the others'
     template<typename Type, typename Size>
     void create_data_set_per_mpi(std::string const& path, Size const& dataSetSize)
     {
@@ -225,9 +212,7 @@ public:
     }
 
 
-    /*
-     * Write attribute on all mpi cores, considered global, always the same path/key and value
-     */
+    // collective: the same path, key and value on every rank
     template<typename Data>
     void write_attribute(std::string const& keyPath, std::string const& key, Data const& data)
     {
@@ -267,14 +252,8 @@ public:
 
 
 
-    /*
-     * Communicate all attribute paths and values to all MPI process to allow each to create all
-     * attributes independently. This is a requirement of HDF5.
-     * in the case of a disparate number of attributes per MPI process, path may be an empty string
-     * such that the current process creates attributes for all other processes with non-zero
-     * sizes. Recommended to use similar sized paths, if possible. key is always assumed to the be
-     * the same
-     */
+    // every rank's attribute created on every rank, as HDF5 needs; path "": this rank has none
+    //  but still creates the others'. key the same on every rank
     template<typename Data>
     void write_attributes_per_mpi(std::string path, std::string key, Data const& data)
     {
@@ -350,8 +329,7 @@ private:
     HiFile h5file_;
 
 
-    // during attribute/dataset creation, we currently don't require the parents of the group to
-    // exist, but create all that are missing - this used to exist in highfive
+    // missing parent groups are created on the way: HighFive does not
     inline std::string getParentName(std::string const& path)
     {
         std::size_t idx = path.find_last_of("/");

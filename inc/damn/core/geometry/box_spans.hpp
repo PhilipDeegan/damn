@@ -18,22 +18,13 @@ struct Box;
 namespace damn::core
 {
 
-/*  Span by span walk of a box.
+/*  A span is the run of cells along the last (fastest varying) direction, the other indices
+    fixed, given as (start point, size): an index range, no memory. In a C ordered array the
+    cells of a span are contiguous: a caller computes one array offset per span, then runs a
+    plain loop over it, which the compiler vectorizes.
 
-    A span is the run of cells along the last (fastest varying) direction, the
-    other indices fixed, given as (start point, size). It is an index range, not
-    a Span<T> (core/memory/span.hpp): it holds no memory. In a C ordered array
-    (NdArrayVector) the cells of a span are contiguous in memory: a caller computes
-    one array offset per span, then runs a plain loop over it, which the compiler
-    vectorizes.
-
-        for_each_span(box, [&](auto const& start, auto const size) { ... });
-        for_each_span(dst_box, src_box, [&](auto const& dst_start, auto const& src_start,
-                                            auto const size) { ... });
-        for_each_point(box, [&](auto const& point) { ... });
-
-    The walk is plain nested loops: going to the next span is just ++y,
-    with no iterator object and no y -> x carry test.
+    The walk is plain nested loops: the next span is just ++y, no iterator object and no
+    y -> x carry test.
 */
 
 

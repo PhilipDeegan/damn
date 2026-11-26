@@ -1,31 +1,8 @@
 #ifndef DAMN_AMR_COPY_HPP
 #define DAMN_AMR_COPY_HPP
 
-// copying data between the patches of a level, along Neighbours' links: sources are never
-// modified (cleared or overwritten)
-//
-//   a copy is what goes where (Region) and what happens on arrival (Arrival):
-//
-//     fill_ghosts     Ghosts,  Assign   (BoxData) neighbours' domain values into my ghosts;
-//                                       my own domain points are never written
-//     sum_borders     Borders, Sum      (BoxData) where ghost boxes overlap, every patch ends
-//                                       with the sum of all patches' values (deposits), the
-//                                       same bits on every patch (see fold_sums)
-//     max_borders     Borders, Max      as sum_borders, with the max
-//     gather_leaving  Leaving, Append   (CellItemData) items a neighbour holds outside its
-//                                       domain are appended to the domain of the patch owning
-//                                       their cell; the source arrays are not cleared
-//
-//   copy(fill_ghosts, neighbours, {"Bx", "By"}, level_data)
-//
-// resources come as (source, destination) pairs (ResourcePair), or names for fields. What
-// goes where is planned on first use for a region and set of resources, and kept in the
-// Neighbours. How each piece goes follows from its link's Distance:
-//   Self, Local:  directly, patch to patch; sums and maxes go through one buffer kept in the
-//                 plan, so they use the values from before the copy
-//   Numa:         as Local for now
-//   Node, Remote: copy() here throws: damn/mpi/copy.hpp's damn::mpi::copy sends them, with
-//                 the pieces packed by pack_piece and unpacked by unpack_piece below
+// copies between a level's patches along Neighbours' links: doc/amr/copy.md
+// sources are never modified (cleared or overwritten)
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -95,12 +72,7 @@ MKN_KUL_FN_SIG_RET constexpr std::string_view name(CopyOp<region, arrival>)
 }
 
 
-// how a copy reaches a piece's resources on a patch's data:
-//   by_name     looked up by their names (for_each_resource), the default
-//   accessors   the caller's, one per pair in the pairs' order (e.g. a std::vector):
-//               access[piece.pair].src(patch_data) and .dst(patch_data) return the typed
-//               resources directly (a reference, or a handle holding a pointer), no lookup;
-//               names still plan (the geometry, the plan's key)
+// resources by name, or the caller's accessors (no lookup): doc/amr/copy.md
 struct ByName
 {
 };
@@ -108,7 +80,7 @@ inline constexpr ByName by_name{};
 
 namespace detail
 {
-    // fn(resource) for the resource called name, BoxData or CellItemData
+    // items: CellItemData, else BoxData
     template<std::size_t dim, bool items, typename PatchData, typename Fn>
     void with_resource_of_kind(PatchData& patch_data, std::string const& name, Fn&& fn);
 
@@ -152,10 +124,8 @@ namespace detail
     template<typename T>
     void write(std::vector<std::byte>& out, T const& v);
 
-    // a BoxData resource whose values are a C ordered array over a box: box_span(resource,
-    //  patch box) its data and the box of its points. Its pieces are copied span by span
-    //  (core::for_each_span: a run along the last direction, contiguous in memory) instead of
-    //  point by point, in the same point order: the same bytes, the same sums
+    // values a C ordered array over a box: copied span by span (a run along the last
+    //  direction, contiguous), not point by point, in the same point order: the same sums
     template<typename R, std::size_t dim>
     concept SpanBoxData
         = BoxData<std::remove_cvref_t<R>, dim> and requires(R& r, core::Box<int, dim> const& box) {
@@ -177,7 +147,6 @@ namespace detail
         return span.ptr + flat;
     }
 
-    // local pieces only, below: pieces from or to other ranks are damn::mpi::copy's
     // fn(a piece's source / destination resource on patch_data), as access reaches it
     template<std::size_t dim, bool items, typename PatchData, typename Fn>
     void src_of(ByName, PatchData& patch_data, Piece<dim> const& piece, Fn&& fn);
@@ -193,8 +162,7 @@ namespace detail
     template<std::size_t dim, typename Access, typename PatchData>
     void assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    // the copy done on the device (device_copy.hpp: GPU builds, every piece's resources on the
-    //  device, Assign, Sum or Append); false: the host path's to do
+    // false: not every piece's resources on the device, the host path's to do
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
     bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
                    [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
@@ -235,12 +203,8 @@ namespace detail
 
     struct FoldOwn; // fold_sums' scratch (core::scratch tag)
 
-    // the sums, in the same order on every patch holding a point (PHAREHUB/PHARE#1581): per
-    //  destination and resource, the summed points are zeroed, then the contributions added in
-    //  the lexicographic order of their patch's box in the destination's space (its image), the
-    //  destination's own included. Every holder of a point has the same contributing patches,
-    //  their images one shift apart, and the order is translation invariant: the same values
-    //  added in the same order, the same bits ((a + b) + c and (a + c) + b can differ)
+    // the same bits on every patch holding a point: contributions added in the lexicographic
+    //  order of their patch's image, translation invariant: doc/amr/copy.md
     template<std::size_t dim, typename Access, typename PatchData>
     void fold_sums(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 } // namespace detail
@@ -259,7 +223,7 @@ void unpack_piece(Region region, Piece<dim> const& piece, Access const& access,
                   LevelData<dim, PatchData>& ld, std::byte const*& at);
 
 
-// the plan of a region for resource pairs, made on first use
+// made on first use, kept in the Neighbours
 template<std::size_t dim, typename PatchData>
 Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, PatchData>& ld,
                     std::vector<ResourcePair> const& pairs)
@@ -283,7 +247,6 @@ Plan<dim>& plan_for(Region const region, Neighbours<dim>& n, LevelData<dim, Patc
     return found->second;
 }
 
-// the number of accessors is the number of pairs (by_name: nothing to check)
 template<typename Access>
 void check_access(Access const& access, std::size_t const pairs)
 {
@@ -292,8 +255,7 @@ void check_access(Access const& access, std::size_t const pairs)
             throw std::runtime_error("damn::amr::copy: one accessor per resource pair");
 }
 
-// on one rank: throws if any piece comes from, or must go to, another rank. access: how the
-//  pieces' resources are reached (by_name, or accessors one per pair)
+// on one rank: throws if any piece comes from, or must go to, another rank (damn::mpi::copy)
 template<Region region, Arrival arrival, std::size_t dim, typename Access, typename PatchData>
 void copy(CopyOp<region, arrival> const op, Neighbours<dim>& n,
           std::vector<ResourcePair> const& pairs, Access const& access,
@@ -442,8 +404,7 @@ void detail::check_reach(Neighbours<dim> const& n, std::string const& name,
                                  + std::to_string(n.reach));
 }
 
-// for a destination patch (local, or another rank's for outgoing pieces) and its links, with
-// resources of the destination's kind (res, any patch's: boxes only depend on the patch box)
+// another rank's destinations take a local patch's resource: boxes only depend on the patch box
 template<std::size_t dim, typename PatchData>
 Plan<dim> detail::item_plan(Neighbours<dim> const& n, LevelData<dim, PatchData>& ld,
                             std::vector<ResourcePair> const& pairs)
