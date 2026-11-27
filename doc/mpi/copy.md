@@ -28,3 +28,18 @@ does not match the receiver's plan is an error.
 Every source is read (steps 1 and 2) before anything is written (steps 3 and 4), so sums and
 maxes use the values from before the copy. The fixed fold order makes sums the same bits
 whatever order the messages arrive in.
+
+## On the device
+
+Resources on the device (`doc/amr/device_copy.md`) never go through the host:
+
+| Step | What |
+|---|---|
+| 1. receive | a receive posted per peer, into the plan's device receive buffer: a field message's size is the plan's |
+| 2. send | the outgoing pieces packed into the device send buffer (one launch), a send per peer |
+| 3. wait | for the receives; a message of another size than the plan's is an error |
+| 4. finish | ghosts assigned, sums and maxes folded, local and received pieces in one launch; sends waited for |
+
+MPI is handed device pointers, so it must be GPU aware (`MPIX_Query_cuda_support`,
+`MPIX_Query_rocm_support`): a copy with messages throws otherwise. Messages are the host path's
+bytes. Leaving items (Append) take the host path.

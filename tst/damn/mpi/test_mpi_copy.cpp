@@ -5,6 +5,9 @@
 #include "damn/mpi/topology.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 #include "tst/damn/amr/toy.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "damn/core/exec/kernels.hpp" // IWYU pragma: keep (gpu::Vec_t: GPU builds)
+#include "damn/core/memory/box_span.hpp"
 
 #include "gtest/gtest.h"
 
@@ -16,6 +19,8 @@
 #include <bit>
 #include <cstdint>
 #include <vector>
+#include <type_traits>
+#include <stdexcept>
 
 namespace damn::amr
 {
@@ -323,6 +328,185 @@ TEST(MpiCopy, repeatedCopiesReuseThePlanAndBuffers)
         mpi::copy(sum_borders, s.n, {"rho"}, s.ld);
     EXPECT_EQ(s.n.plans.size(), 1u);
 }
+
+
+#if DAMN_HAVE_GPU
+// fields in unified memory: the device copies and their messages give the host's bits
+namespace
+{
+    // values in C order over the ghost box
+    template<bool device>
+    struct CField
+    {
+        bool static constexpr on_device = device;
+        std::array<bool, 2> primal{};
+        int gw = 2;
+        std::conditional_t<device, core::gpu::Vec_t<double>, std::vector<double>> v{};
+    };
+    template<bool device>
+    Box2 domain_box(CField<device> const& f, Box2 cells)
+    {
+        for (std::size_t i = 0; i < 2; ++i)
+            cells.upper[i] += f.primal[i];
+        return cells;
+    }
+    template<bool device>
+    Box2 ghost_box(CField<device> const& f, Box2 const& cells)
+    {
+        return core::grow(domain_box(f, cells), f.gw);
+    }
+    template<bool device>
+    core::BoxSpan<double, 2> box_span(CField<device>& f, Box2 const& cells)
+    {
+        return {f.v.data(), ghost_box(f, cells)};
+    }
+    template<bool device>
+    core::BoxSpan<double const, 2> box_span(CField<device> const& f, Box2 const& cells)
+    {
+        return {f.v.data(), ghost_box(f, cells)};
+    }
+    template<bool device>
+    double& value(CField<device>& f, Box2 const& cells, Point2 const& p)
+    {
+        return box_span(f, cells)(p);
+    }
+    template<bool device>
+    double const& value(CField<device> const& f, Box2 const& cells, Point2 const& p)
+    {
+        return box_span(f, cells)(p);
+    }
+
+    struct DevicePatchData // per centering, a field each side
+    {
+        std::array<CField<false>, 2> host;
+        std::array<CField<true>, 2> device;
+    };
+    // the plans' geometry (by name): either side, the same boxes
+    void for_each_resource(DevicePatchData& d, auto&& fn)
+    {
+        fn("Bx", d.host[0]);
+        fn("rho", d.host[1]);
+    }
+    template<bool device, std::size_t i>
+    struct Side
+    {
+        auto& src(DevicePatchData& d) const
+        {
+            if constexpr (device)
+                return d.device[i];
+            else
+                return d.host[i];
+        }
+        auto& dst(DevicePatchData& d) const { return src(d); }
+    };
+} // namespace
+
+TEST(MpiDeviceCopy, theDeviceGivesTheHostsBits)
+{
+    static_assert(detail::DeviceSource<CField<true>, 2>
+                  and detail::DeviceDestination<CField<true>, 2>);
+    static_assert(!detail::OnDevice<CField<false>>);
+    for (auto const periodic : {false, true})
+    {
+        auto const h    = make_hierarchy({periodic, periodic}, mpi_size());
+        auto const make = [](Patch<2> const& patch) {
+            DevicePatchData d;
+            for (std::size_t i = 0; i < 2; ++i)
+            {
+                d.host[i].primal = d.device[i].primal = {i == 0, true}; // Bx like, rho like
+                d.host[i].v.assign(ghost_box(d.host[i], patch.box).size(), 0.);
+                d.device[i].v.assign(d.host[i].v.size(), 0.);
+            }
+            return d;
+        };
+        auto ld = allocate(h.levels[0], mpi_rank(), make);
+        // values whose sums depend on the order they are added in
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            for (std::size_t i = 0; i < 2; ++i)
+                core::for_each_point(ghost_box(d.host[i], patch.box), [&](auto const& p) {
+                    auto const v = 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(h, p) / 7.;
+                    value(d.host[i], patch.box, p)   = v;
+                    value(d.device[i], patch.box, p) = v;
+                });
+        });
+
+        auto run = [&]<bool device>() { // plans of their own: a plan keeps its device table
+            auto n = make_neighbours(h, 0, mpi_rank(), mpi::topology(), reach);
+            mpi::copy(fill_ghosts, n, same_names({"Bx"}), std::array{Side<device, 0>{}}, ld);
+            mpi::copy(sum_borders, n, same_names({"rho"}), std::array{Side<device, 1>{}}, ld);
+            mpi::copy(max_borders, n, same_names({"Bx"}), std::array{Side<device, 0>{}}, ld);
+            for (auto const& [_, plan] : n.plans)
+                EXPECT_EQ(static_cast<amr::detail::DeviceTable<2>*>(plan.device.get())->usable,
+                          device);
+        };
+        run.template operator()<true>();
+        run.template operator()<false>();
+
+        std::size_t compared = 0;
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            for (std::size_t i = 0; i < 2; ++i)
+                core::for_each_point(ghost_box(d.host[i], patch.box), [&](auto const& p) {
+                    auto const x = value(d.host[i], patch.box, p);
+                    auto const y = value(d.device[i], patch.box, p);
+                    EXPECT_EQ(std::bit_cast<std::uint64_t>(x), std::bit_cast<std::uint64_t>(y))
+                        << periodic << " " << i << " patch " << patch.id << " " << p;
+                    ++compared;
+                });
+        });
+        EXPECT_GT(sum_over_ranks(compared), 0u);
+    }
+}
+
+namespace
+{
+    // on the device, its values reached point by point only (no box_span)
+    struct DevicePointField
+    {
+        bool static constexpr on_device = true;
+        CField<true> f;
+    };
+    [[maybe_unused]] Box2 domain_box(DevicePointField const& f, Box2 const& cells)
+    {
+        return domain_box(f.f, cells);
+    }
+    [[maybe_unused]] Box2 ghost_box(DevicePointField const& f, Box2 const& cells)
+    {
+        return ghost_box(f.f, cells);
+    }
+    double& value(DevicePointField& f, Box2 const& cells, Point2 const& p)
+    {
+        return value(f.f, cells, p);
+    }
+    double const& value(DevicePointField const& f, Box2 const& cells, Point2 const& p)
+    {
+        return value(f.f, cells, p);
+    }
+
+    struct PointPatchData
+    {
+        DevicePointField Bx;
+    };
+    void for_each_resource(PointPatchData& d, auto&& fn)
+    {
+        fn("Bx", d.Bx);
+    }
+} // namespace
+
+// the host path would read device values on the host
+TEST(MpiDeviceCopy, aDeviceResourceTheDeviceCannotTakeThrows)
+{
+    auto const h    = make_hierarchy({true, true}); // every patch on this rank
+    auto const make = [](Patch<2> const& patch) {
+        PointPatchData d;
+        d.Bx.f.primal = {true, false};
+        d.Bx.f.v.assign(ghost_box(d.Bx, patch.box).size(), 0.);
+        return d;
+    };
+    auto ld = allocate(h.levels[0], 0, make);
+    auto n  = neighbours_of(h);
+    EXPECT_THROW(copy(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
+}
+#endif // DAMN_HAVE_GPU
 
 } // namespace damn::amr
 
