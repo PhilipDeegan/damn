@@ -163,20 +163,19 @@ namespace detail
     template<std::size_t dim, typename Access, typename PatchData>
     void assign(Plan<dim> const& plan, Access const& access, LevelData<dim, PatchData>& ld);
 
-    // false: not every piece's resources on the device, the host path's to do
+    // false: host resources, the host path's to do
     template<Arrival arrival, std::size_t dim, typename Access, typename PatchData>
     bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
                    [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
     {
 #if DAMN_HAVE_GPU
-        if constexpr (arrival == Arrival::Assign)
-            return assign_on_device(plan, access, ld);
-        else if constexpr (arrival == Arrival::Sum)
-            return sum_on_device(plan, access, ld);
-        else if constexpr (arrival == Arrival::Append)
+        if constexpr (arrival == Arrival::Append)
             return append_on_device(plan, access, ld);
-#endif
+        else
+            return copy_on_device<arrival>(plan, access, ld);
+#else
         return false;
+#endif
     }
 
     template<std::size_t dim, typename Access, typename PatchData>
