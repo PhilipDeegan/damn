@@ -42,4 +42,5 @@ Resources on the device (`doc/amr/device_copy.md`) never go through the host:
 
 MPI is handed device pointers, so it must be GPU aware (`MPIX_Query_cuda_support`,
 `MPIX_Query_rocm_support`): a copy with messages throws otherwise. Messages are the host path's
-bytes. Leaving items (Append) take the host path.
+bytes. Leaving items move as columns, a counts message before their blocks:
+`doc/amr/device_items.md`.
