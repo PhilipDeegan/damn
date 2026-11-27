@@ -24,12 +24,14 @@ throws: the host path would read device values on the host.
 
 ## Operations
 
+Leaving items (Append) have their own device path: `doc/amr/device_items.md`.
+
+
 | Function | Copy | How |
 |---|---|---|
 | `copy_on_device<arrival>(plan, access, ld)` | Assign, Sum, Max on one rank | `finish_on_device`; false for host resources |
 | `pack_on_device(table)` | messages | the outgoing pieces into the table's send buffer, one launch |
 | `finish_on_device<arrival>(plan, table, ld)` | Assign, Sum, Max | Assign: every piece's points in one launch, a thread per point, `dst(p) = src(p - shift)`; Sum and Max: every piece's source values snapshot into a device buffer (one launch), then a thread per destination point folds the contributions |
-| `append_on_device(plan, access, ld)` | Append (items), one rank | per resource pair, every piece handed at once to the resource type's device hooks |
 
 A thread finds its piece by binary search over the pieces' first points. Pieces from another
 rank read their values from the table's receive buffer, so `finish_on_device` runs once the
@@ -42,22 +44,6 @@ images, in the same order as the host path's `fold_sums`: pieces grouped by dest
 resources, then ordered by source image. The result has the host path's bits. The max starts
 from the destination's own value and takes each contribution as `std::max` does (the value so
 far, unless less than the next): the host path's result.
-
-### Append hooks
-
-The resource type provides two hooks, found by ADL:
-
-```cpp
-bool can_append_items_on_device(std::vector<AppendPiece<Dst, Src, dim>> const& pieces);
-void append_items_on_device(std::vector<AppendPiece<Dst, Src, dim>> const& pieces);
-```
-
-`pieces` are in plan order, so a destination's items come in the host path's order. An
-`AppendPiece` carries the resources (copies: handles), the piece's destination box, its source's
-shift, and its destination patch (`LevelData` index).
-
-Nothing is done unless every pair can: a non local piece, a pair without hooks, or a pair whose
-`can_append_items_on_device` refuses sends the whole copy to the host path.
 
 ## The device table
 

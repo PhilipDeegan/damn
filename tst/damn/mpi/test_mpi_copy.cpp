@@ -21,6 +21,7 @@
 #include <vector>
 #include <type_traits>
 #include <stdexcept>
+#include <algorithm>
 
 namespace damn::amr
 {
@@ -506,6 +507,203 @@ TEST(MpiDeviceCopy, aDeviceResourceTheDeviceCannotTakeThrows)
     auto n  = neighbours_of(h);
     EXPECT_THROW(copy(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
 }
+#if DAMN_HAVE_THRUST
+// items in unified memory, grouped by cell: the device's gather over ranks gives the host's items
+namespace
+{
+    struct DeviceParticles
+    {
+        using value_type                = toy::Item;
+        bool static constexpr on_device = true;
+        int gw                          = 1;
+        Box2 cells{}; // its ghost cells: starts and sizes over them
+        bool grouped = true;
+        core::gpu::Vec_t<std::uint32_t> starts, sizes;
+        core::gpu::Vec_t<int> cx, cy, ox, oy; // cell, origin
+        core::gpu::Vec_t<std::uint32_t> from;
+
+        std::size_t size() const { return cx.size(); }
+    };
+    [[maybe_unused]] Box2 domain_box(DeviceParticles const&, Box2 const& cells)
+    {
+        return cells;
+    }
+    Box2 ghost_box(DeviceParticles const& p, Box2 const& cells)
+    {
+        return core::grow(cells, p.gw);
+    }
+    [[maybe_unused]] void for_each_item(DeviceParticles const& p, auto&& fn)
+    {
+        for (std::size_t i = 0; i < p.size(); ++i)
+            fn(toy::Item{{p.cx[i], p.cy[i]}, {p.ox[i], p.oy[i]}, p.from[i]});
+    }
+    [[maybe_unused]] void append(DeviceParticles&, toy::Item, Point2 const&)
+    {
+        throw std::logic_error("the host path for device items");
+    }
+
+    ItemColumns layout_of(DeviceParticles const&)
+    {
+        return {{4, 4, 4}, 3};
+    }
+
+    // the test's own grouping, on the host: counting sort by cell
+    void group(DeviceParticles& p)
+    {
+        std::vector<toy::Item> items;
+        for_each_item(p, [&](auto const& item) { items.push_back(item); });
+        p.starts.assign(p.cells.size(), 0);
+        p.sizes.assign(p.cells.size(), 0);
+        auto const flat = [&](auto const& c) {
+            return static_cast<std::size_t>((c[0] - p.cells.lower[0]) * (p.cells.shape()[1])
+                                            + (c[1] - p.cells.lower[1]));
+        };
+        for (auto const& item : items)
+            ++p.sizes[flat(item.cell)];
+        for (std::size_t c = 1; c < p.cells.size(); ++c)
+            p.starts[c] = p.starts[c - 1] + p.sizes[c - 1];
+        std::vector<std::uint32_t> next(p.starts.begin(), p.starts.end());
+        for (auto const& item : items)
+        {
+            auto const i = next[flat(item.cell)]++;
+            p.cx[i]      = item.cell[0];
+            p.cy[i]      = item.cell[1];
+            p.ox[i]      = item.origin[0];
+            p.oy[i]      = item.origin[1];
+            p.from[i]    = item.from_patch;
+        }
+        p.grouped = true;
+    }
+
+    DeviceItems<2> device_items(DeviceParticles const& p)
+    {
+        if (!p.grouped)
+            throw std::runtime_error("device items not grouped by cell");
+        DeviceItems<2> items{p.cells, p.starts.data(), p.sizes.data(), {}, layout_of(p)};
+        items.columns[0] = reinterpret_cast<std::byte const*>(p.ox.data());
+        items.columns[1] = reinterpret_cast<std::byte const*>(p.oy.data());
+        items.columns[2] = reinterpret_cast<std::byte const*>(p.from.data());
+        return items;
+    }
+
+    DeviceItemsOut<2> device_items_appended(DeviceParticles& p, std::size_t const n)
+    {
+        auto const at = p.size();
+        for (auto* v : {&p.cx, &p.cy, &p.ox, &p.oy})
+            v->resize(at + n);
+        p.from.resize(at + n);
+        p.grouped = false;
+        DeviceItemsOut<2> out{{}, layout_of(p), {p.cx.data() + at, p.cy.data() + at}};
+        out.columns[0] = reinterpret_cast<std::byte*>(p.ox.data() + at);
+        out.columns[1] = reinterpret_cast<std::byte*>(p.oy.data() + at);
+        out.columns[2] = reinterpret_cast<std::byte*>(p.from.data() + at);
+        return out;
+    }
+
+    void items_appended(DeviceParticles& p)
+    {
+        group(p);
+    }
+
+    struct ItemsPatchData
+    {
+        toy::Particles host_ghost, host_domain;
+        DeviceParticles device_ghost, device_domain;
+    };
+    // the plans' geometry (by name): either side, the same boxes
+    void for_each_resource(ItemsPatchData& d, auto&& fn)
+    {
+        fn("patch_ghost", d.host_ghost);
+        fn("domain", d.host_domain);
+    }
+    template<bool device>
+    struct Leaving
+    {
+        auto& src(ItemsPatchData& d) const
+        {
+            if constexpr (device)
+                return d.device_ghost;
+            else
+                return d.host_ghost;
+        }
+        auto& dst(ItemsPatchData& d) const
+        {
+            if constexpr (device)
+                return d.device_domain;
+            else
+                return d.host_domain;
+        }
+    };
+
+    std::vector<std::array<int, 5>> sorted_items(auto const& particles)
+    {
+        std::vector<std::array<int, 5>> items;
+        for_each_item(particles, [&](auto const& i) {
+            items.push_back(
+                {i.cell[0], i.cell[1], i.origin[0], i.origin[1], static_cast<int>(i.from_patch)});
+        });
+        std::sort(items.begin(), items.end());
+        return items;
+    }
+} // namespace
+
+TEST(MpiDeviceCopy, leavingItemsOnTheDeviceAreTheHosts)
+{
+    static_assert(DeviceItemSource<DeviceParticles, 2>
+                  and DeviceItemDestination<DeviceParticles, 2>);
+    for (auto const periodic : {false, true})
+    {
+        auto const h    = make_hierarchy({periodic, periodic}, mpi_size());
+        auto const make = [](Patch<2> const& patch) {
+            ItemsPatchData d;
+            for (auto* p : {&d.device_ghost, &d.device_domain})
+            {
+                p->cells = ghost_box(*p, patch.box);
+                group(*p);
+            }
+            return d;
+        };
+        auto ld = allocate(h.levels[0], mpi_rank(), make);
+        // per ghost cell outside the patch, as many items as the cell's row, some none
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            core::for_each_point(ghost_box(d.host_ghost, patch.box), [&](auto const& c) {
+                if (isIn(c, patch.box))
+                    return;
+                for (int k = 0; k < mod(c[1], 3); ++k)
+                {
+                    toy::Item const item{{c[0], c[1]}, {c[0] + 100 * k, c[1]}, patch.id};
+                    d.host_ghost.items.push_back(item);
+                    d.device_ghost.cx.push_back(item.cell[0]);
+                    d.device_ghost.cy.push_back(item.cell[1]);
+                    d.device_ghost.ox.push_back(item.origin[0]);
+                    d.device_ghost.oy.push_back(item.origin[1]);
+                    d.device_ghost.from.push_back(item.from_patch);
+                }
+            });
+            group(d.device_ghost);
+        });
+
+        auto run = [&]<bool device>() {
+            auto n = make_neighbours(h, 0, mpi_rank(), mpi::topology(), reach);
+            mpi::copy(gather_leaving, n, std::vector<ResourcePair>{{"patch_ghost", "domain"}},
+                      std::array{Leaving<device>{}}, ld);
+            for (auto const& [_, plan] : n.plans)
+                EXPECT_EQ(static_cast<amr::detail::ItemTable<2>*>(plan.device.get())->usable,
+                          device);
+        };
+        run.template operator()<true>();
+        run.template operator()<false>();
+
+        std::size_t arrived = 0;
+        for_each_patch(ld, [&](auto const& patch, auto& d) {
+            auto const host = sorted_items(d.host_domain);
+            EXPECT_EQ(sorted_items(d.device_domain), host) << periodic << " patch " << patch.id;
+            arrived += host.size();
+        });
+        EXPECT_GT(sum_over_ranks(arrived), 0u);
+    }
+}
+#endif // DAMN_HAVE_THRUST
 #endif // DAMN_HAVE_GPU
 
 } // namespace damn::amr

@@ -168,9 +168,14 @@ namespace detail
     bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
                    [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
     {
-#if DAMN_HAVE_GPU
+#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
         if constexpr (arrival == Arrival::Append)
-            return append_on_device(plan, access, ld);
+            return items_on_device(plan, access, ld);
+        else
+            return copy_on_device<arrival>(plan, access, ld);
+#elif DAMN_HAVE_GPU
+        if constexpr (arrival == Arrival::Append)
+            return false; // device items need thrust
         else
             return copy_on_device<arrival>(plan, access, ld);
 #else
@@ -888,6 +893,7 @@ void unpack_piece(Region const region, Piece<dim> const& piece, Access const& ac
 } // namespace damn::amr
 
 // after the detail functions it uses (src_of, dst_of, is_local)
-#include "damn/amr/device_copy.hpp" // IWYU pragma: export
+#include "damn/amr/device_copy.hpp"  // IWYU pragma: export
+#include "damn/amr/device_items.hpp" // IWYU pragma: export
 
 #endif // DAMN_AMR_COPY_HPP
