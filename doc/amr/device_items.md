@@ -1,6 +1,6 @@
 # Leaving items on the device
 
-GPU builds with thrust move a `gather_leaving` copy's items in unified memory on the device
+GPU builds move a `gather_leaving` copy's items in unified memory on the device
 (`inc/damn/amr/device_items.hpp`), the host never touching them. damn sees an item resource as
 columns, whatever the items are.
 
@@ -36,7 +36,7 @@ order.
 | Step | What |
 |---|---|
 | counts | a thread per (piece, cell): its source cell's items |
-| scan | an exclusive scan of the counts (thrust); per piece its items, read back (one value per piece) |
+| scan | an exclusive scan of the counts (`mkn::gpu::exclusive_scan`); per piece its items, read back (one value per piece) |
 | offsets | a thread per (piece, cell): the block's CSR |
 | pack | a thread per item: its cell by binary search over the scan, its columns into the block |
 | unpack | per destination one `device_items_appended` with all its items; a thread per item: its cell by binary search over its block's offsets, its columns and cell into the destination |
