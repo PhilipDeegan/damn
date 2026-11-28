@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,12 +58,35 @@ public:
     Vector& operator=(Vector&&) noexcept = default;
 
     // that's values (any spec) and at least its capacity: a copy grows as the original would
-    //  have, without a regrow (std::vector's copy allocates only the size). std::copy between host
-    //  memories, else mkn.gpu's copy
+    //  have, without a regrow (std::vector's copy allocates only the size)
     template<AllocationSpec that_spec>
     void copy_from(Vector<T, that_spec> const& that)
     {
         reserve(that.capacity(), /*copy=*/false);
+        copy_values_from(that);
+    }
+
+    // that's values only, the capacity as it is (or as they need): between host memories the
+    //  elements copy constructed (as std::vector's copy: types without a default constructor or
+    //  copy assignment), else a device copy of trivially copyable values
+    template<AllocationSpec that_spec>
+    void copy_values_from(Vector<T, that_spec> const& that)
+        requires(Ops::host and VectorOps<that_spec.type>::host and std::is_copy_assignable_v<T>)
+    {
+        v.assign(that.begin(), that.end());
+    }
+    template<AllocationSpec that_spec>
+    void copy_values_from(Vector<T, that_spec> const& that)
+        requires(Ops::host and VectorOps<that_spec.type>::host and not std::is_copy_assignable_v<T>)
+    {
+        v.clear(); // assign would need T's copy assignment
+        for (auto const& e : that)
+            v.emplace_back(e);
+    }
+    template<AllocationSpec that_spec>
+    void copy_values_from(Vector<T, that_spec> const& that)
+        requires(not(Ops::host and VectorOps<that_spec.type>::host))
+    {
         resize(that.size(), /*copy=*/false);
         if (that.size())
             core::mem::copy<spec, that_spec>(v.data(), that.data(), that.size());
@@ -113,6 +137,32 @@ public:
     void pop_back() { v.pop_back(); }
     void swap(Vector& that) noexcept { v.swap(that.v); }
 
+    auto cbegin() const { return v.cbegin(); }
+    auto cend() const { return v.cend(); }
+    auto erase(const_iterator const pos) { return v.erase(pos); }
+    auto erase(const_iterator const first, const_iterator const last)
+    {
+        return v.erase(first, last);
+    }
+    template<typename... Args>
+    auto insert(const_iterator const pos, Args&&... args)
+    {
+        return v.insert(pos, std::forward<Args>(args)...);
+    }
+    template<typename... Args>
+    void assign(Args&&... args)
+    {
+        v.assign(std::forward<Args>(args)...);
+    }
+    void shrink_to_fit() { v.shrink_to_fit(); }
+
+    // unqualified erase_if(v, pred) works for std::vector and Vector alike
+    template<typename Pred>
+    friend auto erase_if(Vector& vec, Pred pred)
+    {
+        return std::erase_if(vec.v, pred);
+    }
+
 protected:
     std_vector v;
 };
@@ -160,7 +210,7 @@ struct MinimizingVector : Vector<T, spec>
         Super r;
         r.reserve(v.capacity() * realloc_to, /*copy=*/false);
         if constexpr (copy_old)
-            r.copy_from(*this);
+            r.copy_values_from(*this);
         v.swap(r.vec());
         _c = 0;
     }

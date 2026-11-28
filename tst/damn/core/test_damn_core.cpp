@@ -73,6 +73,41 @@ void check_vector_spec()
     EXPECT_EQ(a[99], 3.);
 }
 
+// host copies copy construct (types without a default constructor or copy assignment), as
+//  std::vector's copy
+struct CopyOnly
+{
+    explicit CopyOnly(int const i_)
+        : i{i_}
+    {
+    }
+    CopyOnly(CopyOnly const&)            = default;
+    CopyOnly& operator=(CopyOnly const&) = delete;
+    int i;
+};
+
+TEST(DamnCore, vector_copies_construct)
+{
+    damn::Vector<CopyOnly> a;
+    a.emplace_back(1);
+    a.emplace_back(2);
+    damn::Vector<CopyOnly> const b{a};
+    EXPECT_EQ(b.size(), 2u);
+    EXPECT_EQ(b[1].i, 2);
+}
+
+// after period uses under its percentile, capacity drops to realloc_to of itself
+TEST(DamnCore, minimizing_vector_shrinks)
+{
+    damn::MinimizingVector<double> m;
+    m.get(1000);
+    auto const big = m.capacity();
+    for (std::size_t i = 0; i < m.period; ++i)
+        m.get(10);
+    EXPECT_LT(m.capacity(), big);
+    EXPECT_EQ(m.size(), 10u);
+}
+
 TEST(DamnCore, vector_specs)
 {
     check_vector_spec<damn::Vector<double>>();
