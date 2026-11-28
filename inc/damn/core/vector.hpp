@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -97,9 +98,15 @@ public:
             core::mem::copy<spec, that_spec>(v.data(), that.data(), that.size());
     }
 
-    void resize(std::size_t const s, bool const copy = true) { Ops::resize(v, s, copy); }
+    void resize(std::size_t const s, bool const copy = true) { (void)Ops::resize(v, s, copy); }
     void reserve(std::size_t const s, bool const copy = true) { Ops::reserve(v, s, copy); }
     void fill(T const& val) { Ops::fill(v, val); }
+
+    // as resize, the old buffer returned if freeing it waits for the device (resize_columns)
+    MKN_KUL_FN_SIG_RET std_vector resize_keeping_old(std::size_t const s, bool const copy)
+    {
+        return Ops::resize(v, s, copy);
+    }
 
     // the same memory as a constructing vector (emplace_back / push_back of defaulted values on a
     //  non constructing spec): the allocators are stateless and differ only in construct()
@@ -171,6 +178,16 @@ public:
 protected:
     std_vector v;
 };
+
+
+// columns (an SoA's) each to size s as Vector::resize: all regrows' copies queued before the first
+//  old buffer is freed (a free waits for the device), one wait, not one a column
+template<typename... Vs>
+void resize_columns(std::size_t const s, bool const copy, Vs&... columns)
+{
+    [[maybe_unused]] auto const old
+        = std::make_tuple(columns.resize_keeping_old(s, copy)...); // freed at return
+}
 
 
 // a Vector whose capacity follows its recent use: after `period` uses in a row under percentile
