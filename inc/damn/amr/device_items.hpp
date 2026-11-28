@@ -6,19 +6,20 @@
 
 #include "damn/core/def/damn_config.hpp"
 
-#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+#if DAMN_HAVE_GPU
 
-#include "damn/amr/cell_item_data.hpp"
-#include "damn/amr/device_copy.hpp"
-#include "damn/amr/level_data.hpp"
-#include "damn/amr/neighbours.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
 #include "damn/core/exec/kernels.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 
-#include <thrust/execution_policy.h>
-#include <thrust/scan.h>
+#include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/device_copy.hpp"
+#include "damn/amr/level_data.hpp"
+#include "damn/amr/neighbours.hpp"
+
+#include "mkn/gpu/scan.hpp"
+
 #include <array>
 #include <concepts>
 #include <cstddef>
@@ -395,7 +396,7 @@ void pack_items_on_device(Plan<dim> const& plan, Access const& access,
                 q[d] = p[d] - pc.shift[d];
             counts[i] = contains(pc.src_cells, q) ? pc.sizes[flat_in(pc.src_cells, q)] : 0;
         });
-        thrust::exclusive_scan(thrust::device, counts, counts + cells, table.scan.data());
+        (void)mkn::gpu::exclusive_scan(counts, table.scan.data(), cells);
         auto const* const scan = table.scan.data();
         auto* const totals     = table.totals.data();
         kernel::launch(n, [=] DAMN_ALL() {
@@ -626,6 +627,6 @@ bool items_on_device(Plan<dim>& plan, Access const& access, LevelData<dim, Patch
 
 } // namespace damn::amr
 
-#endif // DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+#endif // DAMN_HAVE_GPU
 
 #endif /* DAMN_AMR_DEVICE_ITEMS_HPP */

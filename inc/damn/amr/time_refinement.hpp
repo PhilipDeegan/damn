@@ -4,8 +4,9 @@
 // subcycling (Berger & Colella), substeps as SAMRAI's TimeRefinementIntegrator; the hooks and
 // their order: doc/amr/time_refinement.md
 
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/def.hpp"
+
+#include "damn/amr/hierarchy.hpp"
 
 #include <algorithm>
 #include <cmath>

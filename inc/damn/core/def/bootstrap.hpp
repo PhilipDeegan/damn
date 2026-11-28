@@ -11,6 +11,7 @@
 #endif
 
 #include "damn/core/bon.hpp"
+
 #include "mkn/kul/lang/cpp/compiler/def.hpp"
 
 #include <array>

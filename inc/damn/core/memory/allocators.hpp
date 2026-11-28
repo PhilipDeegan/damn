@@ -4,6 +4,7 @@
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
+
 #include "mkn/gpu.hpp"
 #include "mkn/kul/alloc.hpp"
 

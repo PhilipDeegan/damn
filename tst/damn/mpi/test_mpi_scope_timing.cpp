@@ -1,14 +1,17 @@
 // any number of ranks
 
 #include "damn/core/def/phlop.hpp"
+
 #include "damn/amr/copy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
+
 #include "damn/mpi/copy.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/scope_timing.hpp"
 #include "damn/mpi/topology.hpp"
+
 #include "tst/damn/amr/toy.hpp"
 
 #include "gtest/gtest.h"

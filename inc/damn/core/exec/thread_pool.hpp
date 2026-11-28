@@ -10,17 +10,17 @@
 
 #include "BS_thread_pool.hpp"
 
-#include <mutex>
-#include <chrono>
-#include <memory>
-#include <vector>
 #include <cassert>
-#include <utility>
-#include <optional>
+#include <chrono>
+#include <cstddef>
 #include <exception>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
-#include <cstddef>
+#include <utility>
+#include <vector>
 
 #if !defined(DAMN_THREAD_POOL_SYNC)
 #define DAMN_THREAD_POOL_SYNC 0

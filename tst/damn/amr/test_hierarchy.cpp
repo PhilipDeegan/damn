@@ -1,5 +1,6 @@
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+
+#include "damn/amr/hierarchy.hpp"
 
 #include "gtest/gtest.h"
 

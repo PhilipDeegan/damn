@@ -1,10 +1,12 @@
 // each rank's tagged cells, the same boxes on every rank as the serial clustering of all of
 // them; any number of ranks
 
-#include "damn/amr/clustering.hpp"
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+
+#include "damn/amr/clustering.hpp"
+#include "damn/amr/hierarchy.hpp"
+
 #include "damn/mpi/clustering.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 

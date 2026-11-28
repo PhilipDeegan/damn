@@ -4,13 +4,13 @@
 #include "damn/core/def.hpp" // IWYU pragma: keep
 
 #include <chrono>
-#include <string>
 #include <cstdint>
-#include <utility>
-#include <memory>
+#include <ctime>
 #include <fstream>
 #include <iostream>
-#include <ctime>
+#include <memory>
+#include <string>
+#include <utility>
 
 #if !defined(DAMN_LOG_LEVEL)
 #define DAMN_LOG_LEVEL 2 // 0 == off
@@ -22,8 +22,8 @@ constexpr static std::uint8_t LOG_LEVEL = DAMN_LOG_LEVEL;
 } // namespace damn
 
 #if !defined(NDEBUG) || defined(DAMN_FORCE_DEBUG_DO) || defined(DAMN_FORCE_LOG_LINE)
-#include <sstream>  // IWYU pragma: keep
 #include <iostream> // IWYU pragma: keep
+#include <sstream>  // IWYU pragma: keep
 
 #define DAMN_LOG_LINE_STR(str)                                                                    \
     std::cout << __FILE__ << ":" << __LINE__ << " - " << (str) << std::endl

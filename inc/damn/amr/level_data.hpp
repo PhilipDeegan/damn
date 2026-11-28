@@ -12,17 +12,18 @@
 // which may also walk runtime sized members (e.g. a vector of populations)
 
 #include "damn/core/def.hpp"
+
 #include "damn/amr/hierarchy.hpp"
 
-#include <memory>
-#include <vector>
-#include <string>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace damn::amr
 {

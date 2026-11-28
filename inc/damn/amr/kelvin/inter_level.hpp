@@ -6,11 +6,12 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
+#include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
+
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"
 #include "damn/amr/lattice.hpp"
-#include "damn/core/geometry/box_spans.hpp"
 
 #include <array>
 #include <cstddef>

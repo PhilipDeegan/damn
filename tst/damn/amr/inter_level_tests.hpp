@@ -12,18 +12,19 @@
 
 #include "damn/amr/inter_level.hpp"
 #include "damn/amr/level_map.hpp"
+
 #include "tst/damn/amr/toy.hpp"
 
 #include "gtest/gtest.h"
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string>
-#include <bit>
-#include <cstdint>
 #include <vector>
 
 namespace damn::amr

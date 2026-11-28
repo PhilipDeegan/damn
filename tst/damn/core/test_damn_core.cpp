@@ -1,6 +1,7 @@
 // damn builds and works on its own, without plamn
 
 #include "damn/damn_core.hpp"
+
 #include "tst/damn/core/geometry/test_box_fixtures.hpp"
 
 #include "gtest/gtest.h"

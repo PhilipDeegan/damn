@@ -5,33 +5,34 @@
 // sources are never modified (cleared or overwritten)
 
 #include "damn/core/def.hpp"
-#include "damn/core/logger.hpp"
+#include "damn/core/def/damn_config.hpp"
 #include "damn/core/geometry/box.hpp"
-#include "damn/core/geometry/point.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+#include "damn/core/geometry/point.hpp"
+#include "damn/core/logger.hpp"
 #include "damn/core/memory/scratch.hpp"
+
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/cell_item_data.hpp"
 #include "damn/amr/cell_items.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
-#include "damn/core/def/damn_config.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
+#include <map>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
-#include <iterator>
-#include <map>
-#include <concepts>
 
 namespace damn::amr
 {
@@ -168,14 +169,9 @@ namespace detail
     bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
                    [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
     {
-#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+#if DAMN_HAVE_GPU
         if constexpr (arrival == Arrival::Append)
             return items_on_device(plan, access, ld);
-        else
-            return copy_on_device<arrival>(plan, access, ld);
-#elif DAMN_HAVE_GPU
-        if constexpr (arrival == Arrival::Append)
-            return false; // device items need thrust
         else
             return copy_on_device<arrival>(plan, access, ld);
 #else

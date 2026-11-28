@@ -5,7 +5,9 @@
 // and no device per rank for now (a rank per core)
 
 #include "damn/core/def.hpp"
+
 #include "damn/amr/topology.hpp"
+
 #include "damn/mpi/damn_mpi.hpp"
 
 #include <algorithm>

@@ -6,9 +6,9 @@
 
 #include <array>
 #include <cstdio>
+#include <numeric>
 #include <string>
 #include <vector>
-#include <numeric>
 
 static_assert(DAMN_HAS_HIGHFIVE);
 

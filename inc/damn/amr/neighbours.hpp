@@ -5,12 +5,14 @@
 // doc/amr/neighbours.md. Geometric; plans kept here, so a regrid drops them
 
 #include "damn/core/def.hpp"
-#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/logger.hpp"
+
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/topology.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -21,7 +23,6 @@
 #include <string>
 #include <tuple>
 #include <utility>
-#include <algorithm>
 #include <vector>
 
 namespace damn::amr

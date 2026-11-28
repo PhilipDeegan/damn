@@ -1,13 +1,14 @@
 #ifndef DAMN_CORE_DATA_TILES_TILING_OPTIONS_HPP
 #define DAMN_CORE_DATA_TILES_TILING_OPTIONS_HPP
 
-#include "mkn/kul/env.hpp"
 #include "damn/core/def.hpp"
 
-#include <string>
+#include "mkn/kul/env.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <stdexcept>
+#include <string>
 
 namespace damn::core
 {

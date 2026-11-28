@@ -9,8 +9,8 @@ mb=$(git merge-base "$BASE" HEAD)
 
 step() { echo; echo "== $*"; }
 
-# warnings as CI's: -W 9 (-Wall -Wextra -pedantic -Werror with gcc), PHARE's devMode exceptions
-#  (unused parameters, variables), and strict aliasing a warning only (third party sources)
+# warnings as CI's: -W 9 (-Wall -Wextra -pedantic -Werror with gcc) except unused
+#  parameters and variables, and strict aliasing a warning only (third party sources)
 W=(-W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing")
 
 # every build output (dependencies' too) from this run: no library left from an older build, as a

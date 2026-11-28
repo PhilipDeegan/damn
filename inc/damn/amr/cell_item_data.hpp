@@ -17,9 +17,9 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <utility>
-#include <concepts>
 
 namespace damn::amr
 {

@@ -1,5 +1,5 @@
-#include "damn/amr/metrics.hpp"
 #include "damn/amr/hierarchy.hpp"
+#include "damn/amr/metrics.hpp"
 #include "damn/amr/topology.hpp"
 
 #include "gtest/gtest.h"

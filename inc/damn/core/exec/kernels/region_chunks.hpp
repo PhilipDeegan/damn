@@ -9,9 +9,9 @@
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/exec/kernels.hpp" // IWYU pragma: keep (gpu::sm_count, Vec_t, TileLauncher: GPU builds)
 
-#include <cstdint>
-#include <cstddef>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 
 namespace damn::core

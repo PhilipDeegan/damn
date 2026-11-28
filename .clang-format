@@ -54,7 +54,28 @@ PenaltyReturnTypeOnItsOwnLine: 60
 PointerAlignment: Left
 QualifierAlignment: Right
 ReflowComments: true
-SortIncludes: false
+SortIncludes: CaseSensitive
+# grouped by damn module, in dependency order, then tests' headers, third party, gtest, system
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"(damn/(core/|damn_core\.hpp)|[a-z_]+\.hpp")'
+    Priority: 1
+  - Regex: '^"damn/amr/'
+    Priority: 2
+  - Regex: '^"damn/mpi/'
+    Priority: 3
+  - Regex: '^"damn/hdf5/'
+    Priority: 4
+  - Regex: '^"tst/'
+    Priority: 5
+  - Regex: '^[<"](gtest|gmock|benchmark)/'
+    Priority: 8
+  - Regex: '^"'
+    Priority: 6
+  - Regex: '^<(thrust|highfive|caliper)/'
+    Priority: 7
+  - Regex: '^<'
+    Priority: 9
 SpaceAfterTemplateKeyword: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements

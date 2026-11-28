@@ -5,16 +5,21 @@
 // every rank calls every collective, patches or not: a rank without patches learns each
 // resource's kind and columns from the others
 
-#include "damn/amr/box_data.hpp"
-#include "damn/amr/level_data.hpp"
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "mkn/kul/strided_span.hpp"
-#include "damn/hdf5/level_table.hpp"
+
+#include "damn/amr/box_data.hpp"
+#include "damn/amr/level_data.hpp"
+
 #include "damn/mpi/mpi_utils.hpp"
 
+#include "damn/hdf5/level_table.hpp"
+
+#include "mkn/kul/strided_span.hpp"
+
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -23,7 +28,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <concepts>
 
 namespace damn::amr
 {

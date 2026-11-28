@@ -1,17 +1,18 @@
 #ifndef DAMN_CORE_DATA_NDARRAY_NDARRAY_VECTOR_HPP
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_VECTOR_HPP
 
-#include "damn/core/vector.hpp"
-#include "damn/core/memory/span.hpp"
 #include "damn/core/data/ndarray/ndarray_view.hpp"
-#include "mkn/kul/math.hpp"
 #include "damn/core/memory/allocators.hpp"
+#include "damn/core/memory/span.hpp"
+#include "damn/core/vector.hpp"
 
-#include <cassert>
+#include "mkn/kul/math.hpp"
+
 #include <array>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <cstddef>
 #include <type_traits>
 #include <utility>
 

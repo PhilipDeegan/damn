@@ -4,14 +4,15 @@
 
 #include "damn/core/memory/allocators.hpp"
 #include "damn/core/memory/operators.hpp"
+
 #include "mkn/kul/lang/cpp/compiler/def.hpp"
 
-#include <vector>
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <utility>
-#include <cstdint>
+#include <vector>
 
 namespace damn
 {

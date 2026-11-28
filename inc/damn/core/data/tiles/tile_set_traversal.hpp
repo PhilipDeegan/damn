@@ -5,11 +5,11 @@
 #include "damn/core/geometry/point.hpp"
 
 #include <array>
-#include <optional>
-#include <functional>
-#include <type_traits>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <optional>
+#include <type_traits>
 
 namespace damn::core
 {

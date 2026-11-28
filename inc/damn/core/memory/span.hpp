@@ -4,17 +4,18 @@
 
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/std/vector.hpp"
 #include "damn/core/def/damn_config.hpp"
 
-#include <cassert>
-#include <vector>
+#include "mkn/kul/std/vector.hpp"
+
 #include <algorithm>
+#include <array>
+#include <cassert>
 #include <cstddef>
 #include <numeric>
 #include <type_traits>
-#include <array>
 #include <utility>
+#include <vector>
 
 
 namespace damn::core

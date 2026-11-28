@@ -1,8 +1,9 @@
 #ifndef DAMN_CORE_MEMORY_OPERATORS_HPP
 #define DAMN_CORE_MEMORY_OPERATORS_HPP
 
-#include "damn/core/memory/allocators.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
+#include "damn/core/memory/allocators.hpp"
+
 #include "mkn/gpu.hpp"
 
 #include <algorithm>

@@ -2,13 +2,13 @@
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_MASK_HPP
 
 
-#include "damn/core/def.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
+#include "damn/core/def.hpp"
 
-#include <cassert>
 #include <array>
-#include <cstdint>
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace damn::core

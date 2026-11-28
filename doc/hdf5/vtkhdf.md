@@ -1,9 +1,8 @@
 # VTKHDF output (`hdf5/vtkhdf.hpp`)
 
 VTK's OverlappingAMR in HDF5 (VTKHDF 2.2), as a time series: one file, a step per dump. Each
-level holds its boxes, the point data on their primal nodes (as PHARE's pharevtkhdf diagnostics)
-and, optionally, cell data on their cells (centres). On a Kelvin lattice the corner sites are the
-points and the body sites the cells.
+level holds its boxes, the point data on their primal nodes and, optionally, cell data on their
+cells (centres). On a Kelvin lattice the corner sites are the points and the body sites the cells.
 
 ## Writing
 

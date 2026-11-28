@@ -3,9 +3,10 @@
 
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/math.hpp"
-#include "mkn/kul/for.hpp"
 #include "damn/core/def/damn_config.hpp"
+
+#include "mkn/kul/for.hpp"
+#include "mkn/kul/math.hpp"
 
 #include <cassert>
 #include <cstddef>
