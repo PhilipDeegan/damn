@@ -1,5 +1,5 @@
 # clang-tidy for damn (mkn's clang.tidy module, profile tidy): checks that find bugs or
-# performance problems, not style (as PHARE's), and unused parameters (parameter sets that want a
+# performance problems, not style, and unused parameters (parameter sets that want a
 # DAO). damn's own headers and tests only.
 # bugprone-casting-through-void: off, MPI's own constants (MPI_COMM_WORLD, MPI_DOUBLE ...) are
 #  casts through void *
