@@ -2,7 +2,7 @@
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_VECTOR_HPP
 
 #include "damn/core/data/ndarray/ndarray_view.hpp"
-#include "damn/core/def/damn_config.hpp"
+#include "damn/core/memory/allocators.hpp"
 #include "damn/core/memory/span.hpp"
 #include "damn/core/vector.hpp"
 
@@ -12,7 +12,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <new>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -26,7 +25,7 @@ struct NdArrayConsts
 {
     auto static constexpr allocator_mode = allocator_mode_;
 
-    using vector_t  = typename Vector<Type, allocator_mode_>::vector_t;
+    using vector_t  = Vector<Type, allocator_mode_>;
     using stack_var = StackVar<vector_t>;
 };
 
@@ -49,8 +48,6 @@ public:
     using View::shape;
     using View::size;
 
-    using vec_helper = damn::Vector<Type, allocator_mode>;
-
 
     NdArrayVector() = delete;
 
@@ -58,18 +55,14 @@ public:
     explicit NdArrayVector(std::array<std::uint32_t, dim> const& ncells,
                            std::optional<Type> const& value = std::nullopt)
         : Storage{[&] {
-            if constexpr (std::is_trivially_copyable_v<Type>)
-                return value ? vec_helper::make(mkn::kul::math::product(ncells), *value)
-                             : vec_helper::make(mkn::kul::math::product(ncells));
+            using vector_t = typename Consts::vector_t;
+            auto const n   = mkn::kul::math::product(ncells);
+            if constexpr (std::is_trivially_copyable_v<Type>) // a device fill
+                return value ? vector_t(n, *value) : vector_t(n);
             else
             {
                 (void)value;
-                auto v = vec_helper::make(mkn::kul::math::product(ncells));
-                // NoConstructAllocator skips element construction; place-new each element.
-                if constexpr (allocator_mode_ != AllocatorMode::CPU)
-                    for (std::size_t i = 0; i < v.size(); ++i)
-                        new (&v.data()[i]) Type{};
-                return v;
+                return vector_t(n);
             }
         }()}
         , View{Storage::var.data(), ncells}
@@ -87,7 +80,7 @@ public:
 
 
     NdArrayVector(NdArrayVector const& that)
-        : Storage{vec_helper::from(that.var)}
+        : Storage{that.var}
         , View{Storage::var.data(), that.shape()}
     {
     }
@@ -95,7 +88,13 @@ public:
 
     template<std::size_t d, typename T, bool c, auto a, typename C>
     NdArrayVector(NdArrayVector<d, T, c, a, C>&& that)
-        : Storage{vec_helper::from(std::move(that.var))}
+        : Storage{[&] {
+            using vector_t = typename Consts::vector_t;
+            if constexpr (std::is_same_v<vector_t, std::decay_t<decltype(that.var)>>)
+                return std::move(that.var);
+            else
+                return vector_t(that.var);
+        }()}
         , View{Storage::var.data(), that.shape()}
     {
     }
@@ -107,7 +106,7 @@ public:
 
     auto& operator=(std::array<std::uint32_t, dim> const& ncells)
     {
-        Storage::var = std::move(vec_helper::make(mkn::kul::math::product(ncells)));
+        Storage::var = typename Consts::vector_t(mkn::kul::math::product(ncells));
         View::reset(this->var, ncells);
         return *this;
     }
@@ -115,10 +114,7 @@ public:
 
     auto& operator=(NdArrayVector const& that)
     {
-        if constexpr (allocator_mode == AllocatorMode::CPU)
-            this->var = that.var;
-        else
-            vec_helper::copy(this->var, that.var);
+        this->var = that.var;
 
         View::reset(this->var, that.shape());
 
@@ -127,10 +123,7 @@ public:
 
     auto& operator=(NdArrayVector&& that)
     {
-        if constexpr (allocator_mode == AllocatorMode::CPU)
-            this->var = std::move(that.var);
-        else
-            vec_helper::copy(this->var, that.var);
+        this->var = std::move(that.var);
 
         View::reset(this->var, that.shape());
 
@@ -144,7 +137,7 @@ public:
     {
         if (size() == 0)
             return;
-        vec_helper::fill(this->var, 0);
+        this->var.fill(0);
     }
 
 

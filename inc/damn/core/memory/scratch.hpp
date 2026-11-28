@@ -10,7 +10,7 @@
 //   Scratch<T> s{n};       n values, left from earlier uses (not zeroed)
 //   ScratchVector<T> v;    an empty std::vector, for buffers grown by push_back
 
-#include "damn/core/def/damn_config.hpp"
+#include "damn/core/memory/allocators.hpp"
 #include "damn/core/vector.hpp"
 
 #include <cstddef>
@@ -108,7 +108,7 @@ public:
     // the vector itself, e.g. for a hook appending to a std::vector&: a hook's parameter must be
     //  that type, a deduced one (auto&) gets the ScratchVector
     auto& operator*() { return kept(); }
-    operator typename Kept::vector_t&() { return kept(); }
+    operator typename Kept::std_vector&() { return kept(); }
 
 private:
     Kept& kept;

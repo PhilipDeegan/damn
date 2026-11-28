@@ -31,7 +31,8 @@
 #include "damn/core/logger.hpp"                        // IWYU pragma: export
 #include "damn/core/math/random.hpp"                   // IWYU pragma: export
 #include "damn/core/math/sort.hpp"                     // IWYU pragma: export
-#include "damn/core/memory/memory.hpp"                 // IWYU pragma: export
+#include "damn/core/memory/allocators.hpp"             // IWYU pragma: export
+#include "damn/core/memory/operators.hpp"              // IWYU pragma: export
 #include "damn/core/memory/span.hpp"                   // IWYU pragma: export
 #include "damn/core/operators.hpp"                     // IWYU pragma: export
 #include "damn/core/sys/logger_defaults.hpp"           // IWYU pragma: export

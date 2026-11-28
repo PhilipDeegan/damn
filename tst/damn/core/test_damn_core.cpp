@@ -35,6 +35,56 @@ TEST(DamnCore, ndarray_vector_shape_and_zero)
         EXPECT_EQ(v, 0);
 }
 
+// each allocation spec: growing past the capacity keeps the values (a regrow: a new buffer, a
+//  device copy for device memory), copies between specs and copy construction keep them too
+template<typename V>
+void check_vector_spec()
+{
+    V a(4, 1.);
+    for (std::size_t i = 0; i < 4; ++i)
+        a[i] = static_cast<double>(i);
+    a.resize(100);
+    EXPECT_EQ(a.size(), 100u);
+    a.reserve(1000);
+    EXPECT_GE(a.capacity(), 1000u);
+    EXPECT_EQ(a.size(), 100u);
+
+    damn::Vector<double> host;
+    host.copy_from(a);
+    V const b{a};
+    V c;
+    c.copy_from(host);
+    V d(2);
+    d = a;
+    EXPECT_GE(host.capacity(), a.capacity()); // copies keep the capacity
+    EXPECT_GE(b.capacity(), a.capacity());
+    EXPECT_GE(d.capacity(), a.capacity());
+    EXPECT_EQ(d.size(), a.size());
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        EXPECT_EQ(a[i], static_cast<double>(i));
+        EXPECT_EQ(host[i], static_cast<double>(i));
+        EXPECT_EQ(b[i], static_cast<double>(i));
+        EXPECT_EQ(c[i], static_cast<double>(i));
+        EXPECT_EQ(d[i], static_cast<double>(i));
+    }
+
+    a.fill(3.);
+    EXPECT_EQ(a[99], 3.);
+}
+
+TEST(DamnCore, vector_specs)
+{
+    check_vector_spec<damn::Vector<double>>();
+    check_vector_spec<damn::Vector<double, damn::Allocators::aligned>>();
+    check_vector_spec<damn::Vector<double, damn::AllocationSpec{damn::Allocators::cpu, false}>>();
+#if DAMN_HAVE_MKN_GPU
+    check_vector_spec<damn::Vector<double, damn::Allocators::device>>();
+    check_vector_spec<
+        damn::Vector<double, damn::AllocationSpec{damn::Allocators::device, false}>>();
+#endif
+}
+
 } // namespace damn::core
 
 // DAMN_DEBUG_DO: on unless NDEBUG; DAMN_SUPER_DEBUG_DO: only with -DDAMN_SUPER_DEBUG
