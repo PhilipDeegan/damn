@@ -1,7 +1,6 @@
 # HDF5 files (`hdf5/h5_file.hpp`)
 
-`HighFiveFile` is an HDF5 file through HighFive, adapted from PHARE's
-`hdf5/detail/h5/h5_file.hpp`. It opens serially or in parallel (MPI-IO over `MPI_COMM_WORLD`),
+`HighFiveFile` is an HDF5 file through HighFive. It opens serially or in parallel (MPI-IO over `MPI_COMM_WORLD`),
 and reads and writes datasets (flat, nested vectors, chunked, resizable) and attributes.
 
 ## Every rank creates everything

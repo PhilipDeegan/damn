@@ -179,9 +179,8 @@ TEST(Partition, keepsNeighboursTogetherBetterThanStrips)
 
 TEST(Partition, followsTheWeights)
 {
-    // PHARE's tests/simulator/test_load_balancing.py: two populations, one with no particles in
-    // the cells of a row (density below the cutoff): by cells alone the ranks holding that row
-    // have fewer particles
+    // two populations, one with no particles in the cells of a row (density below the cutoff): by
+    // cells alone the ranks holding that row have fewer particles
     int constexpr nx = 100, ny = 100, ppc_high = 90, ppc_low = 120, empty_row = 50;
     auto const boxes
         = chop(Box<2>{std::array{0, 0}, std::array{nx - 1, ny - 1}}, std::array{10, 5});
@@ -269,7 +268,7 @@ TEST(CutPartition, cutsTheBoxesASharesEndsInWithinABlock)
 
 TEST(CutPartition, followsTheBlockWeights)
 {
-    // the particles of PHARE's load balancing test, counted per block of one large patch
+    // the particles of Partition.followsTheWeights, counted per block of one large patch
     std::vector const boxes{Box<2>{std::array{0, 0}, std::array{99, 99}}};
     std::array const block{10, 10};
     std::vector<double> w;

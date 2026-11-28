@@ -509,7 +509,6 @@ TEST(MpiDeviceCopy, aDeviceResourceTheDeviceCannotTakeThrows)
     auto n  = neighbours_of(h);
     EXPECT_THROW(copy(fill_ghosts, n, {"Bx"}, ld), std::runtime_error);
 }
-#if DAMN_HAVE_THRUST
 // items in unified memory, grouped by cell: the device's gather over ranks gives the host's items
 namespace
 {
@@ -705,7 +704,6 @@ TEST(MpiDeviceCopy, leavingItemsOnTheDeviceAreTheHosts)
         EXPECT_GT(sum_over_ranks(arrived), 0u);
     }
 }
-#endif // DAMN_HAVE_THRUST
 #endif // DAMN_HAVE_GPU
 
 } // namespace damn::amr
