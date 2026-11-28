@@ -21,9 +21,16 @@ called in the same order on every rank.
 | `block` | `cut_partition`'s block, cells per direction |
 | `cut` | cut patches where a rank's share ends (several ranks); false: patches stay whole |
 | `near_band` | `finest` in pieces: level 0's cells within this many cells of level 1 go to level 1's owners |
+| `patch_weight` | the heaviest patch, in `weigh`'s units; 0: none (below) |
 
 A refined level's sizes are rounded down to a multiple of the ratio, at least the ratio, so its
 patches are made of whole coarser cells.
+
+With `patch_weight`, a chopped patch that weighs more is halved along its widest direction (in
+whole coarser cells on a refined level) until it weighs no more or is one unit wide. Patches then
+follow the work rather than the cells: a level 0 region that the model refines in place gets more
+patches. Each round of halving is one `weigh` call with every patch of the round in it. With
+`keep`, the halves stay on their owner.
 
 ## One level: `decompose_level(h, ln, boxes, in[, finer])`
 

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -38,6 +39,7 @@ struct Decompose
     std::vector<std::array<int, dim>> level_size{}; // per level, else patch_size
     std::vector<std::array<int, dim>> under_size{}; // per level, under the finer level; 0: none
     int near_band = 0;                              // finest in pieces: doc/amr/decompose.md
+    double patch_weight = 0.; // the heaviest patch, weigh's units; 0: none
 };
 
 namespace detail
@@ -221,6 +223,59 @@ namespace detail
                                              + " patch not in whole coarse cells");
     }
 
+    // odd unit counts: the lower half is the smaller
+    template<std::size_t dim>
+    std::optional<std::array<core::Box<int, dim>, 2>> halve(core::Box<int, dim> const& box,
+                                                            int const unit)
+    {
+        auto const shape   = box.shape();
+        std::size_t widest = 0;
+        for (std::size_t d = 1; d < dim; ++d)
+            if (shape[d] / unit > shape[widest] / unit)
+                widest = d;
+        auto const units = shape[widest] / unit;
+        if (units < 2)
+            return std::nullopt;
+        auto lower = box, upper = box;
+        lower.upper[widest] = box.lower[widest] + units / 2 * unit - 1;
+        upper.lower[widest] = lower.upper[widest] + 1;
+        return std::array{lower, upper};
+    }
+
+    // one weigh call per round, every patch of the round in it: weigh may be collective
+    template<std::size_t dim>
+    std::vector<core::Box<int, dim>> split_heavy(Decompose<dim> const& in, int const ln,
+                                                 int const unit,
+                                                 std::vector<core::Box<int, dim>> patches)
+    {
+        if (in.patch_weight <= 0.)
+            return patches;
+        while (true)
+        {
+            auto const w = in.weigh(ln, patches);
+            if (w.size() != patches.size())
+                throw std::runtime_error("damn::amr::decompose: one weight per patch");
+            std::vector<core::Box<int, dim>> next;
+            next.reserve(patches.size());
+            bool any = false;
+            for (std::size_t i = 0; i < patches.size(); ++i)
+            {
+                auto const halves = w[i] > in.patch_weight ? halve(patches[i], unit) : std::nullopt;
+                if (!halves)
+                {
+                    next.push_back(patches[i]);
+                    continue;
+                }
+                any = true;
+                next.push_back((*halves)[0]);
+                next.push_back((*halves)[1]);
+            }
+            if (!any)
+                return next;
+            patches = std::move(next);
+        }
+    }
+
     // a level's patches: its boxes chopped; with an under size, the parts under the finer
     // level's boxes first, chopped at it, then the rest
     template<std::size_t dim>
@@ -234,7 +289,7 @@ namespace detail
             for (auto const& box : bs)
                 for (auto const& b : chop_evenly(box, s, ln > 0 ? r : 1))
                     patches.push_back(b);
-            return patches;
+            return split_heavy(in, ln, ln > 0 ? r : 1, std::move(patches));
         };
         if (!finer or under[0] <= 0)
             return chop(boxes, size);
