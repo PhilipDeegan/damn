@@ -6,18 +6,19 @@
 // sources are never modified; an operator without a call for a resource's kind throws
 
 #include "damn/core/def.hpp"
-#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
-#include "damn/core/geometry/point.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+#include "damn/core/geometry/point.hpp"
+#include "damn/core/logger.hpp"
+#include "damn/core/memory/scratch.hpp"
+
 #include "damn/amr/box_data.hpp"
-#include "damn/amr/copy.hpp"
 #include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/cell_items.hpp"
+#include "damn/amr/copy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
-#include "damn/amr/cell_items.hpp"
-#include "damn/core/memory/scratch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -33,8 +34,8 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
-#include <vector>
 #include <utility>
+#include <vector>
 
 namespace damn::amr
 {

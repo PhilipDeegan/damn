@@ -5,9 +5,10 @@
 // doc/amr/level_map.md. Geometric, rebuilt per regrid of either level
 
 #include "damn/core/def.hpp"
-#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/logger.hpp"
+
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/topology.hpp"
@@ -17,10 +18,10 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <tuple>
-#include <utility>
 #include <stdexcept>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 namespace damn::amr

@@ -9,12 +9,13 @@
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+
 #include "damn/amr/lattice.hpp"
 
 #include <array>
 #include <cstddef>
-#include <utility>
 #include <stdexcept>
+#include <utility>
 
 namespace damn::amr::kelvin
 {

@@ -5,18 +5,19 @@
 // spill to rebalance: doc/amr/keep_partition.md
 
 #include "damn/core/def.hpp"
+#include "damn/core/geometry/box.hpp"
+
 #include "damn/amr/partition.hpp"
 #include "damn/amr/topology.hpp"
-#include "damn/core/geometry/box.hpp"
 
 #include <algorithm>
 #include <cstddef>
-#include <numeric>
-#include <stdexcept>
-#include <vector>
 #include <initializer_list>
 #include <iterator>
+#include <numeric>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace damn::amr
 {

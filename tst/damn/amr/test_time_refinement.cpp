@@ -1,14 +1,15 @@
+#include "damn/core/geometry/box.hpp"
+
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/time_refinement.hpp"
-#include "damn/core/geometry/box.hpp"
 
 #include "gtest/gtest.h"
 
 #include <array>
 #include <cstddef>
-#include <type_traits>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace damn::amr

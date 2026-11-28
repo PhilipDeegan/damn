@@ -13,9 +13,9 @@
 #include "mkn/gpu.hpp"
 #include "mkn/gpu/stream.hpp"
 
+#include <algorithm>
 #include <type_traits>
 #include <vector>
-#include <algorithm>
 
 namespace damn::core::gpu
 {

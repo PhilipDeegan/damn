@@ -1,27 +1,29 @@
 // the serial copy tests' brute force expectations with the patches spread over the ranks (round
 // robin, uniform_level_0); any number of ranks, one checks the MPI path against the serial copies
 
-#include "damn/mpi/copy.hpp"
-#include "damn/mpi/topology.hpp"
-#include "damn/mpi/damn_mpi.hpp"
-#include "tst/damn/amr/toy.hpp"
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/exec/kernels.hpp" // IWYU pragma: keep (gpu::Vec_t: GPU builds)
 #include "damn/core/memory/box_span.hpp"
 
+#include "damn/mpi/copy.hpp"
+#include "damn/mpi/damn_mpi.hpp"
+#include "damn/mpi/topology.hpp"
+
+#include "tst/damn/amr/toy.hpp"
+
 #include "gtest/gtest.h"
 
-#include <cmath>
-#include <cstddef>
-#include <string>
-#include <tuple>
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <vector>
-#include <type_traits>
 #include <stdexcept>
-#include <algorithm>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <vector>
 
 namespace damn::amr
 {

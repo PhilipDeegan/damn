@@ -6,8 +6,10 @@
 // boxes
 
 #include "damn/core/def.hpp"
-#include "damn/hdf5/h5_file.hpp"
+
 #include "damn/mpi/mpi_utils.hpp"
+
+#include "damn/hdf5/h5_file.hpp"
 
 #include "highfive/H5File.hpp"
 
@@ -16,13 +18,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <numeric>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
-#include <initializer_list>
 
 namespace damn::amr
 {

@@ -5,19 +5,20 @@
 // doc/amr/metrics.md. Self counts a patch's own periodic images; Local the same rank's others
 
 #include "damn/core/def.hpp"
-#include "damn/amr/hierarchy.hpp"
-#include "damn/amr/topology.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 
-#include <array>
+#include "damn/amr/hierarchy.hpp"
+#include "damn/amr/topology.hpp"
+
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <numeric>
 #include <stdexcept>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 namespace damn::amr
 {

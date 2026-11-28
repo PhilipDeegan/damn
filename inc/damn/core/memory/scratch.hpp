@@ -10,8 +10,8 @@
 //   Scratch<T> s{n};       n values, left from earlier uses (not zeroed)
 //   ScratchVector<T> v;    an empty std::vector, for buffers grown by push_back
 
-#include "damn/core/vector.hpp"
 #include "damn/core/def/damn_config.hpp"
+#include "damn/core/vector.hpp"
 
 #include <cstddef>
 #include <deque>

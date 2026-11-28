@@ -2,10 +2,10 @@
 #define DAMN_CORE_OPERATORS_HPP
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/meta.hpp"
 #include "damn/core/def/damn_config.hpp"
 
 #include "mkn/gpu.hpp"
+#include "mkn/kul/meta.hpp"
 
 #ifndef DAMN_HAVE_GPU
 #define DAMN_HAVE_GPU 0

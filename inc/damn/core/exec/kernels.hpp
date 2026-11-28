@@ -2,9 +2,9 @@
 #define DAMN_CORE_EXEC_KERNELS_HPP
 
 #include "damn/core/def/damn_config.hpp"
-#include "damn/core/exec/kernels/launchers.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
 #include "damn/core/exec/kernels.hpp"
+#include "damn/core/exec/kernels/launchers.hpp"
 
 #include <cstddef>
 #include <cstdint>

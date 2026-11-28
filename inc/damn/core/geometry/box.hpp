@@ -2,25 +2,26 @@
 #define DAMN_CORE_GEOMETRY_BOX_HPP
 
 #include "damn/core/def.hpp"
+#include "damn/core/def/damn_config.hpp"
+#include "damn/core/geometry/point.hpp"
 #include "damn/core/logger.hpp"
 #include "damn/core/memory/span.hpp"
-#include "mkn/kul/math.hpp"
-#include "damn/core/geometry/point.hpp"
-#include "damn/core/def/damn_config.hpp"
-#include "mkn/kul/std/array.hpp"
-#include "mkn/kul/for.hpp"
 
-#include <cassert>
-#include <limits>
-#include <vector>
-#include <iostream>
-#include <optional>
+#include "mkn/kul/for.hpp"
+#include "mkn/kul/math.hpp"
+#include "mkn/kul/std/array.hpp"
+
 #include <algorithm>
-#include <unordered_map>
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
+#include <limits>
+#include <optional>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 
 namespace damn::core

@@ -5,10 +5,11 @@
 // initialised, else 0
 
 #include "damn/core/exec/execution_model.hpp"
+
 #include "damn/mpi/mpi_utils.hpp"
 
-#include <string>
 #include <stdexcept>
+#include <string>
 
 namespace damn::mpi
 {

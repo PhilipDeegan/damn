@@ -3,6 +3,7 @@
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/regrid.hpp"
+
 #include "tst/damn/amr/toy.hpp"
 #include "tst/damn/amr/toy_regrid.hpp"
 
@@ -11,11 +12,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <memory>
-#include <string_view>
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 

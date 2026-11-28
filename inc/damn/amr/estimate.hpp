@@ -4,24 +4,25 @@
 // a decomposition's step time without data, to rank decompositions: doc/amr/estimate.md
 // no overlap of compute and exchange: an estimate, not a prediction
 
+#include "damn/core/data/tiles/tile_set.hpp"
 #include "damn/core/def.hpp"
 #include "damn/core/def/bootstrap.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+
 #include "damn/amr/decompose.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/metrics.hpp"
 #include "damn/amr/topology.hpp"
-#include "damn/core/data/tiles/tile_set.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <functional>
 #include <queue>
-#include <utility>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace damn::amr

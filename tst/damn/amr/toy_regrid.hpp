@@ -4,9 +4,11 @@
 // toy level data filled with values known everywhere (fields) and one particle per cell, and
 // checks of a regridded level against them
 
+#include "damn/core/geometry/box_spans.hpp"
+
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"
-#include "damn/core/geometry/box_spans.hpp"
+
 #include "tst/damn/amr/toy.hpp"
 
 #include <cstddef>

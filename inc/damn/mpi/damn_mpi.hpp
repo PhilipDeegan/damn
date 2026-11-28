@@ -21,7 +21,7 @@
 #endif
 
 #if __has_include("mpi.h") // silence clangd
-#include "mpi.h" // IWYU pragma: export
+#include "mpi.h"           // IWYU pragma: export
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)

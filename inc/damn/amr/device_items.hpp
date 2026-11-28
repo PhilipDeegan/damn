@@ -8,17 +8,19 @@
 
 #if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
 
-#include "damn/amr/cell_item_data.hpp"
-#include "damn/amr/device_copy.hpp"
-#include "damn/amr/level_data.hpp"
-#include "damn/amr/neighbours.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
 #include "damn/core/exec/kernels.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
 
+#include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/device_copy.hpp"
+#include "damn/amr/level_data.hpp"
+#include "damn/amr/neighbours.hpp"
+
 #include <thrust/execution_policy.h>
 #include <thrust/scan.h>
+
 #include <array>
 #include <concepts>
 #include <cstddef>

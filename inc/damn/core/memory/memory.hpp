@@ -4,12 +4,12 @@
 
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
-#include "mkn/kul/for.hpp"
 
 #include "mkn/gpu.hpp"
+#include "mkn/kul/for.hpp"
 
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <stdexcept>
 
 

@@ -6,13 +6,13 @@
 
 #include "damn/core/def.hpp"
 
-#include <cmath>
-#include <atomic>
-#include <string>
-#include <cstddef>
-#include <utility>
 #include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <cstddef>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 namespace damn::core
 {

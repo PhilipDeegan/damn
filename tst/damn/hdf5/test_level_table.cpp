@@ -4,16 +4,20 @@
 // another's, into memory in place; fields' domains from their ghost buffers (n dimensional
 // memory selections), in C order; any number of ranks
 
-#include "damn/hdf5/level_table.hpp"
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "mkn/kul/strided_span.hpp"
-#include "damn/hdf5/h5_file.hpp"
+
+#include "damn/amr/hierarchy.hpp"
+
+#include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
+#include "damn/hdf5/h5_file.hpp"
+#include "damn/hdf5/level_table.hpp"
+
+#include "mkn/kul/strided_span.hpp"
+
 #include "gtest/gtest.h"
-#include "damn/mpi/damn_mpi.hpp"
 
 #include <array>
 #include <cstddef>

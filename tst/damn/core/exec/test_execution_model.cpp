@@ -5,9 +5,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <mutex>
 #include <set>
-#include <cstddef>
 #include <stdexcept>
 #include <thread>
 #include <utility>
