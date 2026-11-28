@@ -141,6 +141,39 @@ TEST(DamnCore, vector_specs)
 #endif
 }
 
+// regrows (past the capacity: a new buffer, a device copy for managed memory) keep the values,
+//  every column at once with resize_columns
+template<typename V>
+void check_regrows_keep_values()
+{
+    V a(4), b(4);
+    for (std::size_t i = 0; i < 4; ++i)
+        a[i] = static_cast<double>(i), b[i] = static_cast<double>(10 + i);
+    damn::resize_columns(100, /*copy=*/true, a, b);
+    EXPECT_EQ(a.size(), 100u);
+    EXPECT_EQ(b.size(), 100u);
+    a.reserve(1000);
+    EXPECT_GE(a.capacity(), 1000u);
+    EXPECT_EQ(a.size(), 100u);
+    b.resize(500);
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        EXPECT_EQ(a[i], static_cast<double>(i));
+        EXPECT_EQ(b[i], static_cast<double>(10 + i));
+    }
+}
+
+TEST(DamnCore, regrows_keep_values)
+{
+    check_regrows_keep_values<damn::Vector<double>>();
+    check_regrows_keep_values<damn::Vector<double, damn::Allocators::aligned>>();
+#if DAMN_HAVE_MKN_GPU
+    check_regrows_keep_values<
+        damn::Vector<double, damn::AllocationSpec{damn::Allocators::device, false}>>();
+    check_regrows_keep_values<damn::Vector<double, damn::Allocators::device>>();
+#endif
+}
+
 } // namespace damn::core
 
 // DAMN_DEBUG_DO: on unless NDEBUG; DAMN_SUPER_DEBUG_DO: only with -DDAMN_SUPER_DEBUG
