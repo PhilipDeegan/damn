@@ -87,6 +87,7 @@ struct VectorOps<Allocators::device>
 
     template<typename V>
     static void reserve(V& v, std::size_t const s, bool const copy)
+        requires(std::is_trivially_copyable_v<typename V::value_type>)
     {
         if (s > v.capacity())
             regrow(v, s, copy);
@@ -94,10 +95,27 @@ struct VectorOps<Allocators::device>
 
     template<typename V>
     static void resize(V& v, std::size_t const s, bool const copy)
+        requires(std::is_trivially_copyable_v<typename V::value_type>)
     {
         if (s > v.capacity())
             regrow(v, s + s / 2, copy);
         v.resize(s); // within capacity
+    }
+
+    // objects in managed memory (tiles): no device copy of them, std::vector's growth (moves on
+    //  the host)
+    template<typename V>
+    static void reserve(V& v, std::size_t const s, bool /*copy*/)
+        requires(not std::is_trivially_copyable_v<typename V::value_type>)
+    {
+        v.reserve(s);
+    }
+
+    template<typename V>
+    static void resize(V& v, std::size_t const s, bool /*copy*/)
+        requires(not std::is_trivially_copyable_v<typename V::value_type>)
+    {
+        v.resize(s);
     }
 
     template<typename V, typename T>
