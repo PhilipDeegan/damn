@@ -5,8 +5,8 @@ execution, a patch hierarchy and its communication. It moves data and does not i
 what a patch holds (fields, particles, populations, ...) is the user's type, and the arithmetic
 of anything physical (refinement operators, centerings, boundary values) is the user's too.
 
-This is a work in progress: the headers' leading comments are the reference, this page is only
-a map of them.
+This is a work in progress: a map of the headers. Longer explanations live in `doc/`, beside this
+page.
 
 ## Layout
 

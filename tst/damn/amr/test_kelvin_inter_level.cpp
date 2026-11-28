@@ -1,6 +1,3 @@
-// damn::amr::kelvin between levels: the sublattices' mapping at odd ratios; LinearRefine /
-// InjectCoarsen on a two level Kelvin hierarchy, see kelvin_inter_level_tests.hpp
-
 #include "damn/amr/kelvin/inter_level.hpp"
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"

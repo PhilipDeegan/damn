@@ -1,27 +1,8 @@
 #ifndef DAMN_AMR_KEEP_PARTITION_HPP
 #define DAMN_AMR_KEEP_PARTITION_HPP
 
-// partitions by distance, for regrids and the finer levels of a rebalance: data that stays on its
-// rank costs nothing to move, and a fine patch on the rank of the coarse cells under it refines
-// and synchronizes without messages (partition.hpp's curve balances each level on its own, with
-// most of the coarse cells under a fine patch on other ranks)
-//
-//   keep(boxes, old, coarser, ratio, fresh)
-//       each box (a level's cells) cut into pieces with an owner: where a patch of `old` (the
-//       level being replaced) holds the cells, its owner (the data stays); elsewhere where a
-//       patch of `coarser` (the next coarser level, refined by ratio) lies under them, its owner
-//       (the cells refine from there); the rest by fresh(rest): OwnedBoxes covering those boxes
-//       once (e.g. chopped, then partitioned along the curve). Every rank computes the same
-//   owned_boxes(pieces, n_ranks)
-//       per rank its pieces coalesced (partition.hpp's coalesce): the boxes to chop into patches
-//   spill(boxes, ranks, weights, topology, tol)
-//       the ranks again with no rank above (1 + tol) times its share of the weight (its node's
-//       share, node_share_capacity): an overloaded rank, the most loaded first, hands patches
-//       (the heaviest that fits in its excess, else its lightest) to the least loaded rank with
-//       room, the closest first (its memory domain, its node, any node: Distance); it keeps
-//       its last patch. Deterministic
-//
-// as plamn/amr.py's Chopper (partition "keep", spill), its proof of concept
+// partitions keeping data where it is (the old level's owners, the coarser level's under it),
+// spill to rebalance: doc/amr/keep_partition.md
 
 #include "damn/core/def.hpp"
 #include "damn/amr/partition.hpp"
@@ -125,7 +106,6 @@ keep(std::vector<core::Box<int, dim>> const& boxes, std::vector<Patch<dim>> cons
     return pieces;
 }
 
-// per rank (0 .. n_ranks - 1) its pieces' boxes coalesced
 template<std::size_t dim>
 MKN_KUL_FN_SIG_RET std::vector<std::vector<core::Box<int, dim>>>
 owned_boxes(std::vector<OwnedBox<dim>> const& pieces, int const n_ranks)

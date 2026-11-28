@@ -1,33 +1,9 @@
 #ifndef DAMN_HDF5_VTKHDF_HPP
 #define DAMN_HDF5_VTKHDF_HPP
 
-// VTK's OverlappingAMR in HDF5 (VTKHDF 2.2), as a time series: one file, a step per dump, each
-// level's boxes, the point data on their primal nodes (as PHARE's pharevtkhdf diagnostics) and,
-// optionally, cell data on their cells (centres): a Kelvin lattice's corner sites are the points,
-// its body sites the cells
-//
-//   init(file, VtkInit{n_components, max_levels, spacing, chunk_bytes, ratio,
-//                      n_cell_components})   the groups, datasets, attributes of every level up
-//                                     to max_levels (if not there yet); CellData/data only with
-//                                     n_cell_components
-//   append_step(file, time)           a step: its time, NSteps + 1
-//   append_level(file, VtkLevel{ln, level, rank, n_components, data})   collective: level ln
-//                                     at the last step: its boxes (rank major: every rank's
-//                                     patches one after another, by rank), their offsets, and
-//                                     each rank's rows at its place, one write per rank; a level
-//                                     without patches (not there yet) appends an empty entry;
-//                                     its cell rows (cell_data) too if the file has cell data
-//
-//   points_of(box)                    a box's primal nodes, cells + 1 per direction
-//   rows_of(box)                      its rows: its points, x_times<dim> times (1D, 2D: a 3D
-//                                     view, the block repeated for each dummy direction's two
-//                                     nodes)
-//   cell_rows_of(box)                 its cell rows: its cells (a dummy direction has one)
-//
-// rows: points in Fortran order (x fastest), one column per component (vectors x y z, tensors
-// xx xy xz yy yz zz), the caller's data in its patches' order (level order). AMRBox rows: the
-// cells, lower and upper per direction (upper inclusive), 0 for directions past dim. Every rank
-// calls every resize with the same sizes; rank 0 writes the steps' entries and the boxes
+// VTK's OverlappingAMR in HDF5 (VTKHDF 2.2), as a time series: doc/hdf5/vtkhdf.md
+// every rank calls every resize with the same sizes; rank 0 writes the steps' entries and the
+// boxes
 
 #include "damn/core/def.hpp"
 #include "damn/hdf5/h5_file.hpp"

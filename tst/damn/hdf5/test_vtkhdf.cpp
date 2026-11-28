@@ -1,7 +1,7 @@
 // damn::hdf5::vtkhdf: an OverlappingAMR time series written by every rank, read back: steps,
 // every level's Steps entries (a level that never has patches included), the boxes rank major,
 // each rank's rows where the offsets say, a level whose boxes change between steps (a regrid);
-// any number of ranks, e.g. mpirun -n 3
+// any number of ranks
 
 #include "damn/hdf5/vtkhdf.hpp"
 #include "damn/amr/hierarchy.hpp"

@@ -1,8 +1,8 @@
 #ifndef DAMN_TST_AMR_TOY_REGRID_HPP
 #define DAMN_TST_AMR_TOY_REGRID_HPP
 
-// regrid tests' helpers, serial and MPI: toy level data filled with values known everywhere
-// (fields) and one particle per cell, and checks of a regridded level against them
+// toy level data filled with values known everywhere (fields) and one particle per cell, and
+// checks of a regridded level against them
 
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"

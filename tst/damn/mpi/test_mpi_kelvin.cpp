@@ -1,6 +1,4 @@
-// damn::amr::kelvin site fields' ghosts filled by damn::mpi::copy, patches over the ranks: a
-// scalar and a value per face, periodic and bounded; any number of ranks
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_kelvin
+// any number of ranks
 
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"

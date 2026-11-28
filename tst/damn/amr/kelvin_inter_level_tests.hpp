@@ -1,9 +1,7 @@
 #ifndef DAMN_TST_AMR_KELVIN_INTER_LEVEL_TESTS_HPP
 #define DAMN_TST_AMR_KELVIN_INTER_LEVEL_TESTS_HPP
 
-// LinearRefine / InjectCoarsen through refine and coarsen on a two level Kelvin hierarchy, serial
-// (test_kelvin_inter_level.cpp) and over MPI (test_mpi_kelvin_inter_level.cpp). The including file
-// defines, before including this:
+// serial or over MPI: the including file defines, before including this:
 //   int test_rank(); int test_ranks(); Topology test_topology();
 //   void do_refine(op, region, map, pairs, coarse_ld, fine_ld, alpha);
 //   void do_coarsen(op, map, pairs, fine_ld, coarse_ld);

@@ -1,8 +1,7 @@
 #ifndef DAMN_TST_AMR_TEST_INTER_LEVEL_HPP
 #define DAMN_TST_AMR_TEST_INTER_LEVEL_HPP
 
-// damn::amr::refine and coarsen on one rank at refinement ratio DAMN_TEST_INTER_LEVEL_RATIO,
-// defined by the including file: inter_level_tests.hpp's hooks, then its tests
+// one rank, at the ratio DAMN_TEST_INTER_LEVEL_RATIO the including file defines
 
 #include "damn/amr/inter_level.hpp"
 #include "damn/amr/level_map.hpp"

@@ -1,19 +1,8 @@
 #ifndef DAMN_AMR_LEVEL_MAP_HPP
 #define DAMN_AMR_LEVEL_MAP_HPP
 
-// LevelMap: how the patches of two consecutive levels overlap, periodic images included
-//
-//   under[i]: for the i-th local fine patch, the coarse patches under its box grown by reach
-//             (fine cells), e.g. to fill its level border ghosts or a new patch from coarse
-//             data; link shifts are in the coarse index space
-//   over[i]:  for the i-th local coarse patch, the fine patches over it, e.g. to coarsen fine
-//             data onto it; link shifts are in the fine index space
-//   remote:   other ranks' fine patches over my coarse patches, in level order, with their
-//             links to my coarse patches only: what I send them (refine) or receive from them
-//             (coarsen)
-//
-// geometric, as Neighbours: built per regrid of either level. damn/amr/inter_level.hpp refines
-// and coarsens data along it, planning what goes where on first use and keeping the plans here
+// how the patches of two consecutive levels overlap, periodic images included:
+// doc/amr/level_map.md. Geometric, rebuilt per regrid of either level
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -25,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <tuple>
@@ -69,7 +59,6 @@ same_level_names(std::vector<std::string> const& names, std::string const& old_s
     return pairs;
 }
 
-// what goes where between levels, see inter_level.hpp
 enum class LevelRegion : std::uint8_t {
     Interior,    // refine: the fine patches' domain points (or cells), e.g. a new level
     LevelGhosts, // refine: fine ghost points (or cells) on no fine patch's domain
@@ -113,12 +102,16 @@ struct LevelPlan
     std::vector<LevelPiece<dim>> pieces{};
     std::vector<std::max_align_t> scratch{}; // coarse values of fine local field targets
     std::map<int, std::vector<std::byte>> sent{}, received{}; // per peer rank, kept
+    std::vector<std::byte> local{}; // a local piece's bytes, kept: a plan is one copy's at a time
+    // per other rank sending me pieces (rank order): their indices in pieces, in plan order
+    std::vector<std::pair<int, std::vector<std::size_t>>> from{};
 };
 
 template<std::size_t dim>
 struct LevelMap
 {
-    using PlanKey = std::tuple<LevelRegion, std::vector<LevelPair>, int>; // and the stencil
+    // and the stencil; found by a tuple of references (std::less<>), not copied per transfer
+    using PlanKey = std::tuple<LevelRegion, std::vector<LevelPair>, int>;
 
     int coarse = 0; // level numbers, fine == coarse + 1
     int fine   = 1;
@@ -133,7 +126,7 @@ struct LevelMap
     std::vector<core::Point<int, dim>> fine_shifts{};   // the fine level's periodic images, and
                                                         //  no shift first
     std::vector<core::Point<int, dim>> coarse_shifts{}; // the coarse level's, likewise
-    std::map<PlanKey, std::unique_ptr<LevelPlan<dim>>> plans{};
+    std::map<PlanKey, std::unique_ptr<LevelPlan<dim>>, std::less<>> plans{};
 };
 
 

@@ -1,24 +1,8 @@
 #ifndef DAMN_AMR_KELVIN_INTER_LEVEL_HPP
 #define DAMN_AMR_KELVIN_INTER_LEVEL_HPP
 
-// a Kelvin lattice's sites between levels at an odd ratio r: each sublattice nests in itself, as a
-// staggered Cartesian grid, so a site maps to sites of its own sublattice only
-//
-//   corner sites   on cell corners (as primal nodes): coarse corner c is fine corner r c
-//   body sites     on cell centres: r odd, coarse body c is fine body r c + (r - 1) / 2
-//
-//   coincident_fine(coarse cell, site, r)    the fine cell whose site is the coarse one
-//   coincident_coarse(fine cell, site, r)    the coarse cell whose site the fine one is, if any
-//   bracket(fine cell, site, r)              per direction, the coarse cells c and c + 1 of the
-//                                            site's sublattice around the fine site, at c + num / r
-//                                            (num 0: on c); a fine site's bracket is at most one
-//                                            coarse cell from the cell over it
-//   refined_keys(keys, r)                    a domain's sites on the level r times finer
-//
-// what the values do is the model's (damn::amr::refine and coarsen call its operators); these two
-// are the plain ones, on SiteArray of a floating point T, or an array of them:
-//   LinearRefine   a fine site from its bracket, multilinear (stencil 1)
-//   InjectCoarsen  a coarse site from its coincident fine site
+// a Kelvin lattice's sites between levels at an odd ratio, each sublattice nesting in itself,
+// and the plain refine / coarsen operators: doc/amr/kelvin/inter_level.md
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"

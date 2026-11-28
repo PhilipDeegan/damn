@@ -1,32 +1,8 @@
 #ifndef DAMN_AMR_PARTITION_HPP
 #define DAMN_AMR_PARTITION_HPP
 
-// load balance: boxes (patches) to ranks along a Hilbert space filling curve
-//
-//   partition(boxes, weights, capacity)  rank of each box: the curve cut into one run per rank,
-//                                       rank r's share of the weight capacity[r] / sum(capacity)
-//   partition(boxes, weights, n_ranks)  the same, every rank's capacity 1
-//
-// capacity: what each rank has for this work, e.g. its threads less those given to something
-// else (analysis, diagnostics, a minimisation); 0 for a rank that takes none. The curve keeps a
-// rank's boxes together, so most neighbours are on the same rank. A box goes to the rank whose
-// share of the total weight holds the middle of the box's weight along the curve: every rank
-// ends within one box's weight of its share, and the ranks are contiguous runs of the curve.
-// Deterministic: every rank computes the same partition from the same input weights: whatever
-// costs, e.g. cells, or particles (density above a cutoff times particles per cell)
-//
-//   cut_partition(boxes, block, block_weights, capacity[, tol])  boxes and their ranks, boxes
-//                                       cut where a rank's share ends inside them; the
-//                                       arguments build a CutPartition, which it also takes
-//   equal_capacity(n_ranks)             n_ranks ranks of the same capacity
-//
-// as SAMRAI's CascadePartitioner, but along the curve: with whole boxes the ranks only get within
-// a box's weight of their share, and patches can be large (tiled), one weighing more than the
-// imbalance allowed (tol of a share). A box is cut into blocks (blocks_of: `block` cells
-// from its lower corner, the remainder in the last block of each direction); a box a rank's share
-// ends in is split by its blocks along the curve, and the blocks of each rank coalesced back into
-// boxes. Weights are per block (blocks(boxes, block): box after box), the same on every rank,
-// e.g. particles counted per block on the rank that holds the box then summed over the ranks
+// boxes to ranks along a Hilbert curve, whole or cut on blocks: doc/amr/partition.md
+// deterministic: every rank computes the same partition from the same weights
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
@@ -101,10 +77,8 @@ struct Partition
     std::vector<int> ranks;                 // non decreasing
 };
 
-// cut_partition's input: boxes cut on blocks of `block` cells, a weight per block (in
-// blocks(boxes, block) order), each rank's capacity (equal_capacity(n_ranks): the same for all),
-// and tol: how much of the smallest (non zero) share may be on one side of a share's end before
-// the box it is in is cut
+// block_weights in blocks(boxes, block) order; tol: how much of the smallest (non zero) share
+// may be on one side of a share's end before the box it is in is cut
 template<std::size_t dim>
 struct CutPartition
 {
@@ -125,7 +99,6 @@ MKN_KUL_FN_SIG_RET Partition<dim> cut_partition(CutPartition<dim> const& in);
 // the same from CutPartition's members as arguments, in order; missing ones (tol) defaulted
 DAMN_DAO_RET_FN(MKN_KUL_FN_SIG, cut_partition, CutPartition)
 
-// n_ranks ranks of the same capacity
 MKN_KUL_FN_SIG_RET inline std::vector<double> equal_capacity(int const n_ranks)
 {
     if (n_ranks < 1)

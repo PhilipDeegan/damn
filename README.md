@@ -7,3 +7,5 @@ damn moves data around: index space (boxes, points), n-dimensional storage, tili
 ```sh
 mkn clean build test -p test_damn_core -dKO -t 8 -x res/mkn/thrust
 ```
+
+[doc/overview.md](doc/overview.md) maps the code; [CONVENTIONS.md](CONVENTIONS.md) is how it is written.

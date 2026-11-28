@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # what CI runs (build_nix.yml, format.yml), locally: before marking a PR ready, instead of
 # spending Actions minutes. From the repository root; JOBS=8 compile jobs by default.
-#   res/ci/local.sh [base, default origin/next: PRs target next]
+#   res/ci/local.sh [base, default origin/next if it exists, else origin/master]
 set -euo pipefail
-BASE=${1:-origin/next}
+BASE=${1:-$(git rev-parse -q --verify origin/next >/dev/null && echo origin/next || echo origin/master)}
 J=${JOBS:-8}
-MPI="mpirun --oversubscribe"
 mb=$(git merge-base "$BASE" HEAD)
 
 step() { echo; echo "== $*"; }
@@ -14,27 +13,25 @@ step() { echo; echo "== $*"; }
 #  (unused parameters, variables), and strict aliasing a warning only (third party sources)
 W=(-W 9 -a "-Wno-unused-parameter -Wno-unused-variable -Wno-error=strict-aliasing")
 
-step "core tests"
-mkn build test -p test_damn_core -dKO -t "$J" "${W[@]}" -x res/mkn/thrust
+# every build output (dependencies' too) from this run: no library left from an older build, as a
+#  .so an -lname would pick over the .a just built. ccache keeps the rebuild cheap
+step "clean"
+mkn clean -dp test_damn_core -x res/mkn/thrust
+mkn clean -dp test_damn_hdf5 -x res/mkn/mpi
 
-tests() { find "bin/$1/test" -type f -perm -u+x -name "*.cpp" | sort; }
-
-step "MPI tests: 1 (mkn's run), 2, 3 and 8 ranks (as CI: 8 leaves ranks without a patch)"
-mkn build test -p test_damn_mpi -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
-for n in 2 3 8; do
-  for t in $(tests test_damn_mpi); do $MPI -n $n "$t" --gtest_brief=1; done
-done
-
-step "HDF5 tests: 1 and 3 ranks"
+step "test executables (bin/<profile>/test): core, MPI, HDF5"
+mkn build -p test_damn_core -dKO -t "$J" "${W[@]}" -x res/mkn/thrust
+mkn build -p test_damn_mpi -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
 mkn build -p test_damn_hdf5 -dKO -t "$J" "${W[@]}" -x res/mkn/mpi
-mkn build test -p test_damn_hdf5 -dKO -t "$J" "${W[@]}" -x res/mkn/mpi >/dev/null # links them
-for n in 1 3; do
-  for t in $(tests test_damn_hdf5); do (cd "$(mktemp -d)" && $MPI -n $n "$OLDPWD/$t" --gtest_brief=1); done
-done
+
+# as CI: tst/.phlop.exec.yaml, each test once, most MPI ones also on 2, 3 and 8 ranks (-c 8: an 8
+#  rank job, oversubscribed, runs alone); phlop from tpp/phlop (the checkout mkn's sub: made)
+step "tests (phlop)"
+PYTHONPATH=tpp/phlop${PYTHONPATH:+:$PYTHONPATH} python3 -m phlop.run.test_cases -i tst -c 8 --tags mpi
 
 step "clang-format (changed lines)"
-# (git clang-format --diff exits 1 when it has a diff: under pipefail a pipe into grep never
-#  failed this step; capture the diff, then look at it)
+# git clang-format --diff exits 1 on a diff: under pipefail a pipe into grep would not fail the
+#  step, so the diff is captured, then looked at
 fmt=$(git clang-format-22 --binary clang-format-22 --extensions c,cc,cpp,h,hpp,ipp --diff "$mb" -- inc src tst || true)
 if grep -q "^diff" <<<"$fmt"; then
   echo "$fmt"

@@ -1,18 +1,8 @@
 #ifndef DAMN_AMR_METRICS_HPP
 #define DAMN_AMR_METRICS_HPP
 
-// what a hierarchy's decomposition costs, without data: per level, how much each rank holds and
-// how many cells its patches exchange, by Distance (topology.hpp), for comparing decompositions
-// (chopping, partitioning) before a run:
-//
-//   ghost_cells[d]:  same level, the cells of other patches (and periodic images) inside each
-//                    patch's box grown by reach, whose owner is at distance d
-//   coarse_cells[d]: levels > 0, the coarser level's cells under each patch's box grown by
-//                    reach (coarsened), whose owner is at distance d: what refining its ghosts
-//                    reads
-//   weight[r]:       rank r's sum of the level's patch weights (cells if none given)
-//
-// Self counts a patch's own periodic images; Local the same rank's other patches.
+// what a decomposition costs, without data, to compare decompositions before a run:
+// doc/amr/metrics.md. Self counts a patch's own periodic images; Local the same rank's others
 
 #include "damn/core/def.hpp"
 #include "damn/amr/hierarchy.hpp"
@@ -140,15 +130,8 @@ metrics(Hierarchy<dim, Lattice> const& h, Topology const& t, int const reach,
     return out;
 }
 
-// what moving from hierarchy `from` to `to` (a regrid, a rebalance) costs, without data, per level
-// of `to`, by Distance from the old owner to the new one:
-//
-//   moved[d]:   cells of a new patch the old level held (any patch), owned at distance d
-//   refined[d]: cells of a new patch the old level did not hold, refined from the old coarser
-//               level's cells under them (coarsened), whose owner is at distance d (level 0: none,
-//               it always covers the domain)
-//
-// Self and Local are free (the data stays on its rank); the rest is copied between ranks
+// a regrid's or rebalance's cost, per level of `to`, by Distance from the old owner to the new:
+// doc/amr/metrics.md. Self and Local are free: the data stays on its rank
 struct LevelMigration
 {
     int level = 0;

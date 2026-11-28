@@ -1,6 +1,3 @@
-// damn::amr same level copies on a toy field: ghost fills (periodic or not), border sum and
-// max, leaving particles; the Neighbours' links and distances, plans kept and dropped, and
-// the LevelMap between two levels
 // expected values come from brute force over every patch and periodic image
 
 #include "damn/amr/level_map.hpp"
@@ -16,6 +13,7 @@
 #include <cstdint>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -77,6 +75,65 @@ INSTANTIATE_TEST_SUITE_P(Copy, GhostFill,
                          ::testing::Combine(::testing::Values("Bx", "rho", "Ez", "alpha_density"),
                                             ::testing::Bool()));
 
+// a primal node on a patch border is a domain point of every patch sharing it (and of its
+//  periodic image): one piece only may write it into a ghost, else the result depends on the
+//  order pieces run in (on a device, on its schedule)
+TEST_P(GhostFill, eachGhostPointFromOnePiece)
+{
+    auto const& [name, periodic] = GetParam();
+    auto const h                 = make_hierarchy({periodic, periodic});
+    auto ld                      = allocate(h.levels[0], 0, make_patch_data);
+    auto n                       = neighbours_of(h);
+    auto const pairs             = same_names({name});
+    auto const& plan             = plan_for(Region::Ghosts, n, ld, pairs);
+
+    std::map<std::pair<std::size_t, std::array<int, 2>>, int> writes;
+    for (auto const& piece : plan.pieces)
+        core::for_each_point(piece.box,
+                             [&](auto const& p) { ++writes[{piece.dst, {p[0], p[1]}}]; });
+    for (auto const& [at, count] : writes)
+        EXPECT_EQ(count, 1) << name << " patch " << at.first << " (" << at.second[0] << ", "
+                            << at.second[1] << ")";
+}
+
+// each patch's copy of a shared node different: the same ghosts whatever the pieces' order
+TEST_P(GhostFill, thePlanOrderDoesNotMatter)
+{
+    auto const& [name, periodic] = GetParam();
+    auto const h                 = make_hierarchy({periodic, periodic});
+    auto const filled            = [&](bool const reversed) {
+        auto ld = allocate(h.levels[0], 0, make_patch_data);
+        for_each_patch(ld, [&](auto const& patch, auto& data) {
+            auto& f = field(data, name);
+            core::for_each_point(domain_box(f, patch.box), [&](auto const& p) {
+                value(f, patch.box, p) = f_of(h, p) + 1e-3 * (patch.id + 1);
+            });
+        });
+        auto n = neighbours_of(h);
+        if (reversed)
+        {
+            auto const pairs = same_names({name});
+            auto& pieces     = plan_for(Region::Ghosts, n, ld, pairs).pieces;
+            std::reverse(pieces.begin(), pieces.end());
+        }
+        copy(fill_ghosts, n, {name}, ld);
+        return ld;
+    };
+    auto a = filled(false), b = filled(true);
+    for (std::size_t i = 0; i < size(a); ++i)
+    {
+        auto const& box = a.patches[i].box;
+        auto& fa        = field(a.data[i], name);
+        auto& fb        = field(b.data[i], name);
+        core::for_each_point(ghost_box(fa, box), [&](auto const& p) {
+            auto const x = value(fa, box, p), y = value(fb, box, p);
+            EXPECT_TRUE(std::bit_cast<std::uint64_t>(x) == std::bit_cast<std::uint64_t>(y)
+                        or (std::isnan(x) and std::isnan(y)))
+                << name << " patch " << i << " " << p;
+        });
+    }
+}
+
 
 // ---------------------------------------------------------------- BorderSum / BorderMax
 
@@ -112,7 +169,7 @@ TEST_P(BorderOps, sumCountsEveryPatchImageCoveringAPoint)
 
 // values whose sums depend on the order they are added in: every patch holding a point ends
 //  with the same bits, those of the contributions added from 0 in the lexicographic order of
-//  their patch images' boxes (PHAREHUB/PHARE#1581)
+//  their patch images' boxes
 TEST_P(BorderOps, sumIsTheSameBitsOnEveryPatchHoldingAPoint)
 {
     auto const h = make_hierarchy({GetParam(), GetParam()});

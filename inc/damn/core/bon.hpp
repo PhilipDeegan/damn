@@ -3,11 +3,6 @@
 
 // mkn.kul's bon::Node as a tree of paths: "a/b/c" pairs (a generated table, e.g. bootstrap's
 // entries) made into nested maps, a node found by its path, a leaf read as T (kul's from_string)
-//
-//   auto const t = damn::bon::tree(entries);              // {a: {b: {c: v}}}
-//   damn::bon::find(t, "a/b")                             // the {c: v} node, null if none
-//   damn::bon::get<double>(t, "a/b/c", 1.)                // v as a double, 1. if absent or not one
-//   damn::bon::get<double>(entries, "a/b/c", 1.)          // the same over the flat table
 
 #include "mkn/kul/bon.hpp" // IWYU pragma: export
 #include "mkn/kul/lang/cpp/compiler/def.hpp"

@@ -1,5 +1,3 @@
-// damn::amr::advance: the order and times of the hooks with time refinement
-
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/time_refinement.hpp"
 #include "damn/core/geometry/box.hpp"

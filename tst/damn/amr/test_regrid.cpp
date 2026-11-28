@@ -1,5 +1,4 @@
-// damn::amr::regrid on one rank: the toy level (8 x 6 cells, 3 x 4 patches) onto other
-// decompositions of the same cells
+// the toy level (8 x 6 cells, 3 x 4 patches) onto other decompositions of the same cells
 
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"

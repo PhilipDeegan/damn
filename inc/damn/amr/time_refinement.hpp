@@ -1,51 +1,8 @@
 #ifndef DAMN_AMR_TIME_REFINEMENT_HPP
 #define DAMN_AMR_TIME_REFINEMENT_HPP
 
-// advancing a hierarchy with time refinement (subcycling, Berger & Colella): each finer level
-// steps from its coarser level's time to the end of that level's step, then is synchronised onto
-// it. How a coarser step is split into substeps is SAMRAI's TimeRefinementIntegrator's
-// (advanceRecursivelyForRefinedTimestepping, findNextDtAndStepsRemaining):
-//
-//   after each substep the level asks for a dt (hooks.next_dt, else the coarser level's dt over
-//   time_ratio); dt_max = min(asked, dt_max * grow_dt); the steps left to the coarser level's
-//   end, n = int(remaining / dt_max) (+1 if it leaves more than sqrt(eps) of remaining), rounded
-//   up to a multiple of regrid_interval on a level that can be refined; each substep
-//   remaining / (steps left), its end time t + dt, the last one's the coarser level's end
-//   a level new since the previous advance (made by a regrid, or the first advance): its first
-//   dt_max min(coarser dt, coarser dt / time_ratio) and, if it can be refined,
-//   remaining / regrid_interval
-//
-//   TimeRefinement<dim> stepping{{.time_ratio = 4, .regrid_interval = 2}};
-//   stepping.advance(h, hooks, t, dt);     one step dt of level 0 from t, finer levels with it
-//   advance(h, hooks, t, dt, time_ratio)   the same with a fresh state (every level new)
-//   stepping.state() / restore(state)      what carries across steps (each level's dt_max, the
-//                                          finest level before the last regrid), for restarts
-//
-// the user's hooks, per level ln (all but advance optional, see below):
-//   hooks.advance(ln, step)                one step of level ln, step: a Step (t, dt, coarse_t,
-//                                          coarse_dt, first, last, substep); or
-//   hooks.advance(ln, t, dt)               its t and dt only
-//   hooks.next_dt(ln, step) -> double      after that step: the dt the level asks for next (its
-//                                          stable dt, a fixed fraction...); default: the
-//                                          coarser level's dt / time_ratio (level 0: step.dt)
-//   hooks.prepare_step(ln, t)              before each step of ln, e.g. keep the data at t
-//                                          (the next finer level interpolates between it and
-//                                          the data at t + dt)
-//   hooks.first_step(ln, t, coarse_t, coarse_dt)
-//                                          before the first of ln's substeps (ln > 0): the
-//                                          coarser level is at coarse_t + coarse_dt already,
-//                                          and was at coarse_t
-//   hooks.last_step(ln)                    after the last of ln's substeps (ln > 0)
-//   hooks.synchronize(ln, t)               after ln's substeps (ln > 0), its data onto level
-//                                          ln - 1, both at t
-//   hooks.after_step(ln, t, last)          after a step of ln to t and the finer levels with it
-//                                          (synchronized), finest level included: e.g. a regrid
-//                                          of the finer levels (SAMRAI's regrid points); last:
-//                                          ln's last substep of the coarser level's step (true
-//                                          for level 0)
-//
-// per step of level ln: first_step (first substep), prepare_step, advance, next_dt, last_step
-// (last substep), then the finer level's substeps and its synchronize, then after_step
+// subcycling (Berger & Colella), substeps as SAMRAI's TimeRefinementIntegrator; the hooks and
+// their order: doc/amr/time_refinement.md
 
 #include "damn/amr/hierarchy.hpp"
 #include "damn/core/def.hpp"
@@ -91,7 +48,6 @@ struct TimeRefinementOptions
 
 namespace detail
 {
-    // hooks.advance: with the Step, or its t and dt
     void advance_hook(auto& hooks, int const ln, Step const& step)
         requires requires { hooks.advance(ln, step); }
     {
@@ -103,7 +59,6 @@ namespace detail
         hooks.advance(ln, step.t, step.dt);
     }
 
-    // hooks.next_dt, else the default bound
     double next_dt_hook(auto& hooks, int const ln, Step const& step,
                         [[maybe_unused]] int const time_ratio)
         requires requires {
@@ -303,9 +258,8 @@ private:
     }
 };
 
-// one step dt of level 0 from t with a fresh stepping state (every level new: each finer level
-//  time_ratio substeps per step of its coarser level when no hooks.next_dt), 0: the refinement
-//  ratio
+// a fresh stepping state: every level new, so time_ratio substeps per coarser step without
+//  hooks.next_dt
 template<std::size_t dim, typename Lattice>
 void advance(Hierarchy<dim, Lattice> const& h, auto& hooks, double const t, double const dt,
              int const time_ratio = 0)

@@ -1,6 +1,5 @@
-// damn::mpi::cluster: each rank's tagged cells, the same boxes on every rank as the serial
-// clustering of all of them. Any number of ranks:
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_clustering
+// each rank's tagged cells, the same boxes on every rank as the serial clustering of all of
+// them; any number of ranks
 
 #include "damn/amr/clustering.hpp"
 #include "damn/amr/hierarchy.hpp"

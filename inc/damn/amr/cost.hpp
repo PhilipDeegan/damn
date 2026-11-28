@@ -1,26 +1,8 @@
 #ifndef DAMN_AMR_COST_HPP
 #define DAMN_AMR_COST_HPP
 
-// what a patch costs to advance, for partitioning (decompose.hpp)
-//
-//   CostModel{item, cell, ghost_cell, patch, reach}
-//       a patch's cost from its box and a count in it (whatever the model counts: particles, a
-//       cell's refined cells...): item * count + cell * cells + ghost_cell * (cells within reach
-//       of the box, outside it) + patch, as nested fma (item, count, fma(cell, cells,
-//       fma(ghost_cell, ghosts, patch))). The default weighs the count alone; measured_hybrid()
-//       the per term times of a hybrid PIC step (item: a particle)
-//   CostMap{box, block, counts}
-//       counts on a grid of `block` cells from box.lower (the last block of each direction
-//       clipped to the box), x fastest: a box's count summed over the blocks it overlaps, a
-//       block's share by the cells overlapped. For callers without the counted things themselves
-//       (an emulation, a decomposition made before a run); a run counts its own
-//   weigh_by(model, counts)
-//       a Weigh (decompose.hpp): per level and box, the model's cost of counts(ln, boxes)
-//   counts_of(maps)
-//       a Weigh of per level CostMaps' counts (weigh_by's input)
-//
-// Every rank computes the same costs from the same counts: the counts are global (summed over
-// the ranks by the caller)
+// what a patch costs to advance, for partitioning: doc/amr/cost.md
+// counts are global (summed over the ranks by the caller): every rank gets the same costs
 
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"

@@ -1,31 +1,23 @@
 #ifndef DAMN_MPI_COPY_HPP
 #define DAMN_MPI_COPY_HPP
 
-// damn::amr copies over MPI: the same copies as damn/amr/copy.hpp's, between patches of any
-// rank, collective over the ranks holding the level's patches
-//
-//   damn::mpi::copy(damn::amr::fill_ghosts, neighbours, {"Bx"}, level_data)
-//
-// every rank plans the same pieces from the same global patch list, so a message is the
-// pieces' data only, in plan order: one message per peer rank and copy
-//   1. outgoing pieces packed per peer and sent (MPI_Isend)
-//   2. local pieces: ghosts and leaving items copied, sums and maxes read into the buffer
-//   3. per peer with pieces for me: probed (item messages vary in size), received,
-//      unpacked; sums kept in the received buffers
-//   4. local maxes written, sums folded with the received ones in a fixed order
-//      (damn::amr::detail::fold_sums), sends waited for
+// damn::amr copies between patches of any rank, collective: doc/mpi/copy.md
 // every source is read (1, 2) before anything is written (3, 4), so sums and maxes use the
-// values from before the copy
+// values from before the copy. Device resources take a device path: doc/mpi/copy.md
 
 #include "damn/core/logger.hpp"
 #include "damn/amr/copy.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 #include "damn/core/memory/scratch.hpp"
+#include "damn/core/def/damn_config.hpp"
+
+#if DAMN_HAVE_GPU && __has_include(<mpi-ext.h>)
+#include <mpi-ext.h> // MPIX_Query_cuda_support, MPIX_Query_rocm_support (Open MPI)
+#endif
 
 #include <cstddef>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -38,12 +30,181 @@ struct LevelData;
 
 namespace damn::mpi
 {
-inline constexpr int copy_tag = 0xda;
+inline constexpr int copy_tag        = 0xda;
+inline constexpr int copy_counts_tag = 0xdd; // device items: their counts before them
 
-struct CopySends; // core::scratch tag: a copy's send requests
+namespace detail
+{
+    inline int as_count(std::size_t const bytes)
+    {
+        if (bytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+            throw std::runtime_error("damn::mpi::copy: a message over 2GB");
+        return static_cast<int>(bytes);
+    }
 
-// access: how the pieces' resources are reached (amr::by_name, or accessors one per pair, as
-//  damn::amr::copy)
+#if DAMN_HAVE_GPU
+    // device buffers handed to MPI: an MPI that does not read them on the device would read
+    //  them on the host
+    inline void check_device_aware()
+    {
+        static bool const aware = [] {
+#if MKN_GPU_CUDA && defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
+            return MPIX_Query_cuda_support() == 1;
+#elif MKN_GPU_ROCM && defined(MPIX_ROCM_AWARE_SUPPORT) && MPIX_ROCM_AWARE_SUPPORT
+            return MPIX_Query_rocm_support() == 1;
+#else
+            return false;
+#endif
+        }();
+        if (!aware)
+            throw std::runtime_error("damn::mpi::copy: device resources need a GPU aware MPI");
+    }
+
+    // the device path: field messages' sizes are the plan's, so receives are posted first
+    template<amr::Arrival arrival, std::size_t dim, typename PatchData>
+    void copy_on_device(amr::Plan<dim> const& plan, amr::detail::DeviceTable<dim>& table,
+                        amr::LevelData<dim, PatchData> const& ld, MPI_Comm const comm)
+    {
+        if (!table.to.empty() or !table.from.empty())
+            check_device_aware();
+        auto const value = sizeof(double);
+
+        core::ScratchVector<MPI_Request> recvs;
+        recvs.resize(table.from.size());
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            auto const& peer = table.from[k];
+            MPI_Irecv(table.recv.data() + peer.begin, as_count(peer.count * value), MPI_BYTE,
+                      peer.rank, copy_tag, comm, &recvs[k]);
+        }
+
+        core::ScratchVector<MPI_Request> sends;
+        sends.resize(table.to.size());
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::pack_send");
+            amr::pack_on_device(table); // done when it returns: the launch waits
+            for (std::size_t k = 0; k < table.to.size(); ++k)
+            {
+                auto const& peer = table.to[k];
+                MPI_Isend(table.send.data() + peer.begin, as_count(peer.count * value), MPI_BYTE,
+                          peer.rank, copy_tag, comm, &sends[k]);
+            }
+        }
+
+        core::ScratchVector<MPI_Status> status;
+        status.resize(table.from.size());
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::wait"); // for the peers' messages
+            MPI_Waitall(static_cast<int>(recvs.size()), recvs.data(), status.data());
+        }
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            int bytes = 0;
+            MPI_Get_count(&status[k], MPI_BYTE, &bytes);
+            if (static_cast<std::size_t>(bytes) != table.from[k].count * value)
+                throw std::runtime_error("damn::mpi::copy: rank "
+                                         + std::to_string(table.from[k].rank)
+                                         + "'s message does not match this rank's plan");
+        }
+
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
+            amr::finish_on_device<arrival>(plan, table, ld);
+        }
+        DAMN_LOG_SCOPE(2, "damn::mpi::copy::sends"); // until the peers have received them
+        MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
+    }
+#endif // DAMN_HAVE_GPU
+
+#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+    // leaving items on the device: per peer a counts message (host, its size the plan's), then
+    //  its blocks (device), received at the place the counts give
+    template<std::size_t dim, typename Access, typename PatchData>
+    void items_on_device(amr::Plan<dim> const& plan, amr::detail::ItemTable<dim>& table,
+                         Access const& access, amr::LevelData<dim, PatchData>& ld,
+                         MPI_Comm const comm)
+    {
+        if (!table.to.empty() or !table.from.empty())
+            check_device_aware();
+        auto const words = sizeof(std::uint64_t);
+
+        core::ScratchVector<MPI_Request> counts;
+        counts.resize(table.from.size());
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            auto& peer = table.from[k];
+            MPI_Irecv(peer.header.data(), as_count(peer.header.size() * words), MPI_BYTE, peer.rank,
+                      copy_counts_tag, comm, &counts[k]);
+        }
+
+        core::ScratchVector<MPI_Request> sends;
+        sends.resize(2 * table.to.size());
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::pack_send");
+            amr::pack_items_on_device(plan, access, ld, table); // done when it returns
+            auto const* const send = reinterpret_cast<std::byte const*>(table.send.data());
+            for (std::size_t k = 0; k < table.to.size(); ++k)
+            {
+                auto const& peer = table.to[k];
+                MPI_Isend(peer.header.data(), as_count(peer.header.size() * words), MPI_BYTE,
+                          peer.rank, copy_counts_tag, comm, &sends[2 * k]);
+                MPI_Isend(send + peer.begin, as_count(peer.bytes), MPI_BYTE, peer.rank, copy_tag,
+                          comm, &sends[2 * k + 1]);
+            }
+        }
+
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::wait"); // for the peers' counts
+            MPI_Waitall(static_cast<int>(counts.size()), counts.data(), MPI_STATUSES_IGNORE);
+        }
+        std::size_t bytes = 0;
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            auto& peer = table.from[k];
+            peer.begin = bytes;
+            peer.bytes = amr::detail::received_bytes(plan, table, k);
+            bytes += peer.bytes;
+        }
+        table.recv.resize(bytes / words);
+
+        core::ScratchVector<MPI_Request> recvs;
+        recvs.resize(table.from.size());
+        core::ScratchVector<MPI_Status> status;
+        status.resize(table.from.size());
+        auto* const recv = reinterpret_cast<std::byte*>(table.recv.data());
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            auto const& peer = table.from[k];
+            MPI_Irecv(recv + peer.begin, as_count(peer.bytes), MPI_BYTE, peer.rank, copy_tag, comm,
+                      &recvs[k]);
+        }
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::wait"); // for the peers' items
+            MPI_Waitall(static_cast<int>(recvs.size()), recvs.data(), status.data());
+        }
+        for (std::size_t k = 0; k < table.from.size(); ++k)
+        {
+            int got = 0;
+            MPI_Get_count(&status[k], MPI_BYTE, &got);
+            if (static_cast<std::size_t>(got) != table.from[k].bytes
+                or !amr::place_received(plan, table, k))
+                throw std::runtime_error("damn::mpi::copy: rank "
+                                         + std::to_string(table.from[k].rank)
+                                         + "'s items do not match its counts");
+        }
+
+        {
+            DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
+            amr::unpack_items_on_device(plan, access, ld, table);
+            amr::detail::appended(plan, access, ld); // local and received items in, each once
+        }
+        DAMN_LOG_SCOPE(2, "damn::mpi::copy::sends"); // until the peers have received them
+        MPI_Waitall(static_cast<int>(sends.size()), sends.data(), MPI_STATUSES_IGNORE);
+    }
+#endif // DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+} // namespace detail
+
+// access: amr::by_name, or accessors one per pair
 template<amr::Region region, amr::Arrival arrival, std::size_t dim, typename Access,
          typename PatchData>
 void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
@@ -55,14 +216,19 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
     check_access(access, pairs.size());
     auto& plan = plan_for(region, n, ld, pairs);
 
-    auto const as_int = [](std::size_t const bytes) {
-        if (bytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-            throw std::runtime_error("damn::mpi::copy: a message over 2GB");
-        return static_cast<int>(bytes);
-    };
+#if DAMN_HAVE_GPU
+    if constexpr (region != Region::Leaving)
+        if (auto& table = amr::detail::device_table(plan, access, ld); table.usable)
+            return detail::copy_on_device<arrival>(plan, table, ld, comm);
+#endif
+#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+    if constexpr (region == Region::Leaving)
+        if (auto& table = amr::detail::item_table(plan, access, ld); table.usable)
+            return detail::items_on_device(plan, table, access, ld, comm);
+#endif
 
     // 1. send
-    std::span<MPI_Request> sends;
+    core::ScratchVector<MPI_Request> sends; // until the sends are waited for, step 4
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::pack_send");
         for (auto& [_, buffer] : plan.sent)
@@ -73,11 +239,11 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
             pack_piece(region, piece, access, ld, plan.sent[piece.dst_rank]);
         }
 
-        sends          = core::scratch<MPI_Request, CopySends>(plan.sent.size());
+        sends.resize(plan.sent.size());
         std::size_t at = 0;
         for (auto& [peer, buffer] : plan.sent)
-            MPI_Isend(buffer.data(), as_int(buffer.size()), MPI_BYTE, peer, copy_tag, comm,
-                      &sends[at++]);
+            MPI_Isend(buffer.data(), detail::as_count(buffer.size()), MPI_BYTE, peer, copy_tag,
+                      comm, &sends[at++]);
     }
 
     // 2. local
@@ -131,7 +297,7 @@ void copy(amr::CopyOp<region, arrival> const op, amr::Neighbours<dim>& n,
                                      + "'s message does not match this rank's plan");
     }
 
-    // 4.
+    // 4. finish
     {
         DAMN_LOG_SCOPE(2, "damn::mpi::copy::finish");
         if constexpr (arrival == Arrival::Sum)

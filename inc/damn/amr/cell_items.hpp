@@ -1,27 +1,10 @@
 #ifndef DAMN_AMR_CELL_ITEMS_HPP
 #define DAMN_AMR_CELL_ITEMS_HPP
 
-// moving a CellItemData resource's items between patches: the items whose cell + shift is in a
-// box, packed to bytes and unpacked (other ranks, regrid transfers), or appended directly (the
-// same rank). A resource can do each its own way, through these optional free functions (ADL),
-// else damn does it item by item (for_each_item, cell, append, the item's bytes):
-//
-//   void pack_items(src const&, box, shift, std::vector<std::byte>&)
-//                                  // appends the selected items in the resource's own format,
-//                                  //  e.g. a count then one byte stream per component
-//   void unpack_items(dst&, std::byte const*& at, shift)
-//                                  // appends what pack_items wrote, cells moved by shift, at
-//                                  //  past it
-//   std::vector<value_type> read_items(dst const&, std::byte const*& at)
-//                                  // what pack_items wrote as items, at past it (refine's
-//                                  //  coarse items)
-//   void append_items_from(dst&, src const&, box, shift)
-//                                  // the same rank: directly (src may be dst); without it a
-//                                  //  resource with pack_items goes through a scratch buffer
-//   void items_appended(dst&)      // after a copy or a regrid appended to dst (once, whatever
-//                                  //  the number of pieces), e.g. to sort it
-//
-// pack_items and unpack_items come together; the default format: a count, then the items' bytes
+// moving a CellItemData resource's items between patches, item by item unless the resource
+// gives its own hooks (ADL): doc/amr/cell_items.md
+
+#include "damn/core/memory/scratch.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -134,9 +117,9 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
         append_items_from(dst, src, box, shift);
     else if constexpr (detail::Packs<R, dim> and detail::Packs<S, dim>)
     {
-        std::vector<std::byte> scratch; // packed first: appending to src itself is safe
-        pack_items(src, box, shift, scratch);
-        std::byte const* at = scratch.data();
+        core::ScratchVector<std::byte> bytes; // packed first: appending to src itself is safe
+        pack_items(src, box, shift, bytes);
+        std::byte const* at = bytes.data();
         unpack_items(dst, at, shift);
     }
     else
@@ -152,7 +135,7 @@ void append_from(R& dst, S const& src, core::Box<int, dim> const& box,
             return;
         }
         // the same array: collect first, appending invalidates it
-        std::vector<Item> items;
+        core::ScratchVector<Item> items;
         for_each_item(src, [&](auto const& item) {
             if (selected(item))
                 items.push_back(item);

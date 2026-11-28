@@ -1,6 +1,5 @@
-# python3 -m phlop.run.test_cases -i tst --tags mpi: damn's gtest binaries (built by mkn into
-# bin/test_damn_*/test) in phases, each mpi one on 1 rank, most also on 2, 3 and 8 (8 leaves ranks
-# without patches). A failing run's output is kept under .phlop/ (CI uploads it)
+# python3 -m phlop.run.test_cases -i tst --tags mpi; 8 ranks leave some without patches. A
+# failing run's output is kept under .phlop/ (CI uploads it)
 env: {PHLOP_STALL_TIMEOUT: 60, PHLOP_STALL_BUSY_TIMEOUT: 60}
 phases:
   - name: core

@@ -1,17 +1,8 @@
 #ifndef DAMN_AMR_NEIGHBOURS_HPP
 #define DAMN_AMR_NEIGHBOURS_HPP
 
-// Neighbours: the patches of a level near each of a rank's patches, periodic images included
-//
-//   Link:        another patch (or a periodic image of the same one), the shift to its image
-//                and how far its data is (Distance)
-//   Neighbours:  per local patch, in LevelData order, every patch whose box grown by reach
-//                meets the local patch's box grown by reach: reach is the most cells any
-//                resource reaches outside its patch (ghosts, plus one for primal nodes)
-//
-// purely geometric: built once per regrid (make_neighbours), then damn/amr/copy.hpp copies
-// data along the links; what moves where for a given set of resources is planned on first
-// use and kept here (plans), so a regrid, which builds new Neighbours, drops them
+// the patches of a level near each of a rank's patches, periodic images included:
+// doc/amr/neighbours.md. Geometric; plans kept here, so a regrid drops them
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -22,12 +13,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
+#include <algorithm>
 #include <vector>
 
 namespace damn::amr
@@ -63,7 +57,6 @@ same_names(std::vector<std::string> const& names)
     return pairs;
 }
 
-// what goes where, see copy.hpp
 enum class Region : std::uint8_t {
     Ghosts,  // neighbours' domain points -> my ghost points
     Borders, // neighbours' ghost points -> the same points of mine (ghost boxes overlap)
@@ -93,12 +86,8 @@ struct FoldGroup
     std::size_t points = 0;                     // in covered
 };
 
-// what goes where for a region and set of resources, from one rank's point of view
-//   pieces:   into my patches, from mine or another rank's
-//   outgoing: from my patches into another rank's
-// both ranks of a transfer make the same pieces in the same order, from the same global patch
-// list: messages need no description of their content. What follows from the pieces alone is
-// made with the plan (copy.hpp's plan_for), so a copy only moves values
+// from one rank's point of view; both ranks of a transfer make the same pieces in the same
+// order, so messages need no description of their content
 template<std::size_t dim>
 struct Plan
 {
@@ -116,12 +105,15 @@ struct Plan
     std::vector<std::size_t> fold_order{};
     std::vector<FoldGroup<dim>> fold_groups{};
     std::vector<std::byte const*> sources{}; // per piece, its values for fold_sums (per copy)
+    // Leaving: per destination resource, its first piece (cell_items::appended once each)
+    std::vector<std::size_t> appended{};
 };
 
 template<std::size_t dim>
 struct Neighbours
 {
-    using PlanKey = std::pair<Region, std::vector<ResourcePair>>;
+    // a tuple: found by a tuple of references (std::less<>), the pairs not copied per copy
+    using PlanKey = std::tuple<Region, std::vector<ResourcePair>>;
 
     int level = 0;
     int rank  = 0;
@@ -129,10 +121,10 @@ struct Neighbours
     std::vector<Patch<dim>> built_on{};     // the level's patches when built
     std::vector<Patch<dim>> local{};        // this rank's, in LevelData order
     std::vector<std::vector<Link<dim>>> of; // of[i]: links of local[i]
-    // other ranks' patches near mine, in level order, with their links to my patches: what I
-    // send them
+    // other ranks' patches near mine, in level order, with all their links: I send them what
+    // the links to my patches give, the others decide which image of a point fills a ghost
     std::vector<std::pair<Patch<dim>, std::vector<Link<dim>>>> remote{};
-    std::map<PlanKey, Plan<dim>> plans{}; // copy.hpp's, by region and resources
+    std::map<PlanKey, Plan<dim>, std::less<>> plans{}; // copy.hpp's, by region and resources
 };
 
 
@@ -188,7 +180,9 @@ MKN_KUL_FN_SIG_RET Neighbours<dim> make_neighbours(Hierarchy<dim, Lattice> const
     if (!n.local.empty())
         for (auto const& dst : level.patches)
             if (dst.rank != rank)
-                if (auto links = links_of(dst, true); !links.empty())
+                if (auto links = links_of(dst, false);
+                    std::any_of(links.begin(), links.end(),
+                                [](auto const& l) { return l.local != not_local; }))
                     n.remote.emplace_back(dst, std::move(links));
 
     return n;

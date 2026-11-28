@@ -1,6 +1,4 @@
-// damn::mpi::start_scope_timing / stop_scope_timing: one phlop timer file per rank, with the
-// copies' scopes. Run with any number of ranks:
-//   mpirun -n 3 ./bin/test_damn_mpi/test_mpi_scope_timing
+// any number of ranks
 
 #include "damn/core/def/phlop.hpp"
 #include "damn/amr/copy.hpp"
@@ -51,7 +49,8 @@ TEST(MpiScopeTiming, aFilePerRankWithTheCopies)
     if (!DAMN_HAVE_PHLOP)
         GTEST_SKIP() << "built without phlop";
 
-    auto const dir = std::filesystem::path{"damn_test_scope_timing"};
+    // per rank count, as the hdf5 tests' files: the variants run at once from one directory
+    auto const dir = std::filesystem::path{"damn_test_scope_timing_n" + std::to_string(mpi_size())};
     if (mpi_rank() == 0)
     {
         std::filesystem::remove_all(dir);

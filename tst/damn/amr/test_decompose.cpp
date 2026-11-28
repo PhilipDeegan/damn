@@ -1,10 +1,3 @@
-// damn::amr::decompose and cost.hpp: "levels" on one rank is chop_evenly + partition; on several
-// a level of one patch is cut so every rank gets work, refined levels in whole coarser cells;
-// "keep" with the level it replaces keeps every owner; levels decomposed together keep the old
-// finer levels for "keep"; patch_weight halves the heavy patches only (whole coarser cells on a
-// refined level, kept by "keep" on their owner); CostModel's terms, CostMap's prorated counts and
-// weigh_by
-
 #include "damn/amr/decompose.hpp"
 #include "damn/amr/cost.hpp"
 #include "damn/amr/hierarchy.hpp"

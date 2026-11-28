@@ -2,16 +2,7 @@
 #define DAMN_AMR_TOPOLOGY_HPP
 
 // where patches live, and how far one patch's data is from another's
-//
-//   Location:  a rank's node, memory domain (NUMA node) and device
-//   Topology:  the Location of every rank (gathered once, the same on every rank)
-//   Distance:  ordered, so that code can ask "is it at most Local?"; how data moves between
-//              two patches (direct copy, shared memory, messages) follows from it
-//   node_share_capacity(t)  each rank's capacity for partition / cut_partition: an equal share of
-//              its node, 1 / (ranks on the node); nodes taken as equal (hwloc or a benchmark at
-//              init could measure them)
-//
-// a Topology with one entry is a single rank; see damn/mpi for gathering one over ranks
+// a Topology with one entry is a single rank; damn/mpi gathers one over ranks
 
 #include "damn/core/def.hpp"
 
@@ -25,6 +16,7 @@
 
 namespace damn::amr
 {
+// ordered: code asks "is it at most Local?"
 enum class Distance : std::uint8_t {
     Self,   // a periodic image of the same patch
     Local,  // same rank, same memory domain (same NUMA node, same device)
@@ -68,6 +60,7 @@ MKN_KUL_FN_SIG_RET constexpr Distance distance(Location const& a, Location const
     return a.numa == b.numa ? Distance::Node : Distance::Socket;
 }
 
+// gathered once, the same on every rank
 struct Topology
 {
     std::vector<Location> ranks{Location{}}; // ranks[r]: rank r's location
@@ -96,6 +89,8 @@ MKN_KUL_FN_SIG_RET inline Distance distance(Topology const& t, int const rank_a,
     return distance(location(t, rank_a), location(t, rank_b));
 }
 
+// an equal share of its node per rank, 1 / (ranks on the node): nodes taken as equal (hwloc or a
+// benchmark at init could measure them)
 MKN_KUL_FN_SIG_RET inline std::vector<double> node_share_capacity(Topology const& t)
 {
     std::map<int, int> per_node; // ranks

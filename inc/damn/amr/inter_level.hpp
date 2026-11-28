@@ -1,49 +1,9 @@
 #ifndef DAMN_AMR_INTER_LEVEL_HPP
 #define DAMN_AMR_INTER_LEVEL_HPP
 
-// moving data between two consecutive levels, along a LevelMap: damn finds what goes where and
-// moves it, the user's operators do the arithmetic (they know the centerings and the physics)
-//
-//   refine(op, region, map, pairs, coarse_ld, fine_ld, alpha = 0)
-//     region Interior:    the fine patches' domain points (or cells), e.g. a new level
-//     region LevelGhosts: fine ghost points (or cells) on no fine patch's domain, periodic
-//                         images included: the coarse-fine border
-//     for each fine target box, the coarse points (or cells) of
-//       grow(coarsen(box), op.stencil) are gathered from the coarse patches' domains; field
-//       points on no coarse domain (past the coarse level's border: a fine level nearer the
-//       coarse level's border than its ghosts' reach, nesting_buffer 1 say) from the first
-//       coarse patch, in level order, whose ghosts hold them (the coarse level's level ghosts,
-//       filled from the level below it, so a level only ever reads the next coarser one), then
-//       BoxData:      op(fine_resource, fine_patch_box, box, BoxValues<T const> coarse)
-//                     fills the fine points of box from the coarse values
-//       CellItemData: op(fine_resource, fine_patch_box, box, std::span<Item const> coarse,
-//                        shift)
-//                     per coarse patch image: appends the fine items (e.g. split coarse ones)
-//                     whose cell is in box; coarse items' cells are at cell(item) + shift in
-//                     the coarse index space
-//     with a pair's coarse_new set, coarse values are (1 - alpha) coarse + alpha coarse_new:
-//     coarse only at alpha 0, coarse_new only at alpha 1 (the other may be unset)
-//
-//   coarsen(op, map, pairs, fine_ld, coarse_ld)
-//     BoxData only: for each fine patch and coarse patch image under it,
-//       op(fine_resource const&, fine_patch_box, BoxValues<T> out) fills out.box: the coarse
-//       domain points under the fine patch's domain (fine ghosts are expected filled)
-//     then they are assigned to the coarse patch
-//
-// access: how the transfers reach a pair's resources on a patch's data, as damn::amr::copy's
-//  (copy.hpp): by_name (the default), or the caller's accessors, one per pair in the pairs'
-//  order, access[i].coarse(data), .coarse_new(data) (pairs interpolated in time) and
-//  .fine(data) returning the typed resources (a reference, or a handle holding a pointer).
-//  Plans are still made from the names
-//
-// an operator handles the resource kinds it has a call for: one asked to move a resource it
-// has none for throws. Sources are never modified. Pieces of other ranks are
-// damn/mpi/inter_level.hpp's: the functions here throw for them. What goes where is planned on
-// first use for a region, resources and stencil, and kept in the LevelMap
-//
-// resources' boxes come from the user's domain_box / ghost_box of the resource kind, from any
-// patch data holding the name (either level): the coarse and fine resources of a name are
-// expected of the same kind
+// refine and coarsen between two consecutive levels along a LevelMap, the user's operators doing
+// the arithmetic: doc/amr/inter_level.md
+// sources are never modified; an operator without a call for a resource's kind throws
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
@@ -57,6 +17,7 @@
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/cell_items.hpp"
+#include "damn/core/memory/scratch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -65,10 +26,12 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 #include <utility>
@@ -122,11 +85,10 @@ namespace detail
         requires(!std::is_same_v<Access, ByName>)
     bool with_side(Access const& access, Data& data, LevelPair const& pair, std::size_t i, Fn&& fn);
 
-    // fn(resource) for the first patch data of either level holding name, of the kind wanted
+    // items: CellItemData, else BoxData
     template<std::size_t dim, bool items, typename CoarseLD, typename FineLD, typename Fn>
     void with_any_resource(CoarseLD& coarse_ld, FineLD& fine_ld, std::string const& name, Fn&& fn);
 
-    // the fine target boxes of a fine patch for a region
     template<std::size_t dim>
     MKN_KUL_FN_SIG_RET std::vector<core::Box<int, dim>>
     fine_boxes(LevelRegion region, LevelMap<dim> const& map, Patch<dim> const& f, auto const& res);
@@ -154,10 +116,16 @@ namespace detail
 
     template<std::size_t dim>
     void check_local(LevelPlan<dim> const& plan);
+
+    // plan.from: refine, my fine targets' pieces of other ranks' coarse patches; coarsen, my
+    //  coarse patches' pieces of other ranks' fine patches
+    template<std::size_t dim>
+    void plan_from(LevelPlan<dim>& plan);
+
 } // namespace detail
 
 
-// the plan of a region for resource pairs and a stencil, made on first use
+// made on first use, kept in the LevelMap
 template<std::size_t dim, typename CoarseLD, typename FineLD>
 LevelPlan<dim>& level_plan_for(LevelRegion const region, int const stencil, LevelMap<dim>& map,
                                std::vector<LevelPair> const& pairs, CoarseLD& coarse_ld,
@@ -168,13 +136,12 @@ LevelPlan<dim>& level_plan_for(LevelRegion const region, int const stencil, Leve
         throw std::runtime_error("damn::amr::inter_level: the level map is not the level data's"
                                  " (rebuild it after a regrid)");
 
-    typename LevelMap<dim>::PlanKey key{region, pairs, stencil};
-    auto found = map.plans.find(key);
+    auto found = map.plans.find(std::forward_as_tuple(region, pairs, stencil));
     if (found == map.plans.end())
     {
         DAMN_LOG_SCOPE(2, "damn::amr::level_plan_for"); // once per region and resources
         found = map.plans
-                    .emplace(std::move(key),
+                    .emplace(typename LevelMap<dim>::PlanKey{region, pairs, stencil},
                              detail::level_plan(region, stencil, map, coarse_ld, fine_ld, pairs))
                     .first;
     }
@@ -183,10 +150,8 @@ LevelPlan<dim>& level_plan_for(LevelRegion const region, int const stencil, Leve
 
 
 // ---------------------------------------------------------------- pieces as bytes
-// shared by the serial functions below and damn::mpi's
 
-// refine: a piece's coarse data from its (local) coarse patch, appended to out: values in the
-// box's point order, or the number of items then the items
+// refine: values in the box's point order, or the number of items then the items
 template<std::size_t dim, typename Access, typename CoarseLD>
 void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
                        Access const& access, CoarseLD& coarse_ld, double const alpha,
@@ -247,8 +212,7 @@ void pack_coarse_piece(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
         throw std::runtime_error("damn::amr::refine: no resource " + pair.coarse);
 }
 
-// refine: a piece's coarse data, packed by pack_coarse_piece, into its (local) fine target:
-// field values into the plan's scratch, items to op; at moves past it
+// refine: field values into the plan's scratch, items to op; at moves past it
 template<std::size_t dim, typename Access, typename FineLD>
 void unpack_coarse_piece(LevelPlan<dim>& plan, LevelPiece<dim> const& piece, Access const& access,
                          FineLD& fine_ld, auto& op, std::byte const*& at)
@@ -315,7 +279,6 @@ void clear_scratch(LevelPlan<dim>& plan, Access const& access, FineLD& fine_ld)
     }
 }
 
-// refine: the fine points of every local field target from its gathered coarse values
 template<std::size_t dim, typename Access, typename FineLD>
 void refine_fields(LevelPlan<dim>& plan, Access const& access, FineLD& fine_ld, auto& op)
 {
@@ -347,7 +310,6 @@ void refine_fields(LevelPlan<dim>& plan, Access const& access, FineLD& fine_ld, 
     }
 }
 
-// coarsen: a target's coarse values computed by op from its (local) fine patch, appended to out
 template<std::size_t dim, typename Access, typename FineLD>
 void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
                     Access const& access, FineLD& fine_ld, auto& op, std::vector<std::byte>& out)
@@ -361,7 +323,9 @@ void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
                 using T       = box_data_value_t<R, dim>;
                 auto const at = out.size();
                 out.resize(at + target.coarse_box.size() * sizeof(T));
-                std::vector<T> values(target.coarse_box.size());
+                // value initialized as a vector's, whatever op leaves unwritten
+                core::Scratch<T> values{static_cast<std::size_t>(target.coarse_box.size())};
+                std::fill_n(values.data(), values.size(), T{});
                 if constexpr (std::invocable<decltype(op)&, R const&, core::Box<int, dim> const&,
                                              BoxValues<T, dim> const&>)
                     op(src, target.fine.box, BoxValues<T, dim>{target.coarse_box, values.data()});
@@ -383,7 +347,6 @@ void pack_coarsened(LevelPlan<dim> const& plan, LevelTarget<dim> const& target,
         throw std::runtime_error("damn::amr::coarsen: no resource " + pair.fine);
 }
 
-// coarsen: a piece's coarse values, packed by pack_coarsened, into its (local) coarse patch
 template<std::size_t dim, typename Access, typename CoarseLD>
 void unpack_coarsened(LevelPlan<dim> const& plan, LevelPiece<dim> const& piece,
                       Access const& access, CoarseLD& coarse_ld, std::byte const*& at)
@@ -431,12 +394,11 @@ void refine(auto op, LevelRegion const region, LevelMap<dim>& map,
     detail::check_local(plan);
     clear_scratch(plan, access, fine_ld);
 
-    std::vector<std::byte> bytes;
     for (auto const& piece : plan.pieces)
     {
-        bytes.clear();
-        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, bytes);
-        std::byte const* at = bytes.data();
+        plan.local.clear();
+        pack_coarse_piece(plan, piece, access, coarse_ld, alpha, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarse_piece(plan, piece, access, fine_ld, op, at);
     }
     refine_fields(plan, access, fine_ld, op);
@@ -461,12 +423,11 @@ void coarsen(auto op, LevelMap<dim>& map, std::vector<LevelPair> const& pairs, A
     auto& plan = level_plan_for(LevelRegion::Coarsened, 0, map, pairs, coarse_ld, fine_ld);
     detail::check_local(plan);
 
-    std::vector<std::byte> bytes;
     for (auto const& piece : plan.pieces) // one per target
     {
-        bytes.clear();
-        pack_coarsened(plan, plan.targets[piece.target], access, fine_ld, op, bytes);
-        std::byte const* at = bytes.data();
+        plan.local.clear();
+        pack_coarsened(plan, plan.targets[piece.target], access, fine_ld, op, plan.local);
+        std::byte const* at = plan.local.data();
         unpack_coarsened(plan, piece, access, coarse_ld, at);
     }
 }
@@ -577,7 +538,7 @@ std::vector<core::Box<int, dim>> detail::fine_boxes(LevelRegion const region,
     if (region == LevelRegion::Interior)
         return {domain_box(res, f.box)};
 
-    // LevelGhosts: the ghost points minus every fine patch's domain, periodic images included
+    // periodic images included
     std::vector<core::Box<int, dim>> boxes{ghost_box(res, f.box)};
     for (auto const& g : map.fine_built_on)
         for (auto const& s : map.fine_shifts)
@@ -594,10 +555,8 @@ std::vector<core::Box<int, dim>> detail::fine_boxes(LevelRegion const region,
     return boxes;
 }
 
-// refine: the parts of coarse_box on no coarse patch's domain (images included), each from the
-// first coarse patch image, in level order, under f (as the links: its box meets f's footprint)
-// whose ghost box holds it. Decided from the coarse level's geometry, the same on every rank;
-// returned for the images in links only (another rank's fine patch: my coarse patches')
+// the first coarse patch image in level order whose ghosts hold a point: decided from the coarse
+// level's geometry, the same on every rank; returned for the images in links only
 template<std::size_t dim>
 std::vector<std::pair<Link<dim>, core::Box<int, dim>>>
 detail::coarse_ghost_sources(LevelMap<dim> const& map, Patch<dim> const& f, auto const& cres,
@@ -639,7 +598,7 @@ detail::coarse_ghost_sources(LevelMap<dim> const& map, Patch<dim> const& f, auto
                         sources.emplace_back(link, h);
             }
         }
-    return sources; // what is left: past a non periodic edge, NaN as before
+    return sources; // what is left: past a non periodic edge, NaN from clear_scratch
 }
 
 template<std::size_t dim>
@@ -769,7 +728,26 @@ detail::level_plan(LevelRegion const region, int const stencil, LevelMap<dim> co
     }
 
     plan->scratch.resize(scratch / sizeof(std::max_align_t));
+    plan_from(*plan);
     return plan;
+}
+
+template<std::size_t dim>
+void detail::plan_from(LevelPlan<dim>& plan)
+{
+    std::map<int, std::vector<std::size_t>> from;
+    for (std::size_t i = 0; i < plan.pieces.size(); ++i)
+    {
+        auto const& piece = plan.pieces[i];
+        if (plan.region == LevelRegion::Coarsened)
+        {
+            if (!fine_is_local(plan, piece) and coarse_is_local(piece))
+                from[plan.targets[piece.target].fine.rank].push_back(i);
+        }
+        else if (fine_is_local(plan, piece) and !coarse_is_local(piece))
+            from[piece.coarse.patch.rank].push_back(i);
+    }
+    plan.from.assign(from.begin(), from.end());
 }
 
 template<std::size_t dim>
