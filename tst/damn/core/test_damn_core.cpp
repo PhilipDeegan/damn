@@ -86,14 +86,35 @@ struct CopyOnly
     int i;
 };
 
-TEST(DamnCore, vector_copies_construct)
+template<typename V>
+void check_copies_construct()
 {
-    damn::Vector<CopyOnly> a;
+    V a;
     a.emplace_back(1);
     a.emplace_back(2);
-    damn::Vector<CopyOnly> const b{a};
+    V const b{a};
     EXPECT_EQ(b.size(), 2u);
     EXPECT_EQ(b[1].i, 2);
+}
+
+// also in device memory: element copies on the host, a device copy is for trivially copyable
+//  values only
+struct NotTrivial : CopyOnly
+{
+    using CopyOnly::CopyOnly;
+    NotTrivial(NotTrivial const& that)
+        : CopyOnly{that.i}
+    {
+    }
+};
+
+TEST(DamnCore, vector_copies_construct)
+{
+    check_copies_construct<damn::Vector<CopyOnly>>();
+    check_copies_construct<damn::Vector<NotTrivial>>();
+#if DAMN_HAVE_MKN_GPU
+    check_copies_construct<damn::Vector<NotTrivial, damn::Allocators::device>>();
+#endif
 }
 
 // after period uses under its percentile, capacity drops to realloc_to of itself

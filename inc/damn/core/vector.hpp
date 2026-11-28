@@ -66,18 +66,23 @@ public:
         copy_values_from(that);
     }
 
-    // that's values only, the capacity as it is (or as they need): between host memories the
-    //  elements copy constructed (as std::vector's copy: types without a default constructor or
-    //  copy assignment), else a device copy of trivially copyable values
+    // a device copy (mkn.gpu, no host loop over device data) for trivially copyable values with
+    //  a device side; else the elements copied on the host, as std::vector's copy (tiles: no
+    //  default constructor, no copy assignment)
+    template<AllocationSpec that_spec>
+    bool static constexpr device_copy
+        = not(Ops::host and VectorOps<that_spec.type>::host) and std::is_trivially_copyable_v<T>;
+
+    // that's values only, the capacity as it is (or as they need)
     template<AllocationSpec that_spec>
     void copy_values_from(Vector<T, that_spec> const& that)
-        requires(Ops::host and VectorOps<that_spec.type>::host and std::is_copy_assignable_v<T>)
+        requires(not device_copy<that_spec> and std::is_copy_assignable_v<T>)
     {
         v.assign(that.begin(), that.end());
     }
     template<AllocationSpec that_spec>
     void copy_values_from(Vector<T, that_spec> const& that)
-        requires(Ops::host and VectorOps<that_spec.type>::host and not std::is_copy_assignable_v<T>)
+        requires(not device_copy<that_spec> and not std::is_copy_assignable_v<T>)
     {
         v.clear(); // assign would need T's copy assignment
         for (auto const& e : that)
@@ -85,7 +90,7 @@ public:
     }
     template<AllocationSpec that_spec>
     void copy_values_from(Vector<T, that_spec> const& that)
-        requires(not(Ops::host and VectorOps<that_spec.type>::host))
+        requires(device_copy<that_spec>)
     {
         resize(that.size(), /*copy=*/false);
         if (that.size())
