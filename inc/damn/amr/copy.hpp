@@ -168,14 +168,9 @@ namespace detail
     bool on_device([[maybe_unused]] Plan<dim>& plan, [[maybe_unused]] Access const& access,
                    [[maybe_unused]] LevelData<dim, PatchData>& ld) // used by GPU builds only
     {
-#if DAMN_HAVE_GPU && DAMN_HAVE_THRUST
+#if DAMN_HAVE_GPU
         if constexpr (arrival == Arrival::Append)
             return items_on_device(plan, access, ld);
-        else
-            return copy_on_device<arrival>(plan, access, ld);
-#elif DAMN_HAVE_GPU
-        if constexpr (arrival == Arrival::Append)
-            return false; // device items need thrust
         else
             return copy_on_device<arrival>(plan, access, ld);
 #else
