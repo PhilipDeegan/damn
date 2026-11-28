@@ -53,12 +53,19 @@ void check_vector_spec()
     V const b{a};
     V c;
     c.copy_from(host);
+    V d(2);
+    d = a;
+    EXPECT_GE(host.capacity(), a.capacity()); // copies keep the capacity
+    EXPECT_GE(b.capacity(), a.capacity());
+    EXPECT_GE(d.capacity(), a.capacity());
+    EXPECT_EQ(d.size(), a.size());
     for (std::size_t i = 0; i < 4; ++i)
     {
         EXPECT_EQ(a[i], static_cast<double>(i));
         EXPECT_EQ(host[i], static_cast<double>(i));
         EXPECT_EQ(b[i], static_cast<double>(i));
         EXPECT_EQ(c[i], static_cast<double>(i));
+        EXPECT_EQ(d[i], static_cast<double>(i));
     }
 
     a.fill(3.);

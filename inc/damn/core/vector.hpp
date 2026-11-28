@@ -39,16 +39,7 @@ public:
         fill(val);
     }
 
-    Vector(Vector const& that)
-        requires(Ops::host)
-        : v(that.v)
-    {
-    }
-    Vector(Vector const& that)
-        requires(not Ops::host)
-    {
-        copy_from(that);
-    }
+    Vector(Vector const& that) { copy_from(that); }
     template<AllocationSpec that_spec>
     explicit Vector(Vector<T, that_spec> const& that)
     {
@@ -64,10 +55,13 @@ public:
     }
     Vector& operator=(Vector&&) noexcept = default;
 
-    // values copied from that (any spec): std::copy between host memories, else mkn.gpu's copy
+    // that's values (any spec) and at least its capacity: a copy grows as the original would
+    //  have, without a regrow (std::vector's copy allocates only the size). std::copy between host
+    //  memories, else mkn.gpu's copy
     template<AllocationSpec that_spec>
     void copy_from(Vector<T, that_spec> const& that)
     {
+        reserve(that.capacity(), /*copy=*/false);
         resize(that.size(), /*copy=*/false);
         if (that.size())
             core::mem::copy<spec, that_spec>(v.data(), that.data(), that.size());
