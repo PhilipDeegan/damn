@@ -4,19 +4,23 @@
 // through their columns (resized, then in place); ranks without patches take part. Any number
 // of ranks
 
-#include "damn/hdf5/checkpoint.hpp"
-#include "damn/amr/hierarchy.hpp"
-#include "damn/amr/level_data.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/memory/box_span.hpp"
-#include "mkn/kul/strided_span.hpp"
-#include "damn/hdf5/h5_file.hpp"
+
+#include "damn/amr/hierarchy.hpp"
+#include "damn/amr/level_data.hpp"
+
+#include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/mpi_utils.hpp"
+
+#include "damn/hdf5/checkpoint.hpp"
+#include "damn/hdf5/h5_file.hpp"
 
 #include "tst/damn/amr/toy.hpp"
 
+#include "mkn/kul/strided_span.hpp"
+
 #include "gtest/gtest.h"
-#include "damn/mpi/damn_mpi.hpp"
 
 #include <array>
 #include <cmath>

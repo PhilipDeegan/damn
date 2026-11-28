@@ -1,9 +1,9 @@
 #ifndef DAMN_CORE_GEOMETRY_BOX_SPANS_HPP
 #define DAMN_CORE_GEOMETRY_BOX_SPANS_HPP
 
-#include "damn/core/geometry/point.hpp"
 #include "damn/core/def.hpp"
 #include "damn/core/def/damn_config.hpp"
+#include "damn/core/geometry/point.hpp"
 
 #include <cassert>
 #include <cstddef>

@@ -4,8 +4,8 @@
 #include "mkn/kul/random.hpp"
 
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 // a reproducible random stream per cell, whatever the patches and ranks: doc/core/math/random.md
 

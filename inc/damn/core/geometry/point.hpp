@@ -2,26 +2,27 @@
 #define DAMN_CORE_GEOMETRY_POINT_HPP
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/std/array.hpp"
-#include "mkn/kul/int.hpp"
-#include "mkn/kul/string.hpp"
-#include "mkn/kul/meta.hpp"
 #include "damn/core/def/damn_config.hpp"
 
+#include "mkn/kul/int.hpp"
+#include "mkn/kul/meta.hpp"
+#include "mkn/kul/std/array.hpp"
+#include "mkn/kul/string.hpp"
+
 #include <array>
-#include <tuple>
-#include <vector>
 #include <cassert>
+#include <concepts>
 #include <cstddef>
-#include <sstream>
 #include <cstdint>
 #include <cstdlib>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <concepts>
+#include <vector>
 
 namespace damn
 {

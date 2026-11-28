@@ -7,12 +7,12 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <array>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <cstdint>
-#include <algorithm>
 
 // every rank sends values made from its rank, so the checks cover both the content and the
 // order of what is gathered; any number of ranks

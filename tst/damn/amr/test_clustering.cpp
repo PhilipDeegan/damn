@@ -1,7 +1,8 @@
-#include "damn/amr/clustering.hpp"
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+
+#include "damn/amr/clustering.hpp"
+#include "damn/amr/hierarchy.hpp"
 
 #include "gtest/gtest.h"
 

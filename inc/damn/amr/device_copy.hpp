@@ -9,12 +9,13 @@
 
 #if DAMN_HAVE_GPU
 
-#include "damn/amr/box_data.hpp"
-#include "damn/amr/level_data.hpp"
-#include "damn/amr/neighbours.hpp"
 #include "damn/core/exec/kernels.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
+
+#include "damn/amr/box_data.hpp"
+#include "damn/amr/level_data.hpp"
+#include "damn/amr/neighbours.hpp"
 
 #include <algorithm>
 #include <concepts>
@@ -24,8 +25,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
 namespace damn::amr
 {

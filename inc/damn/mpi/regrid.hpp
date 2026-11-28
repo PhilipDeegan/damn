@@ -12,9 +12,11 @@
 
 #include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
+
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
 #include "damn/amr/regrid.hpp"
+
 #include "damn/mpi/damn_mpi.hpp"
 
 #include <cstddef>

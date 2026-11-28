@@ -6,11 +6,11 @@
 //   void do_refine(op, region, map, pairs, coarse_ld, fine_ld, alpha);
 //   void do_coarsen(op, map, pairs, fine_ld, coarse_ld);
 
+#include "damn/amr/hierarchy.hpp"
+#include "damn/amr/inter_level.hpp"
 #include "damn/amr/kelvin/inter_level.hpp"
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"
-#include "damn/amr/hierarchy.hpp"
-#include "damn/amr/inter_level.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/level_map.hpp"
 #include "damn/amr/topology.hpp"

@@ -1,5 +1,5 @@
-#include "damn/amr/decompose.hpp"
 #include "damn/amr/cost.hpp"
+#include "damn/amr/decompose.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/partition.hpp"
 #include "damn/amr/topology.hpp"

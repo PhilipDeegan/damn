@@ -6,13 +6,18 @@
 // no staging copy: a StridedSpan's stride, or a BoxRegion's sub box, is the memory side's
 // hyperslab. Rows and offsets are 64 bit: a 3d run's particles overflow 32 bits
 
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/def.hpp"
-#include "mkn/kul/strided_span.hpp"
-#include "damn/hdf5/h5_file.hpp"
-#include "damn/mpi/mpi_utils.hpp"
-#include "highfive/H5File.hpp"
 
+#include "damn/amr/hierarchy.hpp"
+
+#include "damn/mpi/mpi_utils.hpp"
+
+#include "damn/hdf5/h5_file.hpp"
+
+#include "highfive/H5File.hpp"
+#include "mkn/kul/strided_span.hpp"
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -20,7 +25,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <array>
 
 namespace damn::core
 {

@@ -1,11 +1,12 @@
 // the fine patches on other ranks than the coarse ones under them; any number of ranks
 
+#include "damn/amr/level_map.hpp"
+#include "damn/amr/topology.hpp"
+
+#include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/inter_level.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 #include "damn/mpi/topology.hpp"
-#include "damn/mpi/damn_mpi.hpp"
-#include "damn/amr/level_map.hpp"
-#include "damn/amr/topology.hpp"
 
 #include "gtest/gtest.h"
 

@@ -1,8 +1,9 @@
 #ifndef DAMN_TEST_CORE_UTILITIES_BOX_TEST_BOX_FIXTURES_HPP
 #define DAMN_TEST_CORE_UTILITIES_BOX_TEST_BOX_FIXTURES_HPP
 
-#include "damn/damn_core.hpp"
 #include "damn/core/geometry/box.hpp"
+#include "damn/damn_core.hpp"
+
 #include "mkn/kul/assert.hpp"
 
 #include <array>

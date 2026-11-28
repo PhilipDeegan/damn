@@ -2,22 +2,23 @@
 #define DAMN_CORE_DATA_NDARRAY_NDARRAY_VIEW_HPP
 
 
-#include "damn/core/def.hpp"
-#include "mkn/kul/math.hpp"
-#include "mkn/kul/float.hpp"
-#include "mkn/kul/for.hpp"
 #include "damn/core/data/ndarray/ndarray_base.hpp"
 #include "damn/core/data/ndarray/ndarray_mask.hpp"
+#include "damn/core/def.hpp"
 #include "damn/core/def/damn_config.hpp"
 
+#include "mkn/kul/float.hpp"
+#include "mkn/kul/for.hpp"
+#include "mkn/kul/math.hpp"
+
+#include <algorithm>
 #include <array>
-#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <algorithm>
-#include <cstddef>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace damn::core
 {

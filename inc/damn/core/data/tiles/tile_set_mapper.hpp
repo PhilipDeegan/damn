@@ -1,15 +1,15 @@
 #ifndef DAMN_CORE_DATA_TILES_TILE_SET_MAPPER_HPP
 #define DAMN_CORE_DATA_TILES_TILE_SET_MAPPER_HPP
 
+#include "damn/core/data/tiles/tiling_options.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/point.hpp"
-#include "damn/core/data/tiles/tiling_options.hpp"
 
-#include <vector>
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <utility>
+#include <vector>
 
 namespace damn::core
 {

@@ -1,14 +1,15 @@
 // any number of ranks
 
+#include "damn/amr/hierarchy.hpp"
 #include "damn/amr/kelvin/site_data.hpp"
 #include "damn/amr/kelvin/sites.hpp"
-#include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
+
 #include "damn/mpi/copy.hpp"
+#include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 #include "damn/mpi/topology.hpp"
-#include "damn/mpi/damn_mpi.hpp"
 
 #include "gtest/gtest.h"
 

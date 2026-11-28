@@ -6,13 +6,12 @@
 // run(n, fn) leases up to n of them for the call, fn(i) for every i in [0, n) on them, on the
 // calling thread if none are free
 
+#include "BS_thread_pool.hpp"
 #include "damn/core/def.hpp"
 #include "damn/core/exec/execution_model.hpp"
 
-#include "BS_thread_pool.hpp"
-
-#include <memory>
 #include <cstddef>
+#include <memory>
 
 namespace damn::core
 {

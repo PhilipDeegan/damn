@@ -5,12 +5,14 @@
 // every source is read (1, 2) before anything is written (3, 4), so sums and maxes use the
 // values from before the copy. Device resources take a device path: doc/mpi/copy.md
 
+#include "damn/core/def/damn_config.hpp"
 #include "damn/core/logger.hpp"
+#include "damn/core/memory/scratch.hpp"
+
 #include "damn/amr/copy.hpp"
 #include "damn/amr/neighbours.hpp"
+
 #include "damn/mpi/damn_mpi.hpp"
-#include "damn/core/memory/scratch.hpp"
-#include "damn/core/def/damn_config.hpp"
 
 #if DAMN_HAVE_GPU && __has_include(<mpi-ext.h>)
 #include <mpi-ext.h> // MPIX_Query_cuda_support, MPIX_Query_rocm_support (Open MPI)

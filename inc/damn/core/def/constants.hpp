@@ -1,8 +1,8 @@
 #ifndef DAMN_CORE_DEF_CONSTANTS_HPP
 #define DAMN_CORE_DEF_CONSTANTS_HPP
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 namespace damn
 {

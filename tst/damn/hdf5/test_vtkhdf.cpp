@@ -3,13 +3,15 @@
 // each rank's rows where the offsets say, a level whose boxes change between steps (a regrid);
 // any number of ranks
 
-#include "damn/hdf5/vtkhdf.hpp"
 #include "damn/amr/hierarchy.hpp"
-#include "damn/hdf5/h5_file.hpp"
+
+#include "damn/mpi/damn_mpi.hpp"
 #include "damn/mpi/mpi_utils.hpp"
 
+#include "damn/hdf5/h5_file.hpp"
+#include "damn/hdf5/vtkhdf.hpp"
+
 #include "gtest/gtest.h"
-#include "damn/mpi/damn_mpi.hpp"
 
 #include <array>
 #include <cstddef>

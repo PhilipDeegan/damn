@@ -5,17 +5,18 @@
 // the old data is consumed, each old patch freed once done: the peak is about the old level
 
 #include "damn/core/def.hpp"
-#include "damn/core/logger.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
+#include "damn/core/logger.hpp"
+
 #include "damn/amr/box_data.hpp"
+#include "damn/amr/cell_item_data.hpp"
+#include "damn/amr/cell_items.hpp"
 #include "damn/amr/copy.hpp"
 #include "damn/amr/hierarchy.hpp"
 #include "damn/amr/level_data.hpp"
 #include "damn/amr/neighbours.hpp"
-#include "damn/amr/cell_item_data.hpp"
-#include "damn/amr/cell_items.hpp"
 
 #include <algorithm>
 #include <cstddef>

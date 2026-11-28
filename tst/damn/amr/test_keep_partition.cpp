@@ -1,8 +1,9 @@
-#include "damn/amr/keep_partition.hpp"
-#include "damn/amr/hierarchy.hpp"
-#include "damn/amr/topology.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
+
+#include "damn/amr/hierarchy.hpp"
+#include "damn/amr/keep_partition.hpp"
+#include "damn/amr/topology.hpp"
 
 #include "gtest/gtest.h"
 

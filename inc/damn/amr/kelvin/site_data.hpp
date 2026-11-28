@@ -8,16 +8,17 @@
 #include "damn/core/def.hpp"
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/memory/box_span.hpp"
+
 #include "damn/amr/box_data.hpp"
 #include "damn/amr/lattice.hpp"
 
-#include <string>
-#include <vector>
 #include <cassert>
 #include <cstddef>
+#include <initializer_list>
+#include <string>
 #include <string_view>
 #include <type_traits>
-#include <initializer_list>
+#include <vector>
 
 namespace damn::core
 {

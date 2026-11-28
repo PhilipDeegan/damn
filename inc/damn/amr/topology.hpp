@@ -6,13 +6,13 @@
 
 #include "damn/core/def.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <cstddef>
 
 namespace damn::amr
 {

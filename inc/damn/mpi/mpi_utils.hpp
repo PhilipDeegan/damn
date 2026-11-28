@@ -6,21 +6,23 @@
 // and std::array; all_get_from(rank, fn) broadcasts fn's result on rank to every rank
 
 #include "damn/core/def.hpp"
-#include "damn/mpi/damn_mpi.hpp" // IWYU pragma: keep
-#include "mkn/kul/std/vector.hpp"
 #include "damn/core/memory/span.hpp"
-#include "mkn/kul/meta.hpp"
 
-#include <array>
-#include <string>
-#include <vector>
-#include <cassert>
-#include <cstdint>
-#include <cstddef>
-#include <numeric>
+#include "damn/mpi/damn_mpi.hpp" // IWYU pragma: keep
+
+#include "mkn/kul/meta.hpp"
+#include "mkn/kul/std/vector.hpp"
+
 #include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <numeric>
+#include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 
 #if !defined(DAMN_LOG_ERROR)

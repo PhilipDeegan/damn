@@ -8,18 +8,20 @@
 #include "damn/core/geometry/box.hpp"
 #include "damn/core/geometry/box_spans.hpp"
 #include "damn/core/geometry/point.hpp"
+
 #include "damn/amr/lattice.hpp"
 #include "damn/amr/partition.hpp"
+
 #include "mkn/kul/std/array.hpp"
 
+#include <algorithm>
 #include <array>
-#include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <algorithm>
+#include <initializer_list>
 #include <stdexcept>
 #include <string>
-#include <initializer_list>
+#include <vector>
 
 namespace damn::amr
 {

@@ -3,14 +3,16 @@
 
 // damn::amr::refine and coarsen between patches of any rank, collective: doc/mpi/inter_level.md
 
+#include "damn/core/def.hpp"
 #include "damn/core/logger.hpp"
+#include "damn/core/memory/scratch.hpp"
+
+#include "damn/amr/copy.hpp"
 #include "damn/amr/inter_level.hpp"
 #include "damn/amr/level_map.hpp"
-#include "damn/mpi/damn_mpi.hpp"
 #include "damn/amr/neighbours.hpp"
-#include "damn/core/def.hpp"
-#include "damn/amr/copy.hpp"
-#include "damn/core/memory/scratch.hpp"
+
+#include "damn/mpi/damn_mpi.hpp"
 
 #include <cstddef>
 #include <limits>

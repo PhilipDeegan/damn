@@ -8,16 +8,17 @@
 //  (periodic images). What fills them (boundary conditions) is the model's
 
 #include "damn/core/def.hpp"
-#include "damn/amr/hierarchy.hpp"
 #include "damn/core/geometry/box.hpp"
+
+#include "damn/amr/hierarchy.hpp"
 
 #include "mkn/kul/std/array.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <algorithm>
 
 namespace damn::amr
 {

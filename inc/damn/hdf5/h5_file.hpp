@@ -6,18 +6,19 @@
 // paths, sizes and values so each rank creates all of them, then writes only its own
 
 #include "damn/core/def.hpp"
-#include "mkn/kul/meta.hpp"
-#include "damn/mpi/mpi_utils.hpp"
+
 #include "damn/mpi/damn_mpi.hpp"
+#include "damn/mpi/mpi_utils.hpp"
 
-#include "highfive/H5File.hpp"
 #include "highfive/H5Easy.hpp"
+#include "highfive/H5File.hpp"
+#include "mkn/kul/meta.hpp"
 
-#include <string>
-#include <cstdlib>
-#include <vector>
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace damn::hdf5::h5
 {

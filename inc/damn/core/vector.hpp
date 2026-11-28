@@ -3,21 +3,21 @@
 
 
 #include "damn/core/def/damn_config.hpp"
-#include "mkn/kul/meta.hpp"
-#include "damn/core/memory/memory.hpp"
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
+#include "damn/core/memory/memory.hpp"
 
 #include "mkn/gpu.hpp"
 #include "mkn/kul/alloc.hpp"
+#include "mkn/kul/meta.hpp"
 
-#include <vector>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace damn
 {

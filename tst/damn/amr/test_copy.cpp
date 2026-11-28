@@ -1,8 +1,10 @@
 // expected values come from brute force over every patch and periodic image
 
-#include "damn/amr/level_map.hpp"
-#include "damn/amr/copy.hpp"
 #include "damn/core/memory/box_span.hpp"
+
+#include "damn/amr/copy.hpp"
+#include "damn/amr/level_map.hpp"
+
 #include "tst/damn/amr/toy.hpp"
 
 #include "gtest/gtest.h"
@@ -10,8 +12,8 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <string>

@@ -5,6 +5,7 @@
 // there, so every rank gets the same boxes (collective)
 
 #include "damn/amr/clustering.hpp"
+
 #include "damn/mpi/damn_mpi.hpp"
 
 #include <cstddef>
