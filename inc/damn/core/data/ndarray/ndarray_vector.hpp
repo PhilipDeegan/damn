@@ -5,7 +5,7 @@
 #include "damn/core/memory/span.hpp"
 #include "damn/core/data/ndarray/ndarray_view.hpp"
 #include "mkn/kul/math.hpp"
-#include "damn/core/def/damn_config.hpp"
+#include "damn/core/memory/allocators.hpp"
 
 #include <cassert>
 #include <array>

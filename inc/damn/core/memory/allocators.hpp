@@ -14,6 +14,15 @@
 
 namespace damn
 {
+
+// the run's memory: the containers' finer choices are their AllocationSpecs
+enum class AllocatorMode : std::uint16_t {
+    CPU = 0,
+    GPU_UNIFIED,
+    // GPU, // unified for now
+};
+
+
 auto constexpr default_allocator_mode()
 {
     if constexpr (CompileOptions::WithMknGpuHW)

@@ -11,7 +11,7 @@
 //   ScratchVector<T> v;    an empty std::vector, for buffers grown by push_back
 
 #include "damn/core/vector.hpp"
-#include "damn/core/def/damn_config.hpp"
+#include "damn/core/memory/allocators.hpp"
 
 #include <cstddef>
 #include <deque>

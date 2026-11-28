@@ -5,8 +5,6 @@
 #include "damn/core/def/detail/mkn_avx.hpp"
 #include "damn/core/def/detail/mkn_gpu.hpp"
 
-#include <cstdint>
-
 #if !defined(DAMN_HAVE_GPU)
 #if DAMN_HAVE_MKN_GPU_HW
 #define DAMN_HAVE_GPU 1
@@ -57,12 +55,6 @@ struct CompileOptions
     static constexpr bool WithGpu      = WithMknGpu;
 };
 
-
-enum class AllocatorMode : std::uint16_t {
-    CPU = 0,
-    GPU_UNIFIED,
-    // GPU, // unified for now
-};
 
 } // namespace damn
 

@@ -14,6 +14,7 @@
 #include "damn/core/def/damn_config.hpp"
 #include "damn/core/geometry/point.hpp"
 #include "tile_set_mapper.hpp"
+#include "damn/core/memory/allocators.hpp"
 
 #include <cassert>
 #include <array>
