@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""damn's bootstrap: what this machine and build can do, as PHARE's tools/config, one probe binary
-per capability so each passes or fails alone (a probe that does not build, exits non zero,
+"""damn's bootstrap: what this machine and build can do, one probe binary per capability so each passes or fails alone (a probe that does not build, exits non zero,
 aborts or times out: not available)
 
     python3 etc/bootstrap/bootstrap.py                        # the system's MPI / HDF5, CPU
