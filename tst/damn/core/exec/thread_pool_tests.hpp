@@ -9,6 +9,8 @@
 
 #include <atomic>
 #include <cstddef>
+#include <mutex>
+#include <span>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -90,6 +92,54 @@ TEST(ThreadPool, whereTasksRun)
     }
     else
         EXPECT_EQ(on_caller, 0); // the pools' threads
+}
+
+// with hooks: on_done once per patch, on the calling thread; the dispatch order kept
+//  (synchronous: the tasks' order too)
+TEST(ThreadPool, patchExecHooks)
+{
+    Pools pools;
+    std::size_t constexpr n = 13;
+    auto const caller       = std::this_thread::get_id();
+    std::vector<std::size_t> order(n), dispatched, done(n, 0), ran;
+    for (std::size_t k = 0; k < n; ++k)
+        order[k] = n - 1 - k;
+    std::atomic<bool> off_caller = false;
+    std::mutex ran_mutex;
+
+    ThreadPool::INSTANCE().patch_exec(
+        n,
+        [&](std::size_t const i) {
+            dispatched.push_back(i); // views are made on the calling thread, in dispatch order
+            return View{i};
+        },
+        [&](View const& v) {
+            std::scoped_lock lock{ran_mutex};
+            ran.push_back(v.patch);
+        },
+        ThreadPool::PatchHooks{.order = order,
+                               .on_done =
+                                   [&](std::size_t const i) {
+                                       off_caller
+                                           = off_caller or std::this_thread::get_id() != caller;
+                                       ++done[i];
+                                   },
+                               .idle = [] {}});
+
+    EXPECT_EQ(dispatched, order);
+    EXPECT_FALSE(off_caller);
+    for (auto const d : done)
+        EXPECT_EQ(d, 1u);
+    if constexpr (ThreadPool::synchronous)
+    {
+        EXPECT_EQ(ran, order);
+    }
+    EXPECT_THROW(ThreadPool::INSTANCE().patch_exec(
+                     n, [](std::size_t const i) { return View{i}; }, [](View const&) {},
+                     ThreadPool::PatchHooks{.order   = std::span{order}.first(2),
+                                            .on_done = [](std::size_t) {},
+                                            .idle    = [] {}}),
+                 std::runtime_error);
 }
 
 } // namespace damn::core

@@ -44,3 +44,40 @@ MPI is handed device pointers, so it must be GPU aware (`MPIX_Query_cuda_support
 `MPIX_Query_rocm_support`): a copy with messages throws otherwise. Messages are the host path's
 bytes. Leaving items move as columns, a counts message before their blocks:
 `doc/amr/device_items.md`.
+
+## In flight
+
+`damn::mpi::Copy` is `damn::mpi::copy` spread over the level's work, so messages go while
+patches still compute (`damn::mpi::copy` is a `Copy` finished at once):
+
+```cpp
+damn::mpi::Copy c{damn::amr::sum_borders, n, pairs, damn::amr::by_name, ld};
+pool.patch_exec(n_patches, make_view, work,
+                damn::core::ThreadPool::PatchHooks{.order   = c.remote_first(),
+                                                   .on_done = [&](auto i) { c.done(i); },
+                                                   .idle    = [&] { c.poll(); }});
+c.finish();
+```
+
+| Call | What |
+|---|---|
+| `remote_first()` | the local patches feeding other ranks first, then the others, each in index order: a dispatch order |
+| `done(i)` | local patch `i`'s sources are final: each peer whose pieces all come from done patches is packed and sent (step 1 for that peer, the same message as `copy`'s) |
+| `poll()` | the messages that have arrived are received into the plan's buffers; nothing is written to a patch |
+| `finish()` | the peers not sent yet are sent, then steps 2 to 4 |
+
+Nothing is written to a patch before `finish()`, and sums and maxes fold in the same fixed
+order, so the result is the same bits as `copy`. A patch must not change its sources after
+`done(i)`, nor any patch its destinations before `finish()`.
+
+The schedule (per peer its pieces, per local patch the peers it feeds) is built once per plan
+and kept in it (`plan.in_flight`), with the per copy state, so a step does not allocate. One
+`Copy` is in flight per rank at a time: messages of every kind share one tag (#57), and a second
+`Copy` throws. MPI calls come from one thread (`MPI_THREAD_FUNNELED`), the one dispatching work.
+
+On the device, one launch packs every piece, so `done` and `poll` do nothing and `finish` runs the
+whole device copy.
+
+`simulate_latency(fn)`, for benchmarks on one node, where shared memory delivers at once: a
+message from `peer` counts as received `fn(peer, bytes)` seconds after this rank first sees it
+(probed). `poll` leaves it until then, `finish` sleeps until then.

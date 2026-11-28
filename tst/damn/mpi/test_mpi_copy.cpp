@@ -2,6 +2,7 @@
 // robin, uniform_level_0); any number of ranks, one checks the MPI path against the serial copies
 
 #include "damn/mpi/copy.hpp"
+#include "damn/core/exec/thread_pool.hpp"
 #include "damn/mpi/topology.hpp"
 #include "damn/mpi/damn_mpi.hpp"
 #include "tst/damn/amr/toy.hpp"
@@ -15,8 +16,10 @@
 #include <cstddef>
 #include <string>
 #include <tuple>
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <stdexcept>
 #include <cstdint>
 #include <vector>
 #include <type_traits>
@@ -320,6 +323,90 @@ TEST(MpiCopy, accessorsGiveWhatNamesGive)
             ASSERT_EQ(a.ld.data[i].domain.items.size(), b.ld.data[i].domain.items.size()) << i;
         }
     }
+}
+
+// damn::mpi::Copy driven by ThreadPool::patch_exec's hooks (patches in reverse, each one's
+//  sources written in its task, sent as patches finish, received while others run): the same
+//  bits as mpi::copy
+TEST(MpiCopy, inFlightGivesWhatCopyGives)
+{
+    auto& pool = core::ThreadPool::INSTANCE();
+    pool.configure(3, 1);
+
+    auto const init = [](auto const& h, auto const& patch, auto& data) {
+        core::for_each_point(domain_box(data.Bx, patch.box),
+                             [&](auto const& p) { value(data.Bx, patch.box, p) = f_of(h, p); });
+        core::for_each_point(ghost_box(data.rho, patch.box), [&](auto const& p) {
+            value(data.rho, patch.box, p) = 0.1 + 1. / (3. + patch.id) + 1e-3 * f_of(h, p) / 7.;
+        });
+        core::for_each_point(ghost_box(data.patch_ghost, patch.box), [&](auto const& c) {
+            if (!isIn(c, patch.box))
+                data.patch_ghost.items.push_back({{c[0], c[1]}, {c[0], c[1]}, patch.id});
+        });
+    };
+
+    for (auto const periodic : {false, true})
+    {
+        World a{periodic}, b{periodic};
+        for_each_patch(a.ld, [&](auto const& patch, auto& data) { init(a.h, patch, data); });
+        mpi::copy(fill_ghosts, a.n, {"Bx"}, a.ld);
+        mpi::copy(sum_borders, a.n, {"rho"}, a.ld);
+        mpi::copy(gather_leaving, a.n, std::vector<ResourcePair>{{"patch_ghost", "domain"}}, a.ld);
+
+        std::vector<std::size_t> order(size(b.ld));
+        for (std::size_t k = 0; k < order.size(); ++k)
+            order[k] = order.size() - 1 - k;
+
+        auto const in_flight = [&](auto const op, std::vector<ResourcePair> const& pairs,
+                                   bool const first) {
+            mpi::Copy c{op, b.n, pairs, by_name, b.ld};
+            if (first) // feeders first, each patch once
+            {
+                std::vector<std::size_t> sorted{c.remote_first().begin(), c.remote_first().end()};
+                EXPECT_EQ(sorted.size(), size(b.ld));
+                std::sort(sorted.begin(), sorted.end());
+                for (std::size_t k = 0; k < sorted.size(); ++k)
+                    EXPECT_EQ(sorted[k], k);
+            }
+            pool.patch_exec(
+                size(b.ld), [](std::size_t const i) { return i; },
+                [&](std::size_t const i) {
+                    if (first)
+                        init(b.h, b.ld.patches[i], b.ld.data[i]);
+                },
+                core::ThreadPool::PatchHooks{.order   = order,
+                                             .on_done = [&](std::size_t const i) { c.done(i); },
+                                             .idle    = [&] { c.poll(); }});
+            c.finish();
+        };
+        in_flight(fill_ghosts, same_names({"Bx"}), true);
+        in_flight(sum_borders, same_names({"rho"}), false);
+        in_flight(gather_leaving, {{"patch_ghost", "domain"}}, false);
+
+        for (std::size_t i = 0; i < size(a.ld); ++i)
+        {
+            auto const& box = a.ld.patches[i].box;
+            for (auto const f : {&toy::PatchData::Bx, &toy::PatchData::rho})
+                core::for_each_point(ghost_box(a.ld.data[i].*f, box), [&](auto const& p) {
+                    auto const x = value(a.ld.data[i].*f, box, p);
+                    auto const y = value(b.ld.data[i].*f, box, p);
+                    EXPECT_TRUE(std::bit_cast<std::uint64_t>(x) == std::bit_cast<std::uint64_t>(y)
+                                or (std::isnan(x) and std::isnan(y)))
+                        << i << " " << p;
+                });
+            ASSERT_EQ(a.ld.data[i].domain.items.size(), b.ld.data[i].domain.items.size()) << i;
+        }
+    }
+    pool.configure(1, 1);
+}
+
+TEST(MpiCopy, oneCopyInFlight)
+{
+    World s{true};
+    mpi::Copy c{sum_borders, s.n, same_names({"rho"}), by_name, s.ld};
+    EXPECT_THROW((mpi::Copy{fill_ghosts, s.n, same_names({"Bx"}), by_name, s.ld}),
+                 std::runtime_error);
+    c.finish();
 }
 
 TEST(MpiCopy, repeatedCopiesReuseThePlanAndBuffers)
@@ -712,7 +799,8 @@ TEST(MpiDeviceCopy, leavingItemsOnTheDeviceAreTheHosts)
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
-    MPI_Init(&argc, &argv);
+    int provided = 0; // MPI from the main thread only, ThreadPool's threads beside it
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
     auto const result = RUN_ALL_TESTS();
     MPI_Finalize();
     return result;
