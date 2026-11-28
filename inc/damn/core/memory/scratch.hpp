@@ -108,7 +108,7 @@ public:
     // the vector itself, e.g. for a hook appending to a std::vector&: a hook's parameter must be
     //  that type, a deduced one (auto&) gets the ScratchVector
     auto& operator*() { return kept(); }
-    operator typename Kept::vector_t&() { return kept(); }
+    operator typename Kept::std_vector&() { return kept(); }
 
 private:
     Kept& kept;

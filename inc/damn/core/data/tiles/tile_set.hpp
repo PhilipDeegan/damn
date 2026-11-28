@@ -124,7 +124,7 @@ protected:
 
 public:
     template<typename T>
-    using vector_t = typename damn::Vector<T, alloc_mode>::vector_t;
+    using vector_t = damn::Vector<T, alloc_mode>;
 
     using value_type                = Tile;
     using Box_t                     = Box<int, Tile::dimension>;
